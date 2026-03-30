@@ -1,0 +1,538 @@
+/* 遮罩层 */
+.overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+  backdrop-filter: blur(4px);
+}
+
+/* 弹窗 */
+.modal {
+  background: var(--bg);
+  border-radius: 16px;
+  width: 100%;
+  max-width: 560px;
+  max-height: 90vh;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 头部 */
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--border);
+}
+
+.title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+.closeBtn {
+  background: none;
+  border: none;
+  font-size: 24px;
+  color: var(--text);
+  cursor: pointer;
+  padding: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.closeBtn:hover {
+  background: var(--code-bg);
+}
+
+/* Tab 导航 */
+.tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+  padding: 0 16px;
+  gap: 8px;
+}
+
+.tab {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 16px;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-bottom: -1px;
+}
+
+.tab:hover {
+  color: var(--text-h);
+}
+
+.tab.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+.tabIcon {
+  width: 18px;
+  height: 18px;
+}
+
+/* 内容区域 */
+.content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px;
+}
+
+.tabContent {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* 拖拽区域 */
+.dropzone {
+  padding: 40px 32px;
+  border: 2px dashed var(--border);
+  border-radius: 12px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background: var(--code-bg);
+}
+
+.dropzone:hover:not(.disabled) {
+  border-color: var(--accent);
+  background: var(--accent-bg);
+}
+
+.dropzone.active {
+  border-color: var(--accent);
+  background: var(--accent-bg);
+}
+
+.dropzone.disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.dropzoneIcon {
+  font-size: 40px;
+  margin-bottom: 12px;
+}
+
+.dropzoneText {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text-h);
+  margin: 0 0 6px;
+}
+
+.dropzoneHint {
+  font-size: 13px;
+  color: var(--text);
+  opacity: 0.6;
+  margin: 0;
+}
+
+/* 提示信息 */
+.zipHint,
+.doiHint {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  background: var(--accent-bg);
+  border-radius: 8px;
+  font-size: 13px;
+  color: var(--accent);
+}
+
+.hintIcon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+/* 文件列表 */
+.fileList {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.fileListHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: var(--code-bg);
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+  color: var(--text);
+}
+
+.clearBtn {
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-size: 13px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+
+.clearBtn:hover:not(:disabled) {
+  background: var(--accent-bg);
+}
+
+.clearBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.fileItems {
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.fileItem {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+
+.fileItem:last-child {
+  border-bottom: none;
+}
+
+.fileName {
+  flex: 1;
+  color: var(--text-h);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.fileSize {
+  color: var(--text);
+  opacity: 0.6;
+  font-size: 12px;
+}
+
+.removeBtn {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  color: var(--text);
+  font-size: 18px;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+
+.removeBtn:hover:not(:disabled) {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.removeBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ZIP 文件框 */
+.zipFileBox {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px;
+  background: var(--code-bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.zipFileInfo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.zipFileIcon {
+  font-size: 32px;
+}
+
+.zipFileDetails {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.zipFileName {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-h);
+}
+
+.zipFileSize {
+  font-size: 12px;
+  color: var(--text);
+  opacity: 0.6;
+}
+
+/* 进度条 */
+.progressContainer {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.progressBar {
+  flex: 1;
+  height: 8px;
+  background: var(--code-bg);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.progressFill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+.progressText {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--accent);
+  min-width: 40px;
+  text-align: right;
+}
+
+/* 结果展示 */
+.resultBox {
+  padding: 16px;
+  border-radius: 10px;
+  font-size: 13px;
+}
+
+.resultBox.success {
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.resultBox.partial {
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.resultSummary {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.resultTotal {
+  color: var(--text-h);
+  font-weight: 500;
+}
+
+.resultSuccess {
+  color: #10b981;
+  font-weight: 500;
+}
+
+.resultWarning {
+  color: #f59e0b;
+  font-weight: 500;
+}
+
+.resultFailed {
+  color: #dc2626;
+  font-weight: 500;
+}
+
+.errorList {
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+  margin-top: 12px;
+}
+
+.errorTitle {
+  margin: 0 0 8px;
+  font-weight: 500;
+  color: var(--text-h);
+}
+
+.errorItem {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.errorItem:last-child {
+  border-bottom: none;
+}
+
+.errorFile {
+  color: var(--text-h);
+  font-weight: 500;
+}
+
+.errorMsg {
+  color: #dc2626;
+  font-size: 12px;
+}
+
+/* DOI 文本框 */
+.doiTextarea {
+  width: 100%;
+  padding: 16px;
+  background: var(--code-bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-size: 14px;
+  color: var(--text-h);
+  resize: vertical;
+  min-height: 160px;
+  box-sizing: border-box;
+  font-family: inherit;
+  line-height: 1.6;
+}
+
+.doiTextarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-bg);
+}
+
+.doiTextarea::placeholder {
+  color: var(--text);
+  opacity: 0.4;
+}
+
+.doiTextarea:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.doiCount {
+  font-size: 13px;
+  color: var(--text);
+  opacity: 0.7;
+}
+
+/* 加载指示器 */
+.loadingIndicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 16px;
+  color: var(--text);
+}
+
+.spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* 上传按钮 */
+.uploadBtn {
+  width: 100%;
+  padding: 14px 24px;
+  background: var(--accent);
+  color: white;
+  border: none;
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.uploadBtn:hover:not(:disabled) {
+  opacity: 0.9;
+  transform: translateY(-1px);
+}
+
+.uploadBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* 响应式 */
+@media (max-width: 640px) {
+  .modal {
+    max-width: 100%;
+    max-height: 100vh;
+    border-radius: 0;
+  }
+  
+  .tabs {
+    padding: 0 12px;
+  }
+  
+  .tab {
+    padding: 12px;
+    font-size: 13px;
+  }
+  
+  .tab span {
+    display: none;
+  }
+  
+  .content {
+    padding: 16px;
+  }
+  
+  .dropzone {
+    padding: 32px 20px;
+  }
+}

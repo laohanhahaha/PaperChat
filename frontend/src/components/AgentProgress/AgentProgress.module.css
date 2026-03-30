@@ -1,0 +1,354 @@
+/* AgentProgress 组件样式 - 深色主题 */
+
+.container {
+    background: linear-gradient(180deg, #1a1a2e 0%, #16213e 100%);
+    border-radius: 12px;
+    padding: 20px;
+    color: #e0e0e0;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    max-width: 100%;
+    overflow: hidden;
+}
+
+/* ============ 意图识别区域 ============ */
+
+.intentSection {
+    margin-bottom: 20px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.intentHeader {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 8px;
+}
+
+.intentLabel {
+    font-size: 12px;
+    font-weight: 600;
+    color: #8892b0;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.complexityBadge {
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-weight: 500;
+}
+
+.complexityLow {
+    background: rgba(34, 197, 94, 0.2);
+    color: #22c55e;
+}
+
+.complexityMedium {
+    background: rgba(234, 179, 8, 0.2);
+    color: #eab308;
+}
+
+.complexityHigh {
+    background: rgba(239, 68, 68, 0.2);
+    color: #ef4444;
+}
+
+.intentType {
+    font-size: 18px;
+    font-weight: 600;
+    color: #64ffda;
+    margin-bottom: 6px;
+}
+
+.intentReasoning {
+    font-size: 13px;
+    color: #8892b0;
+    line-height: 1.5;
+}
+
+/* ============ 任务步骤区域 ============ */
+
+.planSection {
+    margin-bottom: 20px;
+}
+
+.sectionTitle {
+    font-size: 14px;
+    font-weight: 600;
+    color: #ccd6f6;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.sectionTitle::before {
+    content: '';
+    width: 4px;
+    height: 16px;
+    background: linear-gradient(180deg, #64ffda 0%, #00a8e8 100%);
+    border-radius: 2px;
+}
+
+.stepsList {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.stepItem {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 12px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    transition: all 0.3s ease;
+}
+
+.stepCompleted {
+    background: rgba(34, 197, 94, 0.08);
+    border-color: rgba(34, 197, 94, 0.2);
+}
+
+.stepRunning {
+    background: rgba(100, 255, 218, 0.08);
+    border-color: rgba(100, 255, 218, 0.3);
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% {
+        box-shadow: 0 0 0 0 rgba(100, 255, 218, 0.2);
+    }
+    50% {
+        box-shadow: 0 0 0 4px rgba(100, 255, 218, 0);
+    }
+}
+
+.stepPending {
+    opacity: 0.6;
+}
+
+.stepIcon {
+    flex-shrink: 0;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.iconCompleted {
+    width: 20px;
+    height: 20px;
+    color: #22c55e;
+}
+
+.iconPending {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    color: #8892b0;
+}
+
+/* 加载动画 */
+.spinner {
+    width: 20px;
+    height: 20px;
+    position: relative;
+}
+
+.spinnerInner {
+    width: 100%;
+    height: 100%;
+    border: 2px solid rgba(100, 255, 218, 0.2);
+    border-top-color: #64ffda;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.stepContent {
+    flex: 1;
+    min-width: 0;
+}
+
+.stepHeader {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 4px;
+}
+
+.stepNumber {
+    font-size: 12px;
+    font-weight: 600;
+    color: #ccd6f6;
+}
+
+.stepTool {
+    font-size: 11px;
+    padding: 2px 6px;
+    background: rgba(100, 255, 218, 0.15);
+    color: #64ffda;
+    border-radius: 4px;
+    font-family: 'Monaco', 'Menlo', monospace;
+}
+
+.stepDescription {
+    font-size: 13px;
+    color: #a8b2d1;
+    line-height: 1.4;
+}
+
+.stepResult {
+    margin-top: 8px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.resultTag {
+    font-size: 11px;
+    padding: 3px 8px;
+    background: rgba(34, 197, 94, 0.15);
+    color: #22c55e;
+    border-radius: 4px;
+}
+
+/* ============ 最终答案区域 ============ */
+
+.answerSection {
+    margin-top: 20px;
+    padding-top: 20px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.answerContent {
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 8px;
+    padding: 16px;
+    min-height: 60px;
+    line-height: 1.7;
+}
+
+.answerLoading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.answerText {
+    font-size: 14px;
+    color: #e0e0e0;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+}
+
+.cursor {
+    display: inline-block;
+    color: #64ffda;
+    animation: blink 1s infinite;
+    margin-left: 2px;
+}
+
+@keyframes blink {
+    0%, 50% {
+        opacity: 1;
+    }
+    51%, 100% {
+        opacity: 0;
+    }
+}
+
+/* 加载动画点 */
+.loadingDots {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+}
+
+.loadingDots span {
+    width: 8px;
+    height: 8px;
+    background: #64ffda;
+    border-radius: 50%;
+    animation: bounce 1.4s ease-in-out infinite both;
+}
+
+.loadingDots span:nth-child(1) {
+    animation-delay: -0.32s;
+}
+
+.loadingDots span:nth-child(2) {
+    animation-delay: -0.16s;
+}
+
+@keyframes bounce {
+    0%, 80%, 100% {
+        transform: scale(0);
+        opacity: 0.5;
+    }
+    40% {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+/* ============ 错误区域 ============ */
+
+.errorSection {
+    margin-top: 20px;
+    padding: 16px;
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.2);
+    border-radius: 8px;
+}
+
+.errorTitle {
+    font-size: 14px;
+    font-weight: 600;
+    color: #ef4444;
+    margin-bottom: 8px;
+}
+
+.errorMessage {
+    font-size: 13px;
+    color: #fca5a5;
+    line-height: 1.5;
+}
+
+/* ============ 响应式适配 ============ */
+
+@media (max-width: 640px) {
+    .container {
+        padding: 16px;
+    }
+
+    .intentType {
+        font-size: 16px;
+    }
+
+    .stepItem {
+        padding: 10px;
+    }
+
+    .stepHeader {
+        flex-wrap: wrap;
+    }
+}

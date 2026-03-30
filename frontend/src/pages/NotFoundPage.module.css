@@ -1,0 +1,133 @@
+/* 404 页面 - 深色主题 */
+.container {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f172a 100%);
+    padding: 20px;
+}
+
+.content {
+    text-align: center;
+    max-width: 480px;
+    padding: 48px 32px;
+}
+
+.icon {
+    font-size: 64px;
+    margin-bottom: 24px;
+    opacity: 0.9;
+}
+
+.title {
+    font-size: 96px;
+    font-weight: 700;
+    background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #a855f7 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin: 0 0 8px 0;
+    line-height: 1;
+    letter-spacing: -4px;
+}
+
+.subtitle {
+    font-size: 28px;
+    font-weight: 600;
+    color: #f1f5f9;
+    margin: 0 0 16px 0;
+}
+
+.description {
+    font-size: 16px;
+    color: #94a3b8;
+    margin: 0 0 40px 0;
+    line-height: 1.6;
+}
+
+.actions {
+    display: flex;
+    gap: 16px;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.primaryBtn {
+    padding: 14px 32px;
+    font-size: 15px;
+    font-weight: 600;
+    color: #ffffff;
+    background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+    border: none;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 4px 14px rgba(99, 102, 241, 0.4);
+}
+
+.primaryBtn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(99, 102, 241, 0.5);
+}
+
+.primaryBtn:active {
+    transform: translateY(0);
+}
+
+.secondaryBtn {
+    padding: 14px 32px;
+    font-size: 15px;
+    font-weight: 600;
+    color: #cbd5e1;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.secondaryBtn:hover {
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.25);
+    color: #f1f5f9;
+}
+
+.secondaryBtn:active {
+    transform: translateY(1px);
+}
+
+/* 响应式适配 */
+@media (max-width: 640px) {
+    .content {
+        padding: 32px 24px;
+    }
+
+    .icon {
+        font-size: 48px;
+    }
+
+    .title {
+        font-size: 72px;
+        letter-spacing: -2px;
+    }
+
+    .subtitle {
+        font-size: 22px;
+    }
+
+    .description {
+        font-size: 14px;
+    }
+
+    .actions {
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    .primaryBtn,
+    .secondaryBtn {
+        width: 100%;
+        padding: 12px 24px;
+    }
+}

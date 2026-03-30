@@ -1,0 +1,488 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* Tab 切换栏 */
+.tabBar {
+  display: flex;
+  gap: 0;
+  padding: 0.5rem 0.75rem 0;
+  background: #f5f5f7;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.tabBtn {
+  flex: 1;
+  padding: 0.625rem 0.75rem;
+  border: none;
+  background: transparent;
+  color: #86868b;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  cursor: pointer;
+  border-radius: 0.5rem 0.5rem 0 0;
+  transition: all 0.2s ease;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+}
+
+.tabBtn:hover {
+  color: #1d1d1f;
+  background: rgba(0, 0, 0, 0.03);
+}
+
+.tabBtn.active {
+  color: #007aff;
+  background: #ffffff;
+  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.tabIndicator {
+  width: 6px;
+  height: 6px;
+  background: #34c759;
+  border-radius: 50%;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.tabBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  margin-left: 4px;
+  background: var(--color-accent, #007AFF);
+  color: #fff;
+  border-radius: 8px;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* Tab 内容区 */
+.tabContent {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #86868b;
+  font-size: 0.875rem;
+  padding: 2.5rem 1rem;
+  text-align: center;
+}
+
+.emptyIcon {
+  font-size: 2.5rem;
+  margin: 0 0 0.75rem 0;
+  opacity: 0.8;
+}
+
+.emptyTitle {
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: #1d1d1f;
+  margin: 0 0 0.375rem 0;
+}
+
+.emptyHint {
+  font-size: 0.8125rem;
+  color: #86868b;
+  margin: 0;
+}
+
+.card {
+  background: #ffffff;
+  border-radius: 0.75rem;
+  padding: 1rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+  transition: box-shadow 0.2s;
+  animation: cardBounceIn 0.8s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+
+.card:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
+.cardHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.typeTag {
+  display: inline-block;
+  padding: 0.125rem 0.5rem;
+  border-radius: 0.25rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  background: rgba(0, 122, 255, 0.08);
+  color: #007aff;
+  flex-shrink: 0;
+}
+
+.sectionName {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #1d1d1f;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.explanation {
+  font-size: 0.8125rem;
+  line-height: 1.6;
+  color: #424245;
+}
+
+.loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 1rem;
+  color: #86868b;
+  font-size: 0.8125rem;
+  animation: cardBounceIn 0.5s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+
+.spinner {
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid rgba(0, 0, 0, 0.1);
+  border-top-color: #007aff;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes cardBounceIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.3) translateY(20px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* 中等屏幕适配 */
+@media (max-width: 1200px) {
+  .container {
+    gap: 0.625rem;
+    padding: 0.625rem;
+  }
+
+  .card {
+    padding: 0.875rem;
+  }
+
+  .explanation {
+    font-size: 0.75rem;
+  }
+}
+
+/* 小屏幕适配 */
+@media (max-width: 768px) {
+  .container {
+    gap: 0.75rem;
+    padding: 0.75rem;
+  }
+
+  .card {
+    padding: 1rem;
+    border-radius: 0.625rem;
+  }
+
+  .typeTag {
+    font-size: 0.625rem;
+    padding: 0.125rem 0.375rem;
+  }
+
+  .sectionName {
+    font-size: 0.8125rem;
+  }
+
+  .explanation {
+    font-size: 0.8125rem;
+  }
+}
+
+/* 滚动条 */
+.tabContent::-webkit-scrollbar {
+  width: 6px;
+}
+
+.tabContent::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.tabContent::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 3px;
+}
+
+/* ========== 深度分析维度卡片样式 ========== */
+
+.dimensionCard {
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+  border-radius: 0.75rem;
+  overflow: hidden;
+  transition: all 0.3s ease;
+  animation: cardBounceIn 0.6s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.dimensionCard:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+  border-color: rgba(0, 122, 255, 0.3);
+}
+
+.dimensionCard.expanded {
+  border-color: rgba(0, 122, 255, 0.5);
+}
+
+.dimensionHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.875rem 1rem;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.2s ease;
+}
+
+.dimensionHeader:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.dimensionIcon {
+  font-size: 1.125rem;
+  flex-shrink: 0;
+}
+
+.dimensionTitle {
+  flex: 1;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #f5f5f7;
+}
+
+.expandIcon {
+  font-size: 0.625rem;
+  color: #86868b;
+  transition: transform 0.2s ease;
+}
+
+.dimensionCard.expanded .expandIcon {
+  transform: rotate(90deg);
+}
+
+.dimensionContent {
+  padding: 0 1rem 1rem;
+  animation: slideDown 0.3s ease;
+}
+
+.dimensionContent p {
+  font-size: 0.8125rem;
+  line-height: 1.7;
+  color: #a1a1a6;
+  margin: 0;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ========== 知识点区域样式 ========== */
+
+.knowledgeSection {
+  margin-top: 0.5rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.knowledgeSectionTitle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #f5f5f7;
+  margin: 0 0 0.75rem 0;
+  padding: 0 0.25rem;
+}
+
+.knowledgeCard {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 0.625rem;
+  margin-bottom: 0.5rem;
+  overflow: hidden;
+  transition: all 0.2s ease;
+  animation: cardBounceIn 0.5s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.knowledgeCard:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 214, 10, 0.2);
+}
+
+.knowledgeCard.expanded {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 214, 10, 0.3);
+}
+
+.knowledgeHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.625rem 0.875rem;
+  cursor: pointer;
+  user-select: none;
+}
+
+.knowledgeIcon {
+  font-size: 0.875rem;
+  flex-shrink: 0;
+}
+
+.knowledgeTitle {
+  flex: 1;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: #f5f5f7;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.knowledgeContent {
+  padding: 0 0.875rem 0.75rem;
+  animation: slideDown 0.25s ease;
+}
+
+.knowledgeContent p {
+  font-size: 0.75rem;
+  line-height: 1.6;
+  color: #a1a1a6;
+  margin: 0;
+}
+
+/* ========== 导出按钮样式 ========== */
+
+.exportBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  padding: 0.75rem 1rem;
+  background: linear-gradient(135deg, #007aff 0%, #0051d5 100%);
+  color: #ffffff;
+  border: none;
+  border-radius: 0.625rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  animation: cardBounceIn 0.5s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+
+.exportBtn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 122, 255, 0.3);
+}
+
+.exportBtn:active {
+  transform: translateY(0);
+}
+
+/* ========== 关键词标签样式 ========== */
+
+.keywordsContainer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 20px 16px;
+}
+
+.keywordTag {
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 16px;
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.1), rgba(118, 75, 162, 0.1));
+  color: var(--color-text-primary, #1a1a2e);
+  border: 1px solid rgba(102, 126, 234, 0.25);
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  cursor: default;
+}
+
+.keywordTag:hover {
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.2), rgba(118, 75, 162, 0.2));
+  border-color: rgba(102, 126, 234, 0.4);
+  transform: translateY(-1px);
+}
+
+/* ========== 深色主题适配 ========== */
+
+@media (prefers-color-scheme: dark) {
+  .tabBar {
+    background: #1c1c1e;
+    border-bottom-color: rgba(255, 255, 255, 0.06);
+  }
+  
+  .tabBtn {
+    color: #8e8e93;
+  }
+  
+  .tabBtn:hover {
+    color: #f5f5f7;
+    background: rgba(255, 255, 255, 0.05);
+  }
+  
+  .tabBtn.active {
+    color: #0a84ff;
+    background: #2c2c2e;
+  }
+}

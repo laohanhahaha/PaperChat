@@ -1,0 +1,26 @@
+"""API 路由模块"""
+from app.routers.papers import router as papers_router
+from app.routers.highlights import router as highlights_router
+from app.routers.ws import router as ws_router
+from app.routers.notes import router as notes_router
+from app.routers.reading import router as reading_router
+from app.routers.analysis import router as analysis_router
+from app.routers.chat import router as chat_router
+from app.routers.recommendations import router as recommendations_router
+from app.routers.writing import router as writing_router
+from app.routers.knowledge import router as knowledge_router
+from app.routers.settings import router as settings_router
+
+__all__ = [
+    "papers_router",
+    "highlights_router",
+    "notes_router",
+    "ws_router",
+    "reading_router",
+    "analysis_router",
+    "chat_router",
+    "recommendations_router",
+    "writing_router",
+    "knowledge_router",
+    "settings_router",
+]

@@ -1,0 +1,246 @@
+/* 侧边导航栏 - 主题响应 */
+.navbar {
+    position: fixed;
+    left: 0;
+    top: 0;
+    height: 100vh;
+    width: 64px;
+    background: var(--color-nav-bg);
+    display: flex;
+    flex-direction: column;
+    z-index: 1000;
+    transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    overflow: hidden;
+    box-shadow: var(--shadow-md);
+}
+
+.navbar:hover {
+    width: 200px;
+}
+
+/* Logo 区域 */
+.logo {
+    display: flex;
+    align-items: center;
+    padding: 16px 12px;
+    height: 64px;
+    border-bottom: 1px solid var(--color-nav-border);
+    flex-shrink: 0;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.logo:hover {
+    background: var(--color-nav-hover-bg);
+}
+
+.logoIcon {
+    font-size: 24px;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    background: linear-gradient(135deg, var(--color-accent) 0%, #af52de 100%);
+    border-radius: 10px;
+    margin-right: 12px;
+}
+
+.logoText {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--color-text-primary);
+    white-space: nowrap;
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.navbar:hover .logoText {
+    opacity: 1;
+}
+
+/* 导航项区域 */
+.navItems {
+    flex: 1;
+    padding: 12px 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+/* 自定义滚动条 */
+.navItems::-webkit-scrollbar {
+    width: 3px;
+}
+
+.navItems::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.navItems::-webkit-scrollbar-thumb {
+    background: var(--color-border);
+    border-radius: 2px;
+}
+
+.navItems::-webkit-scrollbar-thumb:hover {
+    background: var(--color-border-strong);
+}
+
+/* 导航项 */
+.navItem {
+    display: flex;
+    align-items: center;
+    padding: 12px;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    position: relative;
+    color: var(--color-nav-text);
+}
+
+.navItem:hover {
+    background: var(--color-nav-hover-bg);
+    color: var(--color-text-primary);
+}
+
+.navItem.active {
+    background: var(--color-nav-active-bg);
+    color: var(--color-nav-text-active);
+}
+
+.navItem.active::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 3px;
+    height: 20px;
+    background: linear-gradient(180deg, var(--color-accent) 0%, #af52de 100%);
+    border-radius: 0 2px 2px 0;
+}
+
+.navIcon {
+    font-size: 20px;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    margin-right: 12px;
+}
+
+.navLabel {
+    font-size: 14px;
+    font-weight: 500;
+    white-space: nowrap;
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.navbar:hover .navLabel {
+    opacity: 1;
+}
+
+/* 用户区域 */
+.userSection {
+    padding: 12px 8px;
+    border-top: 1px solid var(--color-nav-border);
+    flex-shrink: 0;
+}
+
+.userName {
+    padding: 8px 12px;
+    font-size: 13px;
+    color: var(--color-text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    opacity: 0;
+    transition: opacity 0.2s;
+    margin-bottom: 4px;
+}
+
+.navbar:hover .userName {
+    opacity: 1;
+}
+
+.logoutBtn {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    padding: 10px 12px;
+    border: none;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--color-nav-text);
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.logoutBtn:hover {
+    background: var(--color-danger-bg);
+    color: var(--color-danger);
+}
+
+.logoutIcon {
+    font-size: 18px;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    margin-right: 12px;
+}
+
+.logoutText {
+    white-space: nowrap;
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.navbar:hover .logoutText {
+    opacity: 1;
+}
+
+/* 响应式适配 */
+@media (max-width: 768px) {
+    .navbar {
+        width: 56px;
+    }
+
+    .navbar:hover {
+        width: 180px;
+    }
+
+    .logo {
+        padding: 12px 8px;
+        height: 56px;
+    }
+
+    .logoIcon {
+        width: 36px;
+        height: 36px;
+        font-size: 20px;
+    }
+
+    .navItems {
+        padding: 8px 6px;
+    }
+
+    .navItem {
+        padding: 10px;
+    }
+
+    .navIcon {
+        width: 28px;
+        height: 28px;
+        font-size: 18px;
+    }
+}

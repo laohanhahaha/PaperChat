@@ -1,0 +1,462 @@
+/* 推荐组件样式 - 深色主题 */
+
+.container {
+  background: linear-gradient(145deg, #1e293b 0%, #0f172a 100%);
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+/* 头部样式 */
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  background: rgba(255, 255, 255, 0.03);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #e2e8f0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.title::before {
+  content: '';
+  display: inline-block;
+  width: 4px;
+  height: 16px;
+  background: linear-gradient(180deg, #3b82f6 0%, #8b5cf6 100%);
+  border-radius: 2px;
+}
+
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.refreshBtn,
+.collapseBtn {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  color: #94a3b8;
+}
+
+.refreshBtn:hover,
+.collapseBtn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #e2e8f0;
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.refreshBtn svg,
+.collapseBtn svg {
+  width: 14px;
+  height: 14px;
+  transition: transform 0.2s ease;
+}
+
+/* 论文列表 */
+.paperList {
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+/* 自定义滚动条 */
+.paperList::-webkit-scrollbar {
+  width: 4px;
+}
+
+.paperList::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.paperList::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 2px;
+}
+
+.paperList::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* 论文卡片 */
+.paperCard {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  padding: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.paperCard::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: linear-gradient(180deg, #3b82f6 0%, #8b5cf6 100%);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.paperCard:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.12);
+  transform: translateX(2px);
+}
+
+.paperCard:hover::before {
+  opacity: 1;
+}
+
+/* 卡片头部 */
+.cardHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+
+/* 相似度徽章 */
+.similarityBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.similarityIcon {
+  width: 12px;
+  height: 12px;
+}
+
+/* 匹配原因标签 */
+.matchReason {
+  display: inline-block;
+  padding: 2px 8px;
+  background: rgba(139, 92, 246, 0.15);
+  color: #a78bfa;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 500;
+}
+
+/* 阅读状态标签 */
+.statusBadge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 500;
+}
+
+/* 论文标题 */
+.paperTitle {
+  margin: 0 0 6px 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: #f1f5f9;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* 作者 */
+.paperAuthors {
+  margin: 0 0 8px 0;
+  font-size: 11px;
+  color: #94a3b8;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 摘要预览 */
+.abstractPreview {
+  margin: 0 0 10px 0;
+  font-size: 11px;
+  color: #64748b;
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* 卡片底部 */
+.cardFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: auto;
+}
+
+.metaInfo {
+  font-size: 11px;
+  color: #64748b;
+}
+
+.arrowIcon {
+  width: 14px;
+  height: 14px;
+  color: #475569;
+  transition: all 0.2s ease;
+}
+
+.paperCard:hover .arrowIcon {
+  color: #3b82f6;
+  transform: translateX(2px);
+}
+
+/* 加载状态 */
+.loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+  gap: 12px;
+  color: #94a3b8;
+  font-size: 13px;
+}
+
+.spinner {
+  width: 24px;
+  height: 24px;
+  border: 2px solid rgba(255, 255, 255, 0.1);
+  border-top-color: #3b82f6;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* 空状态 */
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+  gap: 12px;
+  color: #64748b;
+  font-size: 13px;
+  text-align: center;
+}
+
+.emptyIcon {
+  width: 40px;
+  height: 40px;
+  color: #475569;
+  opacity: 0.5;
+}
+
+/* 水平布局 */
+.horizontal .paperList {
+  flex-direction: row;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
+  gap: 12px;
+  padding: 12px;
+}
+
+.horizontal .paperCard {
+  min-width: 240px;
+  max-width: 280px;
+  flex-shrink: 0;
+}
+
+.horizontal .paperList::-webkit-scrollbar {
+  height: 4px;
+}
+
+/* 响应式调整 */
+@media (max-width: 768px) {
+  .container {
+    border-radius: 8px;
+  }
+  
+  .header {
+    padding: 12px;
+  }
+  
+  .paperList {
+    padding: 10px;
+    gap: 8px;
+  }
+  
+  .paperCard {
+    padding: 10px;
+  }
+  
+  .paperTitle {
+    font-size: 12px;
+  }
+}
+
+/* 网络推荐区域 */
+.webSection {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255,255,255,0.1);
+}
+
+.webSectionHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.webSectionHeader h4 {
+  margin: 0;
+  font-size: 14px;
+  color: #e0e0e0;
+}
+
+.searchBtn {
+  padding: 6px 14px;
+  font-size: 12px;
+  border: 1px solid rgba(24, 144, 255, 0.5);
+  background: rgba(24, 144, 255, 0.1);
+  color: #1890ff;
+  border-radius: 16px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.searchBtn:hover:not(:disabled) {
+  background: rgba(24, 144, 255, 0.25);
+}
+
+.searchBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.webLoading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 16px;
+  color: #aaa;
+  font-size: 13px;
+}
+
+.loadingSpinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255,255,255,0.1);
+  border-top: 2px solid #1890ff;
+  border-radius: 50%;
+  animation: webSpin 0.8s linear infinite;
+}
+
+@keyframes webSpin {
+  to { transform: rotate(360deg); }
+}
+
+.webResults {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.webResultCard {
+  display: block;
+  padding: 10px 12px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-left: 3px solid #52c41a;
+  border-radius: 6px;
+  text-decoration: none;
+  color: inherit;
+  transition: all 0.2s;
+  cursor: pointer;
+}
+
+.webResultCard:hover {
+  background: rgba(255,255,255,0.08);
+  border-left-color: #73d13d;
+  transform: translateX(2px);
+}
+
+.webResultTitle {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #e8e8e8;
+  line-height: 1.4;
+}
+
+.externalIcon {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: #52c41a;
+}
+
+.webResultAbstract {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: #999;
+  line-height: 1.5;
+}
+
+.webResultMeta {
+  margin-top: 6px;
+  display: flex;
+  gap: 6px;
+}
+
+.sourceBadge {
+  display: inline-block;
+  padding: 2px 8px;
+  font-size: 11px;
+  background: rgba(82, 196, 26, 0.15);
+  color: #52c41a;
+  border-radius: 10px;
+}
+
+.webHint {
+  padding: 16px;
+  text-align: center;
+  color: #666;
+  font-size: 12px;
+}

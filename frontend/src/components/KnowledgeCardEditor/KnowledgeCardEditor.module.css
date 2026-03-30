@@ -1,0 +1,470 @@
+/* 知识卡片编辑器样式 */
+
+.overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: 20px;
+}
+
+.modal {
+    background: white;
+    border-radius: 16px;
+    width: 100%;
+    max-width: 700px;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    animation: slideIn 0.3s ease;
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateY(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* 头部 */
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 24px;
+    border-bottom: 1px solid #e8e8e8;
+}
+
+.header h2 {
+    font-size: 18px;
+    font-weight: 600;
+    color: #1a1a2e;
+    margin: 0;
+}
+
+.closeBtn {
+    width: 32px;
+    height: 32px;
+    border: none;
+    background: #f5f5f5;
+    border-radius: 8px;
+    font-size: 20px;
+    color: #666;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+}
+
+.closeBtn:hover {
+    background: #e8e8e8;
+    color: #333;
+}
+
+/* 主体 */
+.body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 24px;
+}
+
+/* 表单字段 */
+.field {
+    margin-bottom: 20px;
+}
+
+.field:last-child {
+    margin-bottom: 0;
+}
+
+.label {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 14px;
+    font-weight: 500;
+    color: #333;
+    margin-bottom: 8px;
+}
+
+.input,
+.textarea,
+.select {
+    width: 100%;
+    padding: 12px 16px;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    font-size: 14px;
+    transition: all 0.2s;
+    font-family: inherit;
+}
+
+.input:focus,
+.textarea:focus,
+.select:focus {
+    outline: none;
+    border-color: #4a90e2;
+    box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.1);
+}
+
+.textarea {
+    resize: vertical;
+    min-height: 80px;
+    line-height: 1.6;
+}
+
+.select {
+    cursor: pointer;
+    background: white;
+}
+
+.select:disabled {
+    background: #f5f5f5;
+    cursor: not-allowed;
+}
+
+/* 行布局 */
+.row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+}
+
+/* AI 按钮 */
+.aiBtn {
+    padding: 4px 12px;
+    border: none;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border-radius: 20px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.aiBtn:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.aiBtn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* 标签输入 */
+.tagInputBox {
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    padding: 8px;
+    min-height: 48px;
+}
+
+.tagList {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 12px;
+    background: #e3f2fd;
+    color: #1976d2;
+    border-radius: 20px;
+    font-size: 13px;
+}
+
+.tagRemove {
+    width: 16px;
+    height: 16px;
+    border: none;
+    background: rgba(25, 118, 210, 0.2);
+    border-radius: 50%;
+    font-size: 12px;
+    color: #1976d2;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+}
+
+.tagRemove:hover {
+    background: #1976d2;
+    color: white;
+}
+
+.tagInput {
+    width: 100%;
+    padding: 8px;
+    border: none;
+    font-size: 14px;
+    background: transparent;
+}
+
+.tagInput:focus {
+    outline: none;
+}
+
+/* 论文信息 */
+.paperInfo {
+    padding: 12px 16px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    font-size: 14px;
+    color: #555;
+}
+
+.hint {
+    font-size: 13px;
+    color: #999;
+    margin: 0;
+}
+
+/* 重要性滑块 */
+.range {
+    width: 100%;
+    height: 6px;
+    -webkit-appearance: none;
+    appearance: none;
+    background: #e0e0e0;
+    border-radius: 3px;
+    outline: none;
+}
+
+.range::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 18px;
+    height: 18px;
+    background: #4a90e2;
+    border-radius: 50%;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.range::-webkit-slider-thumb:hover {
+    transform: scale(1.2);
+    box-shadow: 0 2px 8px rgba(74, 144, 226, 0.4);
+}
+
+.range::-moz-range-thumb {
+    width: 18px;
+    height: 18px;
+    background: #4a90e2;
+    border-radius: 50%;
+    cursor: pointer;
+    border: none;
+}
+
+/* 关联管理 */
+.relationsSection {
+    margin-top: 24px;
+    padding-top: 24px;
+    border-top: 1px solid #e8e8e8;
+}
+
+.relationsHeader {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+}
+
+.relationsHeader h3 {
+    font-size: 16px;
+    font-weight: 600;
+    color: #1a1a2e;
+    margin: 0;
+}
+
+.relationsList,
+.discoveredRelations {
+    margin-bottom: 16px;
+}
+
+.relationsList h4,
+.discoveredRelations h4 {
+    font-size: 13px;
+    font-weight: 500;
+    color: #666;
+    margin: 0 0 12px 0;
+}
+
+.relationItem,
+.discoveredItem {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    margin-bottom: 8px;
+}
+
+.discoveredItem {
+    justify-content: space-between;
+}
+
+.relationDirection {
+    font-size: 14px;
+    color: #999;
+    font-weight: bold;
+}
+
+.relationType {
+    padding: 2px 8px;
+    background: #e3f2fd;
+    color: #1976d2;
+    border-radius: 4px;
+    font-size: 12px;
+    white-space: nowrap;
+}
+
+.relationCard {
+    flex: 1;
+    font-size: 14px;
+    color: #333;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.relationDesc {
+    font-size: 12px;
+    color: #999;
+}
+
+.relationDelete {
+    width: 24px;
+    height: 24px;
+    border: none;
+    background: rgba(231, 76, 60, 0.1);
+    color: #e74c3c;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+}
+
+.relationDelete:hover {
+    background: #e74c3c;
+    color: white;
+}
+
+.discoveredInfo {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex: 1;
+}
+
+.addRelationBtn {
+    padding: 6px 14px;
+    border: none;
+    background: #4caf50;
+    color: white;
+    border-radius: 6px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.addRelationBtn:hover {
+    background: #43a047;
+}
+
+.noRelations {
+    text-align: center;
+    padding: 20px;
+    color: #999;
+    font-size: 14px;
+}
+
+/* 底部按钮 */
+.footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    padding: 16px 24px;
+    border-top: 1px solid #e8e8e8;
+}
+
+.cancelBtn {
+    padding: 10px 24px;
+    border: 1px solid #e0e0e0;
+    background: white;
+    color: #666;
+    border-radius: 8px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.cancelBtn:hover {
+    background: #f5f5f5;
+}
+
+.saveBtn {
+    padding: 10px 32px;
+    border: none;
+    background: #4a90e2;
+    color: white;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.saveBtn:hover:not(:disabled) {
+    background: #357abd;
+}
+
+.saveBtn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* 响应式 */
+@media (max-width: 600px) {
+    .overlay {
+        padding: 0;
+    }
+    
+    .modal {
+        max-height: 100vh;
+        border-radius: 0;
+    }
+    
+    .row {
+        grid-template-columns: 1fr;
+    }
+    
+    .body {
+        padding: 16px;
+    }
+    
+    .footer {
+        padding: 12px 16px;
+    }
+}
