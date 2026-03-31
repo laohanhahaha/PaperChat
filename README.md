@@ -6,21 +6,23 @@
 
 ### 核心功能
 
-| 功能模块 | 说明 | 状态 |
-|---------|------|------|
-| 论文管理 | PDF 上传、存储、元数据管理、阅读状态追踪 | ✅ 已完成 |
-| PDF 阅读器 | 原生 PDF 渲染、文本选择、页码导航、阅读进度保存 | ✅ 已完成 |
-| 论文解析 | AI 自动分析论文结构、章节概览、深度分析 | ✅ 已完成 |
-| 智能问答 | 基于 RAG 的多轮对话、会话持久化、引用溯源 | ✅ 已完成 |
-| 高亮标注 | 文本高亮、多色标注、标注管理 | ✅ 已完成 |
-| 笔记系统 | 笔记创建、编辑、关联高亮、笔记面板 | ✅ 已完成 |
-| 知识库 | 知识卡片管理、标签分类、搜索筛选 | ✅ 已完成 |
-| 写作辅助 | 大纲生成、段落生成、学术润色、引用格式、论文对比 | ✅ 已完成 |
-| 联网搜索 | 问答时联网搜索补充信息 | ✅ 已完成 |
-| 推荐系统 | 相似论文推荐 | ✅ 已完成 |
-| Agent 模式 | 意图识别、任务规划、多步推理 | ✅ 已完成 |
-| 用户设置 | 个性化配置、模型参数、主题切换 | ✅ 已完成 |
-| 流式传输 | WebSocket 双向通信，实时流式输出 | ✅ 已完成 |
+| 功能模块 | 说明 | 后端 | 前端 |
+|---------|------|------|------|
+| 论文管理 | PDF 上传、存储、元数据管理、阅读状态追踪 | ✅ | ✅ |
+| PDF 阅读器 | 原生 PDF 渲染、文本选择、页码导航、阅读进度保存 | ✅ | ✅ |
+| 论文解析 | AI 自动分析论文结构、章节概览、深度分析 | ✅ | ✅ |
+| 智能问答 | 基于 RAG 的多轮对话、会话持久化、引用溯源 | ✅ | ✅ |
+| 高亮标注 | 文本高亮、多色标注、标注管理 | ✅ | ✅ |
+| 笔记系统 | 笔记创建、编辑、关联高亮、笔记面板 | ✅ | ✅ |
+| 知识库 | 知识卡片管理、标签分类、搜索筛选 | ✅ | ✅ |
+| 写作辅助 | 大纲生成、段落生成、学术润色、引用格式、论文对比 | ✅ | ✅ |
+| 联网搜索 | 问答时联网搜索补充信息 | ✅ | ✅ |
+| 推荐系统 | 相似论文推荐 | ✅ | ✅ |
+| Agent 模式 | 意图识别、任务规划、多步推理 | ✅ | ❌ 待集成 |
+| 阅读辅助 | 术语解释、文本摘要、翻译（选中文本触发） | ✅ | ❌ 待集成 |
+| 知识图谱 | 知识点可视化图谱 | ⚠️ 待确认 | ⚠️ 待确认 |
+| 用户设置 | 个性化配置、模型参数、主题切换 | ✅ | ✅ |
+| 流式传输 | WebSocket 双向通信，实时流式输出 | ✅ | ✅ |
 
 ### 页面结构
 
@@ -30,8 +32,10 @@
 | 论文列表 | `/papers` | 论文库管理、批量导入 |
 | 论文阅读 | `/paper/:id` | 三栏布局阅读页面 |
 | 知识库 | `/knowledge` | 知识卡片管理 |
+| 知识图谱 | `/knowledge-graph` | 知识点可视化图谱（待完善） |
 | 写作辅助 | `/writing` | 大纲/润色/引用/对比 |
 | 系统设置 | `/settings` | 个性化配置 |
+| 用户认证 | `/auth` | 登录/注册 |
 
 ## 技术栈
 
@@ -140,17 +144,18 @@ PaperChat/
 │   │   │   ├── NotePanel/       # 笔记面板
 │   │   │   ├── NoteEditor/      # 笔记编辑器
 │   │   │   ├── KnowledgeCardEditor/
-│   │   │   ├── AgentProgress/   # Agent 进度
+│   │   │   ├── AgentProgress/   # Agent 进度（待集成）
 │   │   │   ├── Recommendations/ # 推荐面板
 │   │   │   ├── PaperSelector/   # 论文选择器
 │   │   │   ├── BatchImport/     # 批量导入
-│   │   │   ├── ReadingAssist/   # 阅读辅助
+│   │   │   ├── ReadingAssist/   # 阅读辅助（待集成）
 │   │   │   ├── Navbar/          # 导航栏
 │   │   │   └── ProtectedRoute.jsx
 │   │   ├── pages/               # 页面组件
 │   │   │   ├── ChatPage.jsx      # 统一聊天页面
 │   │   │   ├── PaperList.jsx    # 论文列表
 │   │   │   ├── KnowledgePage.jsx# 知识库
+│   │   │   ├── KnowledgeGraphPage.jsx # 知识图谱（待完善）
 │   │   │   ├── WritingPage.jsx  # 写作辅助
 │   │   │   ├── SettingsPage.jsx # 系统设置
 │   │   │   ├── AuthPage.jsx     # 登录注册
@@ -249,10 +254,28 @@ npm run dev
 
 ### Agent 智能体
 
+> **状态**：后端 ✅ 已完成 | 前端 ❌ 待集成
+
 - **意图识别**：自动判断用户请求类型（问答/分析/对比/搜索/写作）
 - **任务规划**：复杂请求自动拆解为多步任务
 - **工具调用**：支持搜索、摘要、翻译、解释、对比、评估等多种工具
 - **结果聚合**：多步结果整合为连贯回答
+
+**已实现的 9 个工具**：
+
+| 工具 | 功能 |
+|------|------|
+| `search_text` | 搜索论文文本 |
+| `summarize` | 文本摘要 |
+| `translate` | 翻译 |
+| `explain_term` | 术语解释 |
+| `extract_key_points` | 提取知识点 |
+| `compare_content` | 对比内容 |
+| `generate_outline` | 生成提纲 |
+| `assess_quality` | 质量评估 |
+| `get_paper_info` | 获取论文信息 |
+
+**待完成**：ChatPage 中启用 Agent 模式开关，集成 AgentProgress 进度展示组件
 
 ### 写作辅助
 
@@ -280,7 +303,9 @@ npm run dev
 | `chat` | `message` | 基础问答 |
 | `rag_chat` | `message`, `paper_id`, `session_id`, `user_id`, `enable_search` | RAG 增强问答 |
 | `cross_doc_chat` | `message`, `paper_ids`, `session_id`, `user_id` | 跨文档问答 |
-| `agent_chat` | `message`, `paper_id`, `paper_ids` | Agent 智能问答 |
+| `unified_chat` | `message`, `paper_id`, `paper_ids`, `session_id`, `enable_search` | 统一聊天入口（自动路由） |
+| `agent_chat` | `message`, `paper_id`, `paper_ids` | Agent 智能问答（后端已实现，前端待集成） |
+| `cancel` | - | 取消当前任务 |
 
 ### 服务器 → 客户端
 
@@ -294,11 +319,13 @@ npm run dev
 | `cross_doc_chunk` | `content` | 跨文档问答流式数据 |
 | `cross_doc_sources` | `sources` | 跨文档引用来源 |
 | `search_status` | `status`, `results_count` | 联网搜索状态 |
+| `intent_detected` | `intent`, `tool`, `confidence`, `matched` | 意图识别结果（统一聊天入口） |
 | `agent_intent` | `intent` | Agent 意图识别结果 |
 | `agent_plan` | `plan` | Agent 任务计划 |
 | `agent_step` | `step`, `description` | Agent 步骤开始 |
 | `agent_step_result` | `step`, `result` | Agent 步骤结果 |
 | `agent_answer_chunk` | `content` | Agent 最终答案片段 |
+| `cancelled` | `message` | 任务取消确认 |
 | `keywords_result` | `keywords` | 关键词提取结果 |
 | `done` | `channel`, `session_id` | 传输完成 |
 | `error` | `message` | 错误信息 |
@@ -397,38 +424,53 @@ npm run dev
 
 ### v3.1 — Agent 智能体后端（2026-03-31）
 
+> **状态**：后端 ✅ 已完成 | 前端 ❌ 待集成
+
 - Agent 意图识别
 - 任务规划与执行
-- 多工具调用
+- 多工具调用（9 个工具已实现）
 - 联网搜索集成
 - 跨文档问答
 - 论文对比分析
 - RAG 参数可配置
 - 会话持久化优化
 
-### v3.2 — Agent 前端集成 + 统一聊天（2026-04-01）
+### v3.2 — 统一聊天入口 + 设计系统重构（2026-04-01）
 
-> **状态**：✅ 已完成
+> **状态**：⚠️ 部分完成
+
+#### 已完成功能
 
 - 统一聊天入口：所有功能（问答、分析、联网搜索）聚合到 `/chat` 页面
 - 论文选择支持单篇或多篇
-- Agent 聊天入口
-- sendAgentMessage WebSocket 消息发送
-- AgentProgress 执行进度展示
-- 意图识别展示
-- 任务步骤可视化
-- 工具调用结果展示
-- 普通 RAG / Agent 模式切换
+- 基于关键词的意图识别与自动路由
+- 联网搜索开关
+- 会话持久化与重命名
 - 导航栏调整：聊天入口置于论文库之上
+- 设计系统重构：从冷色调蓝色系改为暖色调学术风格
+
+#### 设计系统变更
+
+- 配色方案：蓝色 `#007aff` → 暗金色 `#B8860B`
+- 字体系统：新增 Playfair Display 衬线字体
+- 页面样式：ChatPage、Navbar、PaperList 等全面更新
+
+#### 待完成功能（Agent 前端集成）
+
+- [ ] ChatPage Agent 模式开关
+- [ ] AgentProgress 进度展示组件集成
+- [ ] 完整 LLM 意图识别（当前使用关键词匹配）
+- [ ] 任务步骤可视化
+- [ ] 工具调用结果展示
 
 #### 涉及文件
 
-- `frontend/src/pages/ChatPage.jsx` - 新增统一聊天页面
-- `frontend/src/components/ChatPanel/ChatPanel.jsx` - Agent 模式切换
-- `frontend/src/hooks/useWebSocket.js` - sendAgentMessage 方法
-- `frontend/src/components/AgentProgress/AgentProgress.jsx` - 进度展示
+- `frontend/src/pages/ChatPage.jsx` - 统一聊天页面
+- `frontend/src/hooks/useWebSocket.js` - WebSocket 方法扩展
+- `frontend/src/stores/chatStore.js` - 会话管理增强
+- `frontend/src/components/AgentProgress/` - Agent 进度组件（已实现，待集成）
 - `frontend/src/components/Navbar/Navbar.jsx` - 导航顺序调整
-- `frontend/src/components/PaperSelector/PaperSelector.jsx` - minSelection 参数
+- `frontend/src/index.css` - 设计系统重构
 
 ---
 

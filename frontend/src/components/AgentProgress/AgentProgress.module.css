@@ -1,12 +1,13 @@
-/* AgentProgress 组件样式 - 深色主题 */
+/* AgentProgress 组件样式 - 学术精致风：精致步骤指示器 */
 
 .container {
-    background: linear-gradient(180deg, #1a1a2e 0%, #16213e 100%);
-    border-radius: 12px;
+    background: var(--card-bg);
+    border-radius: 0.5rem;
     padding: 20px;
-    color: #e0e0e0;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    color: var(--text);
+    font-family: var(--sans);
+    box-shadow: 0 4px 20px rgba(92, 64, 51, 0.1);
+    border: 1px solid var(--border);
     max-width: 100%;
     overflow: hidden;
 }
@@ -16,7 +17,7 @@
 .intentSection {
     margin-bottom: 20px;
     padding-bottom: 16px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    border-bottom: 1px solid var(--border);
 }
 
 .intentHeader {
@@ -29,7 +30,7 @@
 .intentLabel {
     font-size: 12px;
     font-weight: 600;
-    color: #8892b0;
+    color: var(--text-l);
     text-transform: uppercase;
     letter-spacing: 0.5px;
 }
@@ -37,35 +38,36 @@
 .complexityBadge {
     font-size: 11px;
     padding: 2px 8px;
-    border-radius: 10px;
+    border-radius: 0.75rem;
     font-weight: 500;
 }
 
 .complexityLow {
-    background: rgba(34, 197, 94, 0.2);
-    color: #22c55e;
+    background: rgba(74, 124, 89, 0.15);
+    color: #4A7C59;
 }
 
 .complexityMedium {
-    background: rgba(234, 179, 8, 0.2);
-    color: #eab308;
+    background: rgba(184, 134, 11, 0.15);
+    color: var(--accent);
 }
 
 .complexityHigh {
-    background: rgba(239, 68, 68, 0.2);
-    color: #ef4444;
+    background: rgba(220, 38, 38, 0.15);
+    color: #dc2626;
 }
 
 .intentType {
     font-size: 18px;
     font-weight: 600;
-    color: #64ffda;
+    color: var(--accent);
     margin-bottom: 6px;
+    font-family: var(--heading);
 }
 
 .intentReasoning {
     font-size: 13px;
-    color: #8892b0;
+    color: var(--text-l);
     line-height: 1.5;
 }
 
@@ -78,7 +80,7 @@
 .sectionTitle {
     font-size: 14px;
     font-weight: 600;
-    color: #ccd6f6;
+    color: var(--text-h);
     margin-bottom: 12px;
     display: flex;
     align-items: center;
@@ -89,7 +91,7 @@
     content: '';
     width: 4px;
     height: 16px;
-    background: linear-gradient(180deg, #64ffda 0%, #00a8e8 100%);
+    background: linear-gradient(180deg, var(--accent) 0%, #9a7010 100%);
     border-radius: 2px;
 }
 
@@ -104,29 +106,29 @@
     align-items: flex-start;
     gap: 12px;
     padding: 12px;
-    border-radius: 8px;
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 0.375rem;
+    background: var(--code-bg);
+    border: 1px solid var(--border);
     transition: all 0.3s ease;
 }
 
 .stepCompleted {
-    background: rgba(34, 197, 94, 0.08);
-    border-color: rgba(34, 197, 94, 0.2);
+    background: rgba(74, 124, 89, 0.08);
+    border-color: rgba(74, 124, 89, 0.2);
 }
 
 .stepRunning {
-    background: rgba(100, 255, 218, 0.08);
-    border-color: rgba(100, 255, 218, 0.3);
+    background: rgba(184, 134, 11, 0.08);
+    border-color: rgba(184, 134, 11, 0.3);
     animation: pulse 2s infinite;
 }
 
 @keyframes pulse {
     0%, 100% {
-        box-shadow: 0 0 0 0 rgba(100, 255, 218, 0.2);
+        box-shadow: 0 0 0 0 rgba(184, 134, 11, 0.2);
     }
     50% {
-        box-shadow: 0 0 0 4px rgba(100, 255, 218, 0);
+        box-shadow: 0 0 0 4px rgba(184, 134, 11, 0);
     }
 }
 
@@ -146,19 +148,19 @@
 .iconCompleted {
     width: 20px;
     height: 20px;
-    color: #22c55e;
+    color: #4A7C59;
 }
 
 .iconPending {
     width: 22px;
     height: 22px;
     border-radius: 50%;
-    background: rgba(255, 255, 255, 0.1);
+    background: var(--border);
     display: flex;
     align-items: center;
     justify-content: center;
     font-size: 11px;
-    color: #8892b0;
+    color: var(--text-l);
 }
 
 /* 加载动画 */
@@ -171,8 +173,8 @@
 .spinnerInner {
     width: 100%;
     height: 100%;
-    border: 2px solid rgba(100, 255, 218, 0.2);
-    border-top-color: #64ffda;
+    border: 2px solid rgba(184, 134, 11, 0.2);
+    border-top-color: var(--accent);
     border-radius: 50%;
     animation: spin 1s linear infinite;
 }
@@ -198,21 +200,21 @@
 .stepNumber {
     font-size: 12px;
     font-weight: 600;
-    color: #ccd6f6;
+    color: var(--text-h);
 }
 
 .stepTool {
     font-size: 11px;
     padding: 2px 6px;
-    background: rgba(100, 255, 218, 0.15);
-    color: #64ffda;
-    border-radius: 4px;
-    font-family: 'Monaco', 'Menlo', monospace;
+    background: rgba(184, 134, 11, 0.15);
+    color: var(--accent);
+    border-radius: 0.25rem;
+    font-family: var(--mono);
 }
 
 .stepDescription {
     font-size: 13px;
-    color: #a8b2d1;
+    color: var(--text);
     line-height: 1.4;
 }
 
@@ -226,9 +228,9 @@
 .resultTag {
     font-size: 11px;
     padding: 3px 8px;
-    background: rgba(34, 197, 94, 0.15);
-    color: #22c55e;
-    border-radius: 4px;
+    background: rgba(74, 124, 89, 0.15);
+    color: #4A7C59;
+    border-radius: 0.25rem;
 }
 
 /* ============ 最终答案区域 ============ */
@@ -236,12 +238,12 @@
 .answerSection {
     margin-top: 20px;
     padding-top: 20px;
-    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    border-top: 1px solid var(--border);
 }
 
 .answerContent {
-    background: rgba(0, 0, 0, 0.2);
-    border-radius: 8px;
+    background: var(--code-bg);
+    border-radius: 0.375rem;
     padding: 16px;
     min-height: 60px;
     line-height: 1.7;
@@ -255,14 +257,14 @@
 
 .answerText {
     font-size: 14px;
-    color: #e0e0e0;
+    color: var(--text);
     white-space: pre-wrap;
     word-wrap: break-word;
 }
 
 .cursor {
     display: inline-block;
-    color: #64ffda;
+    color: var(--accent);
     animation: blink 1s infinite;
     margin-left: 2px;
 }
@@ -286,7 +288,7 @@
 .loadingDots span {
     width: 8px;
     height: 8px;
-    background: #64ffda;
+    background: var(--accent);
     border-radius: 50%;
     animation: bounce 1.4s ease-in-out infinite both;
 }
@@ -315,21 +317,21 @@
 .errorSection {
     margin-top: 20px;
     padding: 16px;
-    background: rgba(239, 68, 68, 0.1);
-    border: 1px solid rgba(239, 68, 68, 0.2);
-    border-radius: 8px;
+    background: rgba(220, 38, 38, 0.08);
+    border: 1px solid rgba(220, 38, 38, 0.2);
+    border-radius: 0.375rem;
 }
 
 .errorTitle {
     font-size: 14px;
     font-weight: 600;
-    color: #ef4444;
+    color: #dc2626;
     margin-bottom: 8px;
 }
 
 .errorMessage {
     font-size: 13px;
-    color: #fca5a5;
+    color: #ef4444;
     line-height: 1.5;
 }
 

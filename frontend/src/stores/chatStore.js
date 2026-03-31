@@ -44,11 +44,11 @@ const useChatStore = create((set, get) => ({
     createSession: async (paperId = null, title = '新对话') => {
         set({ isLoading: true, error: null });
         try {
-            const response = await api.post('/chat/sessions', null, {
+            const response = await api.post('/chat/sessions', undefined, {
                 params: { paper_id: paperId, title }
             });
             const newSession = response.data;
-            
+
             set(state => ({
                 sessions: [newSession, ...state.sessions],
                 currentSessionId: newSession.id,
@@ -56,15 +56,17 @@ const useChatStore = create((set, get) => ({
                 sources: [],
                 isLoading: false
             }));
-            
+
             return newSession;
         } catch (error) {
             console.error('创建会话失败:', error);
-            set({ 
+            console.error('错误响应:', error.response?.data);
+            console.error('错误状态:', error.response?.status);
+            set({
                 error: error.response?.data?.detail || '创建会话失败',
-                isLoading: false 
+                isLoading: false
             });
-            return null;
+            throw error;
         }
     },
 
@@ -147,11 +149,11 @@ const useChatStore = create((set, get) => ({
         }
     },
 
-    // 更新会话标题
-    updateSessionTitle: async (sessionId, title) => {
+    // 更新会话标题（重命名）
+    renameSession: async (sessionId, newTitle) => {
         try {
             const response = await api.put(`/chat/sessions/${sessionId}`, null, {
-                params: { title }
+                params: { title: newTitle }
             });
             
             set(state => ({
@@ -164,9 +166,29 @@ const useChatStore = create((set, get) => ({
             
             return true;
         } catch (error) {
-            console.error('更新会话标题失败:', error);
+            console.error('重命名会话失败:', error);
             return false;
         }
+    },
+
+    // 自动命名会话（基于第一条消息内容）
+    autoNameSession: async (sessionId, firstMessage) => {
+        if (!firstMessage || !sessionId) return false;
+        
+        // 清理消息内容：去掉换行符，取前20个字符
+        const cleanedMessage = firstMessage.replace(/\n/g, ' ').trim();
+        const newTitle = cleanedMessage.length > 20 
+            ? cleanedMessage.slice(0, 20) + '...' 
+            : cleanedMessage;
+        
+        if (!newTitle) return false;
+        
+        return await get().renameSession(sessionId, newTitle);
+    },
+
+    // 更新会话标题（兼容旧方法名）
+    updateSessionTitle: async (sessionId, title) => {
+        return await get().renameSession(sessionId, title);
     },
 
     // 设置当前会话

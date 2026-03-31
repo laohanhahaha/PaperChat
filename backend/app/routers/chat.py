@@ -80,6 +80,22 @@ async def create_session(
         paper_ids: 可选，关联的多论文ID列表（跨文档会话）
         title: 会话标题
     """
+    # 如果提供了 paper_id，验证论文是否存在且属于当前用户
+    if paper_id is not None:
+        from app.models.paper import Paper
+        result = await db.execute(
+            select(Paper).where(
+                and_(
+                    Paper.id == paper_id,
+                    Paper.user_id == current_user.id
+                )
+            )
+        )
+        paper = result.scalar_one_or_none()
+        if paper is None:
+            # 论文不存在或不属于当前用户，创建无关联论文的会话
+            paper_id = None
+    
     session = ChatSession(
         user_id=current_user.id,
         paper_id=paper_id,
@@ -354,10 +370,33 @@ async def create_cross_doc_session(
             detail="跨文档会话需要提供至少一个论文ID"
         )
     
+    # 验证所有论文 ID 是否有效且属于当前用户
+    from app.models.paper import Paper
+    valid_paper_ids = []
+    for pid in paper_ids:
+        result = await db.execute(
+            select(Paper).where(
+                and_(
+                    Paper.id == pid,
+                    Paper.user_id == current_user.id
+                )
+            )
+        )
+        paper = result.scalar_one_or_none()
+        if paper is not None:
+            valid_paper_ids.append(pid)
+    
+    # 如果没有有效的论文 ID，返回错误
+    if len(valid_paper_ids) == 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="没有有效的论文ID，请重新选择"
+        )
+    
     session = ChatSession(
         user_id=current_user.id,
         paper_id=None,  # 跨文档会话不设置单论文ID
-        paper_ids=paper_ids,
+        paper_ids=valid_paper_ids,
         title=title
     )
     

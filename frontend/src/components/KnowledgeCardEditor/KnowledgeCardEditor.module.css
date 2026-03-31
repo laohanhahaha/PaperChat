@@ -1,4 +1,4 @@
-/* 知识卡片编辑器样式 */
+/* 知识卡片编辑器样式 - 学术精致风：索引卡片风格 */
 
 .overlay {
     position: fixed;
@@ -6,7 +6,7 @@
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(0, 0, 0, 0.5);
+    background: rgba(27, 27, 31, 0.7);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -15,15 +15,16 @@
 }
 
 .modal {
-    background: white;
-    border-radius: 16px;
+    background: var(--card-bg);
+    border-radius: 0.5rem;
     width: 100%;
     max-width: 700px;
     max-height: 90vh;
     display: flex;
     flex-direction: column;
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 20px 60px rgba(92, 64, 51, 0.2);
     animation: slideIn 0.3s ease;
+    border: 1px solid var(--border);
 }
 
 @keyframes slideIn {
@@ -43,24 +44,25 @@
     justify-content: space-between;
     align-items: center;
     padding: 20px 24px;
-    border-bottom: 1px solid #e8e8e8;
+    border-bottom: 1px solid var(--border);
 }
 
 .header h2 {
     font-size: 18px;
     font-weight: 600;
-    color: #1a1a2e;
+    color: var(--text-h);
     margin: 0;
+    font-family: var(--heading);
 }
 
 .closeBtn {
     width: 32px;
     height: 32px;
     border: none;
-    background: #f5f5f5;
-    border-radius: 8px;
+    background: var(--code-bg);
+    border-radius: 0.375rem;
     font-size: 20px;
-    color: #666;
+    color: var(--text-l);
     cursor: pointer;
     display: flex;
     align-items: center;
@@ -69,8 +71,8 @@
 }
 
 .closeBtn:hover {
-    background: #e8e8e8;
-    color: #333;
+    background: var(--border);
+    color: var(--text-h);
 }
 
 /* 主体 */
@@ -95,7 +97,7 @@
     align-items: center;
     font-size: 14px;
     font-weight: 500;
-    color: #333;
+    color: var(--text-h);
     margin-bottom: 8px;
 }
 
@@ -104,19 +106,21 @@
 .select {
     width: 100%;
     padding: 12px 16px;
-    border: 1px solid #e0e0e0;
-    border-radius: 8px;
+    border: 1px solid var(--border);
+    border-radius: 0.375rem;
     font-size: 14px;
     transition: all 0.2s;
-    font-family: inherit;
+    font-family: var(--sans);
+    background: var(--bg);
+    color: var(--text-h);
 }
 
 .input:focus,
 .textarea:focus,
 .select:focus {
     outline: none;
-    border-color: #4a90e2;
-    box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.1);
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(184, 134, 11, 0.15);
 }
 
 .textarea {
@@ -127,11 +131,11 @@
 
 .select {
     cursor: pointer;
-    background: white;
+    background: var(--bg);
 }
 
 .select:disabled {
-    background: #f5f5f5;
+    background: var(--code-bg);
     cursor: not-allowed;
 }
 
@@ -146,7 +150,7 @@
 .aiBtn {
     padding: 4px 12px;
     border: none;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: var(--accent);
     color: white;
     border-radius: 20px;
     font-size: 12px;
@@ -156,7 +160,7 @@
 
 .aiBtn:hover:not(:disabled) {
     transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+    box-shadow: 0 4px 12px rgba(184, 134, 11, 0.3);
 }
 
 .aiBtn:disabled {
@@ -164,12 +168,13 @@
     cursor: not-allowed;
 }
 
-/* 标签输入 */
+/* 标签输入 - 暖色调 */
 .tagInputBox {
-    border: 1px solid #e0e0e0;
-    border-radius: 8px;
+    border: 1px solid var(--border);
+    border-radius: 0.375rem;
     padding: 8px;
     min-height: 48px;
+    background: var(--bg);
 }
 
 .tagList {
@@ -184,8 +189,8 @@
     align-items: center;
     gap: 4px;
     padding: 4px 12px;
-    background: #e3f2fd;
-    color: #1976d2;
+    background: rgba(184, 134, 11, 0.15);
+    color: var(--accent);
     border-radius: 20px;
     font-size: 13px;
 }
@@ -194,10 +199,10 @@
     width: 16px;
     height: 16px;
     border: none;
-    background: rgba(25, 118, 210, 0.2);
+    background: rgba(184, 134, 11, 0.2);
     border-radius: 50%;
     font-size: 12px;
-    color: #1976d2;
+    color: var(--accent);
     cursor: pointer;
     display: flex;
     align-items: center;
@@ -206,7 +211,7 @@
 }
 
 .tagRemove:hover {
-    background: #1976d2;
+    background: var(--accent);
     color: white;
 }
 
@@ -216,6 +221,7 @@
     border: none;
     font-size: 14px;
     background: transparent;
+    color: var(--text-h);
 }
 
 .tagInput:focus {
@@ -225,15 +231,15 @@
 /* 论文信息 */
 .paperInfo {
     padding: 12px 16px;
-    background: #f8f9fa;
-    border-radius: 8px;
+    background: var(--code-bg);
+    border-radius: 0.375rem;
     font-size: 14px;
-    color: #555;
+    color: var(--text);
 }
 
 .hint {
     font-size: 13px;
-    color: #999;
+    color: var(--text-l);
     margin: 0;
 }
 
@@ -243,7 +249,7 @@
     height: 6px;
     -webkit-appearance: none;
     appearance: none;
-    background: #e0e0e0;
+    background: var(--border);
     border-radius: 3px;
     outline: none;
 }
@@ -253,7 +259,7 @@
     appearance: none;
     width: 18px;
     height: 18px;
-    background: #4a90e2;
+    background: var(--accent);
     border-radius: 50%;
     cursor: pointer;
     transition: all 0.2s;
@@ -261,13 +267,13 @@
 
 .range::-webkit-slider-thumb:hover {
     transform: scale(1.2);
-    box-shadow: 0 2px 8px rgba(74, 144, 226, 0.4);
+    box-shadow: 0 2px 8px rgba(184, 134, 11, 0.4);
 }
 
 .range::-moz-range-thumb {
     width: 18px;
     height: 18px;
-    background: #4a90e2;
+    background: var(--accent);
     border-radius: 50%;
     cursor: pointer;
     border: none;
@@ -277,7 +283,7 @@
 .relationsSection {
     margin-top: 24px;
     padding-top: 24px;
-    border-top: 1px solid #e8e8e8;
+    border-top: 1px solid var(--border);
 }
 
 .relationsHeader {
@@ -290,8 +296,9 @@
 .relationsHeader h3 {
     font-size: 16px;
     font-weight: 600;
-    color: #1a1a2e;
+    color: var(--text-h);
     margin: 0;
+    font-family: var(--heading);
 }
 
 .relationsList,
@@ -303,7 +310,7 @@
 .discoveredRelations h4 {
     font-size: 13px;
     font-weight: 500;
-    color: #666;
+    color: var(--text-l);
     margin: 0 0 12px 0;
 }
 
@@ -313,8 +320,8 @@
     align-items: center;
     gap: 12px;
     padding: 10px 12px;
-    background: #f8f9fa;
-    border-radius: 8px;
+    background: var(--code-bg);
+    border-radius: 0.375rem;
     margin-bottom: 8px;
 }
 
@@ -324,15 +331,15 @@
 
 .relationDirection {
     font-size: 14px;
-    color: #999;
+    color: var(--text-l);
     font-weight: bold;
 }
 
 .relationType {
     padding: 2px 8px;
-    background: #e3f2fd;
-    color: #1976d2;
-    border-radius: 4px;
+    background: rgba(184, 134, 11, 0.15);
+    color: var(--accent);
+    border-radius: 0.25rem;
     font-size: 12px;
     white-space: nowrap;
 }
@@ -340,7 +347,7 @@
 .relationCard {
     flex: 1;
     font-size: 14px;
-    color: #333;
+    color: var(--text);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -348,16 +355,16 @@
 
 .relationDesc {
     font-size: 12px;
-    color: #999;
+    color: var(--text-l);
 }
 
 .relationDelete {
     width: 24px;
     height: 24px;
     border: none;
-    background: rgba(231, 76, 60, 0.1);
-    color: #e74c3c;
-    border-radius: 4px;
+    background: rgba(220, 38, 38, 0.1);
+    color: #dc2626;
+    border-radius: 0.25rem;
     cursor: pointer;
     font-size: 16px;
     display: flex;
@@ -367,7 +374,7 @@
 }
 
 .relationDelete:hover {
-    background: #e74c3c;
+    background: #dc2626;
     color: white;
 }
 
@@ -381,22 +388,22 @@
 .addRelationBtn {
     padding: 6px 14px;
     border: none;
-    background: #4caf50;
+    background: #4A7C59;
     color: white;
-    border-radius: 6px;
+    border-radius: 0.375rem;
     font-size: 13px;
     cursor: pointer;
     transition: all 0.2s;
 }
 
 .addRelationBtn:hover {
-    background: #43a047;
+    background: #3d6649;
 }
 
 .noRelations {
     text-align: center;
     padding: 20px;
-    color: #999;
+    color: var(--text-l);
     font-size: 14px;
 }
 
@@ -406,30 +413,30 @@
     justify-content: flex-end;
     gap: 12px;
     padding: 16px 24px;
-    border-top: 1px solid #e8e8e8;
+    border-top: 1px solid var(--border);
 }
 
 .cancelBtn {
     padding: 10px 24px;
-    border: 1px solid #e0e0e0;
-    background: white;
-    color: #666;
-    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--card-bg);
+    color: var(--text);
+    border-radius: 0.375rem;
     font-size: 14px;
     cursor: pointer;
     transition: all 0.2s;
 }
 
 .cancelBtn:hover {
-    background: #f5f5f5;
+    background: var(--code-bg);
 }
 
 .saveBtn {
     padding: 10px 32px;
     border: none;
-    background: #4a90e2;
+    background: var(--accent);
     color: white;
-    border-radius: 8px;
+    border-radius: 0.375rem;
     font-size: 14px;
     font-weight: 500;
     cursor: pointer;
@@ -437,7 +444,7 @@
 }
 
 .saveBtn:hover:not(:disabled) {
-    background: #357abd;
+    background: #9a7010;
 }
 
 .saveBtn:disabled {

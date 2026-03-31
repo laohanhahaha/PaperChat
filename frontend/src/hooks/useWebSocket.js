@@ -1,87 +1,112 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useEffect, useCallback, useSyncExternalStore } from 'react';
 
 const WS_URL = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws`;
 const MAX_RETRIES = 5;
 const RETRY_DELAY = 3000;
 
-export default function useWebSocket() {
-  const [status, setStatus] = useState('disconnected'); // connecting | connected | disconnected
-  const wsRef = useRef(null);
-  const handlersRef = useRef(new Map());
-  const retryCountRef = useRef(0);
-  const retryTimerRef = useRef(null);
+let globalWs = null;
+let globalStatus = 'disconnected';
+let globalRetryCount = 0;
+let globalRetryTimer = null;
+const globalHandlers = new Map();
+const statusListeners = new Set();
 
-  const connect = useCallback(() => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) return;
-    
-    setStatus('connecting');
-    const ws = new WebSocket(WS_URL);
-    
-    ws.onopen = () => {
-      setStatus('connected');
-      retryCountRef.current = 0;
-    };
-    
-    ws.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        const type = data.type;
-        // 调用所有注册了该类型的处理器
-        const handlers = handlersRef.current.get(type) || [];
-        handlers.forEach(handler => handler(data));
-        
-        // 也调用通配符处理器
-        const wildcard = handlersRef.current.get('*') || [];
-        wildcard.forEach(handler => handler(data));
-      } catch (err) {
-        console.error('WebSocket message parse error:', err);
+function notifyStatusChange(newStatus) {
+  globalStatus = newStatus;
+  statusListeners.forEach(fn => fn());
+}
+
+function globalConnect() {
+  if (globalWs?.readyState === WebSocket.OPEN || globalWs?.readyState === WebSocket.CONNECTING) return;
+
+  notifyStatusChange('connecting');
+  const ws = new WebSocket(WS_URL);
+
+  ws.onopen = () => {
+    globalRetryCount = 0;
+    notifyStatusChange('connected');
+  };
+
+  ws.onmessage = (event) => {
+    try {
+      const data = JSON.parse(event.data);
+      const type = data.type;
+      const handlers = globalHandlers.get(type) || [];
+      handlers.forEach(handler => handler(data));
+      const wildcard = globalHandlers.get('*') || [];
+      wildcard.forEach(handler => handler(data));
+    } catch (err) {
+      console.error('WebSocket message parse error:', err);
+    }
+  };
+
+  ws.onclose = () => {
+    globalWs = null;
+    notifyStatusChange('disconnected');
+    if (globalRetryCount < MAX_RETRIES) {
+      globalRetryCount++;
+      globalRetryTimer = setTimeout(globalConnect, RETRY_DELAY);
+    }
+  };
+
+  ws.onerror = (err) => {
+    console.error('WebSocket error:', err);
+  };
+
+  globalWs = ws;
+}
+
+function globalDisconnect() {
+  if (globalRetryTimer) {
+    clearTimeout(globalRetryTimer);
+    globalRetryTimer = null;
+  }
+  if (globalWs) {
+    globalWs.close();
+    globalWs = null;
+  }
+  notifyStatusChange('disconnected');
+}
+
+let refCount = 0;
+
+function subscribeStatus(listener) {
+  statusListeners.add(listener);
+  return () => statusListeners.delete(listener);
+}
+
+function getStatusSnapshot() {
+  return globalStatus;
+}
+
+export default function useWebSocket() {
+  const status = useSyncExternalStore(subscribeStatus, getStatusSnapshot);
+
+  useEffect(() => {
+    refCount++;
+    if (refCount === 1) {
+      globalConnect();
+    }
+    return () => {
+      refCount--;
+      if (refCount === 0) {
+        globalDisconnect();
       }
     };
-    
-    ws.onclose = () => {
-      setStatus('disconnected');
-      wsRef.current = null;
-      
-      // 自动重连
-      if (retryCountRef.current < MAX_RETRIES) {
-        retryCountRef.current++;
-        retryTimerRef.current = setTimeout(connect, RETRY_DELAY);
-      }
-    };
-    
-    ws.onerror = (err) => {
-      console.error('WebSocket error:', err);
-    };
-    
-    wsRef.current = ws;
   }, []);
 
-  // 组件挂载时自动连接
-  useEffect(() => {
-    connect();
-    return () => {
-      if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
-      if (wsRef.current) {
-        wsRef.current.close();
-        wsRef.current = null;
-      }
-    };
-  }, [connect]);
-
-  // 发送消息
   const sendMessage = useCallback((type, payload = {}) => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({ type, ...payload }));
+    if (globalWs?.readyState === WebSocket.OPEN) {
+      globalWs.send(JSON.stringify({ type, ...payload }));
       return true;
     }
     console.warn('WebSocket not connected, cannot send message');
     return false;
   }, []);
 
-  // 发送RAG问答消息（带会话信息）
   const sendRagMessage = useCallback((message, paperId, sessionId = null, userId = null, enableSearch = false) => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({
+    if (globalWs?.readyState === WebSocket.OPEN) {
+      globalWs.send(JSON.stringify({
         type: 'rag_chat',
         message,
         paper_id: paperId,
@@ -95,10 +120,9 @@ export default function useWebSocket() {
     return false;
   }, []);
 
-  // 发送跨文档问答消息（带会话信息）
   const sendCrossDocMessage = useCallback((message, paperIds, sessionId = null, userId = null) => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({
+    if (globalWs?.readyState === WebSocket.OPEN) {
+      globalWs.send(JSON.stringify({
         type: 'cross_doc_chat',
         message,
         paper_ids: paperIds,
@@ -111,10 +135,9 @@ export default function useWebSocket() {
     return false;
   }, []);
 
-  // 发送统一聊天消息（根据关键词自动路由）
   const sendUnifiedChatMessage = useCallback((message, paperId = null, paperIds = [], sessionId = null, enableSearch = false) => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({
+    if (globalWs?.readyState === WebSocket.OPEN) {
+      globalWs.send(JSON.stringify({
         type: 'unified_chat',
         message,
         paper_id: paperId,
@@ -128,20 +151,27 @@ export default function useWebSocket() {
     return false;
   }, []);
 
-  // 注册消息处理器，返回取消注册函数
-  const onMessage = useCallback((type, handler) => {
-    if (!handlersRef.current.has(type)) {
-      handlersRef.current.set(type, []);
+  const sendCancel = useCallback(() => {
+    if (globalWs?.readyState === WebSocket.OPEN) {
+      globalWs.send(JSON.stringify({ type: 'cancel' }));
+      return true;
     }
-    handlersRef.current.get(type).push(handler);
-    
-    // 返回取消注册函数
+    return false;
+  }, []);
+
+  const onMessage = useCallback((typeOrHandler, handler) => {
+    const type = typeof typeOrHandler === 'function' ? '*' : typeOrHandler;
+    const fn = typeof typeOrHandler === 'function' ? typeOrHandler : handler;
+    if (!globalHandlers.has(type)) {
+      globalHandlers.set(type, []);
+    }
+    globalHandlers.get(type).push(fn);
     return () => {
-      const handlers = handlersRef.current.get(type) || [];
-      const idx = handlers.indexOf(handler);
+      const handlers = globalHandlers.get(type) || [];
+      const idx = handlers.indexOf(fn);
       if (idx !== -1) handlers.splice(idx, 1);
     };
   }, []);
 
-  return { status, sendMessage, sendRagMessage, sendCrossDocMessage, sendUnifiedChatMessage, onMessage, connect };
+  return { status, sendMessage, sendRagMessage, sendCrossDocMessage, sendUnifiedChatMessage, sendCancel, onMessage, connect: globalConnect };
 }

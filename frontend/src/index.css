@@ -1,83 +1,86 @@
+/* ===== 学术精致风设计系统 =====
+ * 美学定位：高端学术期刊 x 精品书房
+ * 借鉴 Nature/Science 期刊排版美学，融合现代 UI 交互
+ */
+
 /* ===== 浅色主题变量 ===== */
 :root, [data-theme="light"] {
-  /* 基础变量（保留原有） */
-  --text: #6b6375;
-  --text-h: #08060d;
-  --bg: #fff;
-  --border: #e5e4e7;
-  --code-bg: #f4f3ec;
-  --accent: #aa3bff;
-  --accent-bg: rgba(170, 59, 255, 0.1);
-  --accent-border: rgba(170, 59, 255, 0.5);
-  --social-bg: rgba(244, 243, 236, 0.5);
-  --shadow: rgba(0, 0, 0, 0.1) 0 10px 15px -3px, rgba(0, 0, 0, 0.05) 0 4px 6px -2px;
+  /* 基础变量 */
+  --text: #5C4033;
+  --text-h: #2C2C2C;
+  --bg: #FAFAF6;
+  --border: #E8E0D0;
+  --code-bg: #F5F0E8;
+  --accent: #B8860B;
+  --accent-bg: rgba(184, 134, 11, 0.08);
+  --accent-border: rgba(184, 134, 11, 0.4);
+  --social-bg: rgba(245, 240, 232, 0.5);
+  --shadow: rgba(92, 64, 51, 0.1) 0 10px 15px -3px, rgba(92, 64, 51, 0.05) 0 4px 6px -2px;
 
-  /* 新增语义化变量 - 浅色主题 */
-  --color-bg-primary: #ffffff;
-  --color-bg-secondary: #f5f5f7;
-  --color-bg-tertiary: #f0f0f2;
-  --color-bg-elevated: rgba(255, 255, 255, 0.95);
+  /* 语义化变量 - 浅色主题 */
+  --color-bg-primary: #FAFAF6;
+  --color-bg-secondary: #F5F0E8;
+  --color-bg-tertiary: #EDE6D8;
+  --color-bg-elevated: rgba(250, 250, 246, 0.97);
 
-  --color-text-primary: #1d1d1f;
-  --color-text-secondary: #86868b;
-  --color-text-muted: #aeaeb2;
+  --color-text-primary: #2C2C2C;
+  --color-text-secondary: #7A6E62;
+  --color-text-muted: #A89F94;
 
-  --color-border: rgba(0, 0, 0, 0.06);
-  --color-border-strong: #e5e4e7;
+  --color-border: rgba(92, 64, 51, 0.08);
+  --color-border-strong: #E0D6C8;
 
-  --color-accent: #007aff;
-  --color-accent-hover: #0066d6;
-  --color-accent-bg: rgba(0, 122, 255, 0.1);
+  --color-accent: #B8860B;
+  --color-accent-hover: #9A7209;
+  --color-accent-bg: rgba(184, 134, 11, 0.08);
 
-  --color-success: #34c759;
-  --color-warning: #ff9500;
-  --color-danger: #ff3b30;
-  --color-danger-bg: rgba(255, 59, 48, 0.1);
+  --color-success: #4A7C59;
+  --color-warning: #C4841D;
+  --color-danger: #B33A3A;
+  --color-danger-bg: rgba(179, 58, 58, 0.1);
 
-  --color-card-bg: #ffffff;
-  --color-sidebar-bg: #f5f5f7;
-  --color-input-bg: #ffffff;
-  --color-input-border: rgba(0, 0, 0, 0.1);
+  --color-card-bg: #FFFFFF;
+  --color-sidebar-bg: #F5F0E8;
+  --color-input-bg: #FFFFFF;
+  --color-input-border: rgba(92, 64, 51, 0.12);
 
-  --color-nav-bg: linear-gradient(180deg, #f8f8fa 0%, #f0f0f2 100%);
-  --color-nav-text: #86868b;
-  --color-nav-text-active: #007aff;
-  --color-nav-hover-bg: rgba(0, 0, 0, 0.04);
-  --color-nav-active-bg: rgba(0, 122, 255, 0.1);
-  --color-nav-border: rgba(0, 0, 0, 0.06);
+  --color-nav-bg: linear-gradient(180deg, #F5F0E8 0%, #EDE6D8 100%);
+  --color-nav-text: #7A6E62;
+  --color-nav-text-active: #B8860B;
+  --color-nav-hover-bg: rgba(184, 134, 11, 0.06);
+  --color-nav-active-bg: rgba(184, 134, 11, 0.1);
+  --color-nav-border: rgba(92, 64, 51, 0.08);
 
-  --color-settings-bg: linear-gradient(135deg, #f5f5f7 0%, #e8e8ed 100%);
+  --color-settings-bg: linear-gradient(135deg, #F5F0E8 0%, #EDE6D8 100%);
   --color-settings-card-bg: rgba(255, 255, 255, 0.9);
-  --color-settings-card-border: rgba(0, 0, 0, 0.08);
+  --color-settings-card-border: rgba(92, 64, 51, 0.08);
 
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08);
-  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.1);
-  --shadow-lg: 0 10px 25px rgba(0, 0, 0, 0.12);
+  --shadow-sm: 0 1px 3px rgba(92, 64, 51, 0.06);
+  --shadow-md: 0 4px 12px rgba(92, 64, 51, 0.08);
+  --shadow-lg: 0 10px 25px rgba(92, 64, 51, 0.1);
 
-  /* 新增语义化变量 - 浅色主题 */
-  --color-gradient-primary: linear-gradient(135deg, #f5f7fa 0%, #e4e8ec 100%);
-  --color-gradient-accent: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  --color-button-bg: #d9d9d9;
-  --color-button-hover: #c9c9c9;
-  --color-button-text: #333;
-  --color-overlay: rgba(0, 0, 0, 0.5);
-  --color-danger: #dc2626;
-  --color-danger-bg: #fee2e2;
-  --color-danger-border: #fecaca;
-  --color-card-bg: #ffffff;
-  --color-card-hover-bg: rgba(102, 126, 234, 0.03);
-  --color-shadow: rgba(0, 0, 0, 0.08);
-  --color-shadow-hover: rgba(0, 0, 0, 0.12);
-  --color-tag-bg: rgba(156, 39, 176, 0.08);
-  --color-tag-text: #9C27B0;
-  --color-tag-border: rgba(156, 39, 176, 0.2);
+  /* 扩展语义化变量 - 浅色主题 */
+  --color-gradient-primary: linear-gradient(135deg, #FAFAF6 0%, #F5F0E8 100%);
+  --color-gradient-accent: linear-gradient(135deg, #B8860B 0%, #9A7209 100%);
+  --color-button-bg: #E8E0D0;
+  --color-button-hover: #DED4C4;
+  --color-button-text: #5C4033;
+  --color-overlay: rgba(44, 44, 44, 0.5);
+  --color-danger-border: rgba(179, 58, 58, 0.2);
+  --color-card-hover-bg: rgba(184, 134, 11, 0.03);
+  --color-shadow: rgba(92, 64, 51, 0.08);
+  --color-shadow-hover: rgba(92, 64, 51, 0.12);
+  --color-tag-bg: rgba(74, 124, 89, 0.08);
+  --color-tag-text: #4A7C59;
+  --color-tag-border: rgba(74, 124, 89, 0.2);
 
-  --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --heading: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --mono: ui-monospace, Consolas, monospace;
+  /* 字体变量 - 学术精致风 */
+  --sans: 'Source Sans 3', 'Noto Sans SC', system-ui, -apple-system, sans-serif;
+  --heading: 'Playfair Display', 'Noto Serif SC', Georgia, 'Times New Roman', serif;
+  --mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Consolas, monospace;
 
-  font: 18px/145% var(--sans);
-  letter-spacing: 0.18px;
+  font: 17px/150% var(--sans);
+  letter-spacing: 0.2px;
   color-scheme: light;
   color: var(--text);
   background: var(--bg);
@@ -94,154 +97,148 @@
 /* ===== 深色主题变量 ===== */
 [data-theme="dark"] {
   /* 基础变量 */
-  --text: #9ca3af;
-  --text-h: #f3f4f6;
-  --bg: #16171d;
-  --border: #2e303a;
-  --code-bg: #1f2028;
-  --accent: #c084fc;
-  --accent-bg: rgba(192, 132, 252, 0.15);
-  --accent-border: rgba(192, 132, 252, 0.5);
-  --social-bg: rgba(47, 48, 58, 0.5);
+  --text: #B8B0A4;
+  --text-h: #E8E4D9;
+  --bg: #1B1B1F;
+  --border: #33312E;
+  --code-bg: #252320;
+  --accent: #D4A853;
+  --accent-bg: rgba(212, 168, 83, 0.12);
+  --accent-border: rgba(212, 168, 83, 0.4);
+  --social-bg: rgba(37, 35, 32, 0.5);
   --shadow: rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
 
   /* 语义化变量 - 深色主题 */
-  --color-bg-primary: #1a1a2e;
-  --color-bg-secondary: #16213e;
-  --color-bg-tertiary: #1e1e36;
-  --color-bg-elevated: rgba(26, 26, 46, 0.95);
+  --color-bg-primary: #1B1B1F;
+  --color-bg-secondary: #222226;
+  --color-bg-tertiary: #2A2A2E;
+  --color-bg-elevated: rgba(27, 27, 31, 0.97);
 
-  --color-text-primary: #f0f0f0;
-  --color-text-secondary: rgba(255, 255, 255, 0.6);
-  --color-text-muted: rgba(255, 255, 255, 0.4);
+  --color-text-primary: #E8E4D9;
+  --color-text-secondary: rgba(232, 228, 217, 0.6);
+  --color-text-muted: rgba(232, 228, 217, 0.35);
 
-  --color-border: rgba(255, 255, 255, 0.08);
-  --color-border-strong: rgba(255, 255, 255, 0.15);
+  --color-border: rgba(232, 228, 217, 0.08);
+  --color-border-strong: rgba(232, 228, 217, 0.15);
 
-  --color-accent: #6366f1;
-  --color-accent-hover: #818cf8;
-  --color-accent-bg: rgba(99, 102, 241, 0.15);
+  --color-accent: #D4A853;
+  --color-accent-hover: #E0B965;
+  --color-accent-bg: rgba(212, 168, 83, 0.12);
 
-  --color-success: #10b981;
-  --color-warning: #f59e0b;
-  --color-danger: #ef4444;
-  --color-danger-bg: rgba(239, 68, 68, 0.15);
+  --color-success: #5A9A6B;
+  --color-warning: #D49A3A;
+  --color-danger: #C94A4A;
+  --color-danger-bg: rgba(201, 74, 74, 0.12);
 
-  --color-card-bg: rgba(255, 255, 255, 0.04);
-  --color-sidebar-bg: #16213e;
-  --color-input-bg: rgba(255, 255, 255, 0.06);
-  --color-input-border: rgba(255, 255, 255, 0.1);
+  --color-card-bg: #252320;
+  --color-sidebar-bg: #222226;
+  --color-input-bg: rgba(232, 228, 217, 0.06);
+  --color-input-border: rgba(232, 228, 217, 0.1);
 
-  --color-nav-bg: linear-gradient(180deg, #1a1a2e 0%, #16213e 100%);
-  --color-nav-text: rgba(255, 255, 255, 0.6);
-  --color-nav-text-active: #818cf8;
-  --color-nav-hover-bg: rgba(255, 255, 255, 0.08);
-  --color-nav-active-bg: rgba(99, 102, 241, 0.2);
-  --color-nav-border: rgba(255, 255, 255, 0.08);
+  --color-nav-bg: linear-gradient(180deg, #222226 0%, #1B1B1F 100%);
+  --color-nav-text: rgba(232, 228, 217, 0.5);
+  --color-nav-text-active: #D4A853;
+  --color-nav-hover-bg: rgba(212, 168, 83, 0.08);
+  --color-nav-active-bg: rgba(212, 168, 83, 0.12);
+  --color-nav-border: rgba(232, 228, 217, 0.08);
 
-  --color-settings-bg: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-  --color-settings-card-bg: rgba(255, 255, 255, 0.05);
-  --color-settings-card-border: rgba(255, 255, 255, 0.1);
+  --color-settings-bg: linear-gradient(135deg, #222226 0%, #1B1B1F 100%);
+  --color-settings-card-bg: rgba(37, 35, 32, 0.9);
+  --color-settings-card-border: rgba(232, 228, 217, 0.1);
 
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
   --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
   --shadow-lg: 0 10px 25px rgba(0, 0, 0, 0.5);
 
-  /* 新增语义化变量 - 深色主题 */
-  --color-gradient-primary: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-  --color-gradient-accent: linear-gradient(135deg, #4a4e8a 0%, #5a3d7a 100%);
-  --color-button-bg: #2a2d3a;
-  --color-button-hover: #3a3d4a;
-  --color-button-text: #e0e0e0;
+  /* 扩展语义化变量 - 深色主题 */
+  --color-gradient-primary: linear-gradient(135deg, #222226 0%, #1B1B1F 100%);
+  --color-gradient-accent: linear-gradient(135deg, #D4A853 0%, #E0B965 100%);
+  --color-button-bg: #3A3A42;
+  --color-button-hover: #4A4A52;
+  --color-button-text: #E8E4D9;
   --color-overlay: rgba(0, 0, 0, 0.7);
-  --color-danger: #ef4444;
-  --color-danger-bg: rgba(239, 68, 68, 0.15);
-  --color-danger-border: rgba(239, 68, 68, 0.3);
-  --color-card-bg: #1e1e30;
-  --color-card-hover-bg: rgba(99, 102, 241, 0.08);
+  --color-danger-border: rgba(201, 74, 74, 0.25);
+  --color-card-hover-bg: rgba(212, 168, 83, 0.05);
   --color-shadow: rgba(0, 0, 0, 0.3);
   --color-shadow-hover: rgba(0, 0, 0, 0.4);
-  --color-tag-bg: rgba(192, 132, 252, 0.15);
-  --color-tag-text: #c084fc;
-  --color-tag-border: rgba(192, 132, 252, 0.3);
+  --color-tag-bg: rgba(90, 154, 107, 0.12);
+  --color-tag-text: #5A9A6B;
+  --color-tag-border: rgba(90, 154, 107, 0.25);
 
   color-scheme: dark;
 }
 
-/* ===== Auto 模式 - 跟随系统（默认） ===== */
+/* ===== Auto 模式 - 跟随系统 ===== */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     /* 基础变量 */
-    --text: #9ca3af;
-    --text-h: #f3f4f6;
-    --bg: #16171d;
-    --border: #2e303a;
-    --code-bg: #1f2028;
-    --accent: #c084fc;
-    --accent-bg: rgba(192, 132, 252, 0.15);
-    --accent-border: rgba(192, 132, 252, 0.5);
-    --social-bg: rgba(47, 48, 58, 0.5);
+    --text: #B8B0A4;
+    --text-h: #E8E4D9;
+    --bg: #1B1B1F;
+    --border: #33312E;
+    --code-bg: #252320;
+    --accent: #D4A853;
+    --accent-bg: rgba(212, 168, 83, 0.12);
+    --accent-border: rgba(212, 168, 83, 0.4);
+    --social-bg: rgba(37, 35, 32, 0.5);
     --shadow: rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
 
     /* 语义化变量 - 深色主题 */
-    --color-bg-primary: #1a1a2e;
-    --color-bg-secondary: #16213e;
-    --color-bg-tertiary: #1e1e36;
-    --color-bg-elevated: rgba(26, 26, 46, 0.95);
+    --color-bg-primary: #1B1B1F;
+    --color-bg-secondary: #222226;
+    --color-bg-tertiary: #2A2A2E;
+    --color-bg-elevated: rgba(27, 27, 31, 0.97);
 
-    --color-text-primary: #f0f0f0;
-    --color-text-secondary: rgba(255, 255, 255, 0.6);
-    --color-text-muted: rgba(255, 255, 255, 0.4);
+    --color-text-primary: #E8E4D9;
+    --color-text-secondary: rgba(232, 228, 217, 0.6);
+    --color-text-muted: rgba(232, 228, 217, 0.35);
 
-    --color-border: rgba(255, 255, 255, 0.08);
-    --color-border-strong: rgba(255, 255, 255, 0.15);
+    --color-border: rgba(232, 228, 217, 0.08);
+    --color-border-strong: rgba(232, 228, 217, 0.15);
 
-    --color-accent: #6366f1;
-    --color-accent-hover: #818cf8;
-    --color-accent-bg: rgba(99, 102, 241, 0.15);
+    --color-accent: #D4A853;
+    --color-accent-hover: #E0B965;
+    --color-accent-bg: rgba(212, 168, 83, 0.12);
 
-    --color-success: #10b981;
-    --color-warning: #f59e0b;
-    --color-danger: #ef4444;
-    --color-danger-bg: rgba(239, 68, 68, 0.15);
+    --color-success: #5A9A6B;
+    --color-warning: #D49A3A;
+    --color-danger: #C94A4A;
+    --color-danger-bg: rgba(201, 74, 74, 0.12);
 
-    --color-card-bg: rgba(255, 255, 255, 0.04);
-    --color-sidebar-bg: #16213e;
-    --color-input-bg: rgba(255, 255, 255, 0.06);
-    --color-input-border: rgba(255, 255, 255, 0.1);
+    --color-card-bg: #252320;
+    --color-sidebar-bg: #222226;
+    --color-input-bg: rgba(232, 228, 217, 0.06);
+    --color-input-border: rgba(232, 228, 217, 0.1);
 
-    --color-nav-bg: linear-gradient(180deg, #1a1a2e 0%, #16213e 100%);
-    --color-nav-text: rgba(255, 255, 255, 0.6);
-    --color-nav-text-active: #818cf8;
-    --color-nav-hover-bg: rgba(255, 255, 255, 0.08);
-    --color-nav-active-bg: rgba(99, 102, 241, 0.2);
-    --color-nav-border: rgba(255, 255, 255, 0.08);
+    --color-nav-bg: linear-gradient(180deg, #222226 0%, #1B1B1F 100%);
+    --color-nav-text: rgba(232, 228, 217, 0.5);
+    --color-nav-text-active: #D4A853;
+    --color-nav-hover-bg: rgba(212, 168, 83, 0.08);
+    --color-nav-active-bg: rgba(212, 168, 83, 0.12);
+    --color-nav-border: rgba(232, 228, 217, 0.08);
 
-    --color-settings-bg: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-    --color-settings-card-bg: rgba(255, 255, 255, 0.05);
-    --color-settings-card-border: rgba(255, 255, 255, 0.1);
+    --color-settings-bg: linear-gradient(135deg, #222226 0%, #1B1B1F 100%);
+    --color-settings-card-bg: rgba(37, 35, 32, 0.9);
+    --color-settings-card-border: rgba(232, 228, 217, 0.1);
 
     --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
     --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
     --shadow-lg: 0 10px 25px rgba(0, 0, 0, 0.5);
 
-    /* 新增语义化变量 - 深色主题 */
-    --color-gradient-primary: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-    --color-gradient-accent: linear-gradient(135deg, #4a4e8a 0%, #5a3d7a 100%);
-    --color-button-bg: #2a2d3a;
-    --color-button-hover: #3a3d4a;
-    --color-button-text: #e0e0e0;
+    /* 扩展语义化变量 - 深色主题 */
+    --color-gradient-primary: linear-gradient(135deg, #222226 0%, #1B1B1F 100%);
+    --color-gradient-accent: linear-gradient(135deg, #D4A853 0%, #E0B965 100%);
+    --color-button-bg: #3A3A42;
+    --color-button-hover: #4A4A52;
+    --color-button-text: #E8E4D9;
     --color-overlay: rgba(0, 0, 0, 0.7);
-    --color-danger: #ef4444;
-    --color-danger-bg: rgba(239, 68, 68, 0.15);
-    --color-danger-border: rgba(239, 68, 68, 0.3);
-    --color-card-bg: #1e1e30;
-    --color-card-hover-bg: rgba(99, 102, 241, 0.08);
+    --color-danger-border: rgba(201, 74, 74, 0.25);
+    --color-card-hover-bg: rgba(212, 168, 83, 0.05);
     --color-shadow: rgba(0, 0, 0, 0.3);
     --color-shadow-hover: rgba(0, 0, 0, 0.4);
-    --color-tag-bg: rgba(192, 132, 252, 0.15);
-    --color-tag-text: #c084fc;
-    --color-tag-border: rgba(192, 132, 252, 0.3);
+    --color-tag-bg: rgba(90, 154, 107, 0.12);
+    --color-tag-text: #5A9A6B;
+    --color-tag-border: rgba(90, 154, 107, 0.25);
 
     color-scheme: dark;
   }
@@ -267,6 +264,7 @@ body {
   box-sizing: border-box;
 }
 
+/* 标题样式 - 使用衬线字体 */
 h1,
 h2 {
   font-family: var(--heading);
@@ -275,27 +273,32 @@ h2 {
 }
 
 h1 {
-  font-size: 56px;
-  letter-spacing: -1.68px;
+  font-size: 52px;
+  letter-spacing: -0.5px;
   margin: 32px 0;
+  line-height: 1.2;
   @media (max-width: 1024px) {
     font-size: 36px;
     margin: 20px 0;
   }
 }
+
 h2 {
-  font-size: 24px;
-  line-height: 118%;
-  letter-spacing: -0.24px;
+  font-size: 22px;
+  line-height: 130%;
+  letter-spacing: -0.2px;
   margin: 0 0 8px;
+  font-weight: 600;
   @media (max-width: 1024px) {
     font-size: 20px;
   }
 }
+
 p {
   margin: 0;
 }
 
+/* 代码样式 - 使用等宽字体 */
 code,
 .counter {
   font-family: var(--mono);
@@ -305,8 +308,32 @@ code,
 }
 
 code {
-  font-size: 15px;
-  line-height: 135%;
-  padding: 4px 8px;
+  font-size: 14px;
+  line-height: 140%;
+  padding: 3px 7px;
   background: var(--code-bg);
+}
+
+/* 纸张纹理背景效果 */
+.paper-texture {
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+  background-blend-mode: overlay;
+  background-size: 200px 200px;
+}
+
+/* 学术引用风格分隔线 */
+.academic-divider {
+  border: none;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--color-border-strong), transparent);
+  margin: 1.5rem 0;
+}
+
+/* 引用块样式 */
+blockquote {
+  border-left: 3px solid var(--accent);
+  padding-left: 1rem;
+  margin: 1rem 0;
+  color: var(--color-text-secondary);
+  font-style: italic;
 }

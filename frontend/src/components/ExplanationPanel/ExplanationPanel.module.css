@@ -3,6 +3,7 @@
   flex-direction: column;
   height: 100%;
   overflow: hidden;
+  background: var(--bg-primary);
 }
 
 /* Tab 切换栏 */
@@ -10,8 +11,8 @@
   display: flex;
   gap: 0;
   padding: 0.5rem 0.75rem 0;
-  background: #f5f5f7;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .tabBtn {
@@ -19,11 +20,12 @@
   padding: 0.625rem 0.75rem;
   border: none;
   background: transparent;
-  color: #86868b;
+  color: var(--text-tertiary);
   font-size: 0.8125rem;
   font-weight: 500;
+  font-family: var(--sans);
   cursor: pointer;
-  border-radius: 0.5rem 0.5rem 0 0;
+  border-radius: 0.375rem 0.375rem 0 0;
   transition: all 0.2s ease;
   position: relative;
   display: flex;
@@ -33,20 +35,20 @@
 }
 
 .tabBtn:hover {
-  color: #1d1d1f;
-  background: rgba(0, 0, 0, 0.03);
+  color: var(--text-primary);
+  background: var(--bg-hover);
 }
 
 .tabBtn.active {
-  color: #007aff;
-  background: #ffffff;
-  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.04);
+  color: var(--accent);
+  background: var(--bg-primary);
+  box-shadow: 0 -2px 8px var(--shadow-sm);
 }
 
 .tabIndicator {
   width: 6px;
   height: 6px;
-  background: #34c759;
+  background: var(--success);
   border-radius: 50%;
   animation: pulse 1.5s ease-in-out infinite;
 }
@@ -59,8 +61,8 @@
   height: 16px;
   padding: 0 4px;
   margin-left: 4px;
-  background: var(--color-accent, #007AFF);
-  color: #fff;
+  background: var(--accent);
+  color: var(--bg-primary);
   border-radius: 8px;
   font-size: 10px;
   font-weight: 600;
@@ -79,6 +81,7 @@
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
+  background: var(--bg-primary);
 }
 
 .empty {
@@ -87,7 +90,7 @@
   align-items: center;
   justify-content: center;
   height: 100%;
-  color: #86868b;
+  color: var(--text-tertiary);
   font-size: 0.875rem;
   padding: 2.5rem 1rem;
   text-align: center;
@@ -101,28 +104,31 @@
 
 .emptyTitle {
   font-size: 0.9375rem;
-  font-weight: 500;
-  color: #1d1d1f;
+  font-weight: 600;
+  font-family: var(--heading);
+  color: var(--text-primary);
   margin: 0 0 0.375rem 0;
 }
 
 .emptyHint {
   font-size: 0.8125rem;
-  color: #86868b;
+  color: var(--text-secondary);
   margin: 0;
 }
 
 .card {
-  background: #ffffff;
-  border-radius: 0.75rem;
+  background: var(--bg-primary);
+  border-radius: 0.375rem;
   padding: 1rem;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
-  transition: box-shadow 0.2s;
+  border: 1px solid var(--border);
+  box-shadow: inset 0 1px 2px var(--shadow-sm), 0 1px 3px var(--shadow-sm);
+  transition: box-shadow 0.2s, border-color 0.2s;
   animation: cardBounceIn 0.8s cubic-bezier(0.22, 0.61, 0.36, 1) both;
 }
 
 .card:hover {
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.06);
+  box-shadow: inset 0 1px 2px var(--shadow-sm), 0 2px 8px var(--shadow-md);
+  border-color: var(--border-hover);
 }
 
 .cardHeader {
@@ -138,15 +144,16 @@
   border-radius: 0.25rem;
   font-size: 0.6875rem;
   font-weight: 600;
-  background: rgba(0, 122, 255, 0.08);
-  color: #007aff;
+  background: var(--accent-bg);
+  color: var(--accent);
   flex-shrink: 0;
 }
 
 .sectionName {
   font-size: 0.875rem;
   font-weight: 600;
-  color: #1d1d1f;
+  font-family: var(--heading);
+  color: var(--text-primary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -154,8 +161,9 @@
 
 .explanation {
   font-size: 0.8125rem;
-  line-height: 1.6;
-  color: #424245;
+  line-height: 1.7;
+  color: var(--text-secondary);
+  font-family: var(--sans);
 }
 
 .loading {
@@ -164,7 +172,7 @@
   justify-content: center;
   gap: 0.5rem;
   padding: 1rem;
-  color: #86868b;
+  color: var(--text-tertiary);
   font-size: 0.8125rem;
   animation: cardBounceIn 0.5s cubic-bezier(0.22, 0.61, 0.36, 1) both;
 }
@@ -172,8 +180,8 @@
 .spinner {
   width: 1rem;
   height: 1rem;
-  border: 2px solid rgba(0, 0, 0, 0.1);
-  border-top-color: #007aff;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
@@ -247,43 +255,56 @@
 }
 
 .tabContent::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.15);
+  background: var(--border-hover);
   border-radius: 3px;
 }
 
 /* ========== 深度分析维度卡片样式 ========== */
 
 .dimensionCard {
-  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-  border-radius: 0.75rem;
+  background: var(--bg-secondary);
+  border-radius: 0.375rem;
   overflow: hidden;
   transition: all 0.3s ease;
   animation: cardBounceIn 0.6s cubic-bezier(0.22, 0.61, 0.36, 1) both;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--border);
+  box-shadow: inset 0 1px 2px var(--shadow-sm);
+  position: relative;
+}
+
+.dimensionCard::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: linear-gradient(180deg, var(--accent) 0%, var(--accent-secondary) 100%);
+  opacity: 0.8;
 }
 
 .dimensionCard:hover {
   transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
-  border-color: rgba(0, 122, 255, 0.3);
+  box-shadow: 0 4px 12px var(--shadow-md), inset 0 1px 2px var(--shadow-sm);
+  border-color: var(--border-hover);
 }
 
 .dimensionCard.expanded {
-  border-color: rgba(0, 122, 255, 0.5);
+  border-color: var(--accent);
 }
 
 .dimensionHeader {
   display: flex;
   align-items: center;
   gap: 0.625rem;
-  padding: 0.875rem 1rem;
+  padding: 0.875rem 1rem 0.875rem 1.25rem;
   cursor: pointer;
   user-select: none;
   transition: background 0.2s ease;
 }
 
 .dimensionHeader:hover {
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--bg-hover);
 }
 
 .dimensionIcon {
@@ -295,12 +316,13 @@
   flex: 1;
   font-size: 0.875rem;
   font-weight: 600;
-  color: #f5f5f7;
+  font-family: var(--heading);
+  color: var(--text-primary);
 }
 
 .expandIcon {
   font-size: 0.625rem;
-  color: #86868b;
+  color: var(--text-tertiary);
   transition: transform 0.2s ease;
 }
 
@@ -316,8 +338,9 @@
 .dimensionContent p {
   font-size: 0.8125rem;
   line-height: 1.7;
-  color: #a1a1a6;
+  color: var(--text-secondary);
   margin: 0;
+  font-family: var(--sans);
 }
 
 @keyframes slideDown {
@@ -336,7 +359,7 @@
 .knowledgeSection {
   margin-top: 0.5rem;
   padding-top: 0.75rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  border-top: 1px solid var(--border-subtle);
 }
 
 .knowledgeSectionTitle {
@@ -345,29 +368,30 @@
   gap: 0.5rem;
   font-size: 0.8125rem;
   font-weight: 600;
-  color: #f5f5f7;
+  font-family: var(--heading);
+  color: var(--text-primary);
   margin: 0 0 0.75rem 0;
   padding: 0 0.25rem;
 }
 
 .knowledgeCard {
-  background: rgba(255, 255, 255, 0.03);
-  border-radius: 0.625rem;
+  background: var(--bg-primary);
+  border-radius: 0.375rem;
   margin-bottom: 0.5rem;
   overflow: hidden;
   transition: all 0.2s ease;
   animation: cardBounceIn 0.5s cubic-bezier(0.22, 0.61, 0.36, 1) both;
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-subtle);
 }
 
 .knowledgeCard:hover {
-  background: rgba(255, 255, 255, 0.05);
-  border-color: rgba(255, 214, 10, 0.2);
+  background: var(--bg-hover);
+  border-color: var(--border-hover);
 }
 
 .knowledgeCard.expanded {
-  background: rgba(255, 255, 255, 0.06);
-  border-color: rgba(255, 214, 10, 0.3);
+  background: var(--bg-secondary);
+  border-color: var(--accent);
 }
 
 .knowledgeHeader {
@@ -388,7 +412,8 @@
   flex: 1;
   font-size: 0.8125rem;
   font-weight: 500;
-  color: #f5f5f7;
+  font-family: var(--sans);
+  color: var(--text-primary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -402,8 +427,9 @@
 .knowledgeContent p {
   font-size: 0.75rem;
   line-height: 1.6;
-  color: #a1a1a6;
+  color: var(--text-secondary);
   margin: 0;
+  font-family: var(--sans);
 }
 
 /* ========== 导出按钮样式 ========== */
@@ -415,12 +441,13 @@
   gap: 0.5rem;
   margin-top: 0.75rem;
   padding: 0.75rem 1rem;
-  background: linear-gradient(135deg, #007aff 0%, #0051d5 100%);
-  color: #ffffff;
-  border: none;
-  border-radius: 0.625rem;
+  background: var(--accent);
+  color: var(--bg-primary);
+  border: 1px solid var(--accent);
+  border-radius: 0.375rem;
   font-size: 0.8125rem;
   font-weight: 600;
+  font-family: var(--sans);
   cursor: pointer;
   transition: all 0.2s ease;
   animation: cardBounceIn 0.5s cubic-bezier(0.22, 0.61, 0.36, 1) both;
@@ -428,7 +455,8 @@
 
 .exportBtn:hover {
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(0, 122, 255, 0.3);
+  box-shadow: 0 4px 12px var(--shadow-accent);
+  background: var(--accent-hover);
 }
 
 .exportBtn:active {
@@ -448,19 +476,20 @@
   display: inline-flex;
   align-items: center;
   padding: 8px 16px;
-  background: linear-gradient(135deg, rgba(102, 126, 234, 0.1), rgba(118, 75, 162, 0.1));
-  color: var(--color-text-primary, #1a1a2e);
-  border: 1px solid rgba(102, 126, 234, 0.25);
+  background: var(--accent-bg);
+  color: var(--accent);
+  border: 1px solid var(--accent-muted);
   border-radius: 20px;
   font-size: 13px;
   font-weight: 500;
+  font-family: var(--sans);
   transition: all 0.2s ease;
   cursor: default;
 }
 
 .keywordTag:hover {
-  background: linear-gradient(135deg, rgba(102, 126, 234, 0.2), rgba(118, 75, 162, 0.2));
-  border-color: rgba(102, 126, 234, 0.4);
+  background: var(--accent-bg-hover);
+  border-color: var(--accent);
   transform: translateY(-1px);
 }
 
@@ -468,21 +497,21 @@
 
 @media (prefers-color-scheme: dark) {
   .tabBar {
-    background: #1c1c1e;
-    border-bottom-color: rgba(255, 255, 255, 0.06);
+    background: var(--bg-secondary);
+    border-bottom-color: var(--border-subtle);
   }
   
   .tabBtn {
-    color: #8e8e93;
+    color: var(--text-tertiary);
   }
   
   .tabBtn:hover {
-    color: #f5f5f7;
-    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-primary);
+    background: var(--bg-hover);
   }
   
   .tabBtn.active {
-    color: #0a84ff;
-    background: #2c2c2e;
+    color: var(--accent);
+    background: var(--bg-primary);
   }
 }

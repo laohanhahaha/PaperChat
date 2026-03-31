@@ -5,10 +5,10 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 12px;
-  background: rgba(30, 30, 30, 0.95);
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  padding: 0.5rem 0.75rem;
+  background: var(--color-bg-elevated);
+  border-radius: 0.5rem;
+  box-shadow: var(--shadow-md), 0 0 0 1px var(--color-border);
   backdrop-filter: blur(10px);
   animation: fadeIn 0.15s ease;
 }
@@ -34,8 +34,9 @@
 .colorBtn {
   width: 24px;
   height: 24px;
-  border: 2px solid transparent;
+  border: 2px solid var(--color-border);
   border-radius: 50%;
+  border: 1px solid var(--color-border);
   cursor: pointer;
   transition: all 0.15s ease;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
@@ -43,7 +44,8 @@
 
 .colorBtn:hover {
   transform: scale(1.15);
-  border-color: rgba(255, 255, 255, 0.8);
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 2px var(--accent-bg);
 }
 
 .colorBtn:active {
@@ -54,7 +56,7 @@
 .divider {
   width: 1px;
   height: 20px;
-  background: rgba(255, 255, 255, 0.2);
+  background: var(--color-border);
   margin: 0 4px;
 }
 
@@ -67,18 +69,19 @@
   height: 28px;
   padding: 0;
   border: none;
-  border-radius: 4px;
+  border-radius: 0.375rem;
   background: transparent;
-  color: rgba(255, 255, 255, 0.8);
+  color: var(--color-text-secondary);
   cursor: pointer;
   transition: all 0.15s ease;
 }
 
 .actionBtn:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: white;
+  background: var(--color-accent-bg);
+  color: var(--color-accent);
 }
 
 .actionBtn:active {
-  background: rgba(255, 255, 255, 0.15);
+  background: var(--color-accent-bg);
+  opacity: 0.8;
 }

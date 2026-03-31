@@ -18,9 +18,19 @@ from app.services.agent_service import agent_service
 from app.services.search_service import search_service
 from app.database import AsyncSessionLocal
 from app.models.chat import ChatSession, ChatMessage
-from app.models.paper import Paper
+from app.models.paper import Paper, PaperTextBlock
 
 router = APIRouter(tags=["WebSocket"])
+
+
+async def get_paper_full_text(db: AsyncSession, paper_id: int) -> str:
+    """从 PaperTextBlock 表获取论文完整文本"""
+    result = await db.execute(
+        select(PaperTextBlock.text).where(PaperTextBlock.paper_id == paper_id)
+        .order_by(PaperTextBlock.page_number, PaperTextBlock.y0)
+    )
+    texts = result.scalars().all()
+    return "\n".join(texts) if texts else ""
 
 
 async def get_db_session():
@@ -263,6 +273,57 @@ async def websocket_endpoint(websocket: WebSocket):
                 # 4. RAG 检索
                 from app.services.rag_service import rag_service
                 relevant_chunks = await rag_service.search(paper_id, message, top_k=5)
+                
+                # 如果没有检索到内容，尝试检查并重建索引
+                if not relevant_chunks:
+                    # 检查论文是否有文本块
+                    text_blocks_result = await db.execute(
+                        select(PaperTextBlock).where(PaperTextBlock.paper_id == paper_id).limit(1)
+                    )
+                    has_text_blocks = text_blocks_result.scalar_one_or_none() is not None
+                    
+                    if has_text_blocks:
+                        # 有文本块但没有索引，尝试重建索引
+                        await websocket.send_text(json.dumps({
+                            "type": "status",
+                            "message": "正在为论文建立索引，请稍候..."
+                        }))
+                        
+                        # 获取所有文本块
+                        all_blocks_result = await db.execute(
+                            select(PaperTextBlock).where(PaperTextBlock.paper_id == paper_id)
+                            .order_by(PaperTextBlock.page_number, PaperTextBlock.y0)
+                        )
+                        all_blocks = all_blocks_result.scalars().all()
+                        
+                        blocks_data = [
+                            {
+                                "text": block.text,
+                                "page_number": block.page_number,
+                                "metadata": {"page": block.page_number}
+                            }
+                            for block in all_blocks
+                        ]
+                        
+                        # 重建索引
+                        await rag_service.reindex_paper(paper_id, blocks_data)
+                        
+                        # 重新检索
+                        relevant_chunks = await rag_service.search(paper_id, message, top_k=5)
+                    else:
+                        # 论文没有文本块，可能还没解析完成
+                        error_msg = "论文尚未解析完成或内容为空，请稍后再试。如果问题持续，请尝试重新上传论文。"
+                        await websocket.send_text(json.dumps({
+                            "type": "rag_chat_chunk",
+                            "content": error_msg
+                        }))
+                        await save_message(db, session.id, "assistant", error_msg, [])
+                        await websocket.send_text(json.dumps({
+                            "type": "done",
+                            "channel": "rag_chat",
+                            "session_id": session.id
+                        }))
+                        return
                 
                 # 5. 网络搜索（如果启用）
                 web_results = []
@@ -743,6 +804,16 @@ async def websocket_endpoint(websocket: WebSocket):
                     handle_cross_doc_chat(message, paper_ids, session_id, user_id)
                 )
 
+            elif msg_type == "cancel":
+                for key in list(running_tasks.keys()):
+                    running_tasks[key].cancel()
+                    del running_tasks[key]
+                await websocket.send_text(json.dumps({
+                    "type": "cancelled",
+                    "message": "已取消当前任务"
+                }))
+                continue
+
             elif msg_type == "unified_chat":
                 """统一聊天入口 - 根据关键词自动路由到不同功能"""
                 message = data.get("message", "")
@@ -751,6 +822,10 @@ async def websocket_endpoint(websocket: WebSocket):
                 session_id = data.get("session_id")
                 user_id = 1
                 enable_search = data.get("enable_search", False)
+
+                if "unified" in running_tasks:
+                    running_tasks["unified"].cancel()
+                    del running_tasks["unified"]
                 
                 if not message:
                     await websocket.send_text(json.dumps({
@@ -782,14 +857,21 @@ async def websocket_endpoint(websocket: WebSocket):
                             async with AsyncSessionLocal() as db:
                                 result = await db.execute(select(Paper).where(Paper.id == paper_id))
                                 paper = result.scalar_one_or_none()
-                                if paper and paper.full_text:
-                                    running_tasks["unified"] = asyncio.create_task(
-                                        handle_analyze(paper.full_text, paper_id)
-                                    )
+                                if paper:
+                                    paper_text = await get_paper_full_text(db, paper_id)
+                                    if paper_text:
+                                        running_tasks["unified"] = asyncio.create_task(
+                                            handle_analyze(paper_text, paper_id)
+                                        )
+                                    else:
+                                        await websocket.send_text(json.dumps({
+                                            "type": "error",
+                                            "message": "论文内容不存在，请先上传并解析论文"
+                                        }))
                                 else:
                                     await websocket.send_text(json.dumps({
                                         "type": "error",
-                                        "message": "论文内容不存在，请先上传并解析论文"
+                                        "message": "论文不存在"
                                     }))
                         else:
                             await websocket.send_text(json.dumps({
@@ -803,14 +885,21 @@ async def websocket_endpoint(websocket: WebSocket):
                             async with AsyncSessionLocal() as db:
                                 result = await db.execute(select(Paper).where(Paper.id == paper_id))
                                 paper = result.scalar_one_or_none()
-                                if paper and paper.full_text:
-                                    running_tasks["unified"] = asyncio.create_task(
-                                        handle_deep_analyze(paper.full_text, paper_id)
-                                    )
+                                if paper:
+                                    paper_text = await get_paper_full_text(db, paper_id)
+                                    if paper_text:
+                                        running_tasks["unified"] = asyncio.create_task(
+                                            handle_deep_analyze(paper_text, paper_id)
+                                        )
+                                    else:
+                                        await websocket.send_text(json.dumps({
+                                            "type": "error",
+                                            "message": "论文内容不存在，请先上传并解析论文"
+                                        }))
                                 else:
                                     await websocket.send_text(json.dumps({
                                         "type": "error",
-                                        "message": "论文内容不存在，请先上传并解析论文"
+                                        "message": "论文不存在"
                                     }))
                         else:
                             await websocket.send_text(json.dumps({
