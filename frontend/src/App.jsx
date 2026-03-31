@@ -1,9 +1,8 @@
 import { useState, useCallback, useEffect, useRef, lazy, Suspense } from 'react';
-import { Routes, Route, Navigate, useParams, useLocation, useNavigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useParams, useNavigate } from 'react-router-dom';
 // 核心阅读页面组件保持直接导入（核心页面性能考虑）
 import FileUpload from './components/FileUpload/FileUpload';
 import ExplanationPanel from './components/ExplanationPanel/ExplanationPanel';
-import ChatPanel from './components/ChatPanel/ChatPanel';
 import PDFReader from './components/PDFReader/PDFReader';
 import NotePanel from './components/NotePanel/NotePanel';
 import NoteEditor from './components/NoteEditor/NoteEditor';
@@ -16,7 +15,6 @@ import usePaperStore from './stores/paperStore';
 import useHighlightStore from './stores/highlightStore';
 import useNoteStore from './stores/noteStore';
 import useAgentStore from './stores/agentStore';
-import useChatStore from './stores/chatStore';
 import useSettingsStore from './stores/settingsStore';
 import api from './api';
 import './App.css';
@@ -26,6 +24,7 @@ initializeTheme();
 
 // 懒加载页面组件（代码分割）
 const PaperList = lazy(() => import('./pages/PaperList'));
+const ChatPage = lazy(() => import('./pages/ChatPage'));
 const WritingPage = lazy(() => import('./pages/WritingPage'));
 const KnowledgePage = lazy(() => import('./pages/KnowledgePage'));
 const SettingsPage = lazy(() => import('./pages/SettingsPage'));
@@ -75,8 +74,6 @@ function ReaderPage() {
   
   // Agent 状态管理
   const {
-    isAgentMode,
-    startAgentMode,
     setIntent,
     setPlan,
     startStep,
@@ -111,10 +108,8 @@ function ReaderPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [explanations, setExplanations] = useState([]);
   const [deepAnalysis, setDeepAnalysis] = useState({ dimensions: [], knowledgePoints: [] });
-  const [chatMessages, setChatMessages] = useState([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isDeepAnalyzing, setIsDeepAnalyzing] = useState(false);
-  const [isChatting, setIsChatting] = useState(false);
   const [keywords, setKeywords] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -124,11 +119,9 @@ function ReaderPage() {
   const [editingNote, setEditingNote] = useState(null);
   const [pendingHighlightForNote, setPendingHighlightForNote] = useState(null);
   const [activeTab, setActiveTab] = useState('explanation'); // 'explanation' | 'notes' | 'recommendations'
-  const [explanationSubTab, setExplanationSubTab] = useState('overview'); // 'overview' | 'deep'
 
   // 三栏宽度状态（百分比）
-  const [leftWidth, setLeftWidth] = useState(25);
-  const [rightWidth, setRightWidth] = useState(25);
+  const [leftWidth, setLeftWidth] = useState(30);
   const [isDragging, setIsDragging] = useState(false);
   const containerRef = useRef(null);
 
@@ -136,7 +129,7 @@ function ReaderPage() {
   const analyzeTextRef = useRef('');
   const deepAnalyzeTextRef = useRef('');
 
-  const { status: wsStatus, sendMessage, sendRagMessage, sendCrossDocMessage, onMessage } = useWebSocket();
+  const { status: wsStatus, sendMessage, onMessage } = useWebSocket();
 
   // ============ Agent 模式 WebSocket 消息处理 ============
   useEffect(() => {
@@ -361,7 +354,9 @@ function ReaderPage() {
                 } else if (obj.dimension) {
                   dimensions.push(obj);
                 }
-              } catch {}
+              } catch {
+                // ignore parse errors
+              }
             });
             setDeepAnalysis({ dimensions, knowledgePoints });
           }
@@ -376,7 +371,9 @@ function ReaderPage() {
             if (Array.isArray(tags)) {
               setKeywords(tags);
             }
-          } catch {}
+          } catch {
+            // ignore parse errors
+          }
         }
         
         // 加载高亮数据
@@ -410,54 +407,44 @@ function ReaderPage() {
     return () => {
       setPdfUrl(null);
       setPdfText('');
-      // 注意：不清空 explanations 和 deepAnalysis，保留分析结果
-      setChatMessages([]);
       clearHighlights();
       clearNotes();
-      clearRecommendations(); // 清理推荐数据
-      resetAgent(); // 清理 Agent 状态
+      clearRecommendations();
+      resetAgent();
     };
   }, [id, fetchHighlights, clearHighlights, fetchNotes, clearNotes, clearRecommendations]);
 
   // 触发章节概述分析
   const handleOverviewAnalyze = useCallback(() => {
     if (!pdfText || pdfText.length < 50 || wsStatus !== 'connected') return;
-    
+
     setExplanations([]);
     setIsAnalyzing(true);
-    setExplanationSubTab('explanation');
     sendMessage('analyze', { text: pdfText, paper_id: parseInt(id) });
   }, [pdfText, wsStatus, sendMessage, id]);
 
   // 触发深度分析
   const handleDeepAnalyze = useCallback(() => {
     if (!pdfText || pdfText.length < 50 || wsStatus !== 'connected') return;
-    
+
     setDeepAnalysis({ dimensions: [], knowledgePoints: [] });
     setIsDeepAnalyzing(true);
-    setExplanationSubTab('deep');
     sendMessage('deep_analyze', { text: pdfText, paper_id: parseInt(id) });
   }, [pdfText, wsStatus, sendMessage, id]);
 
-  // 拖拽调整面板宽度
-  const handleMouseDown = useCallback((e, resizer) => {
+  // 拖拽调整面板宽度（两栏布局）
+  const handleMouseDown = useCallback((e) => {
     e.preventDefault();
     const startX = e.clientX;
     const containerWidth = containerRef.current.getBoundingClientRect().width;
     const startLeftWidth = leftWidth;
-    const startRightWidth = rightWidth;
 
     setIsDragging(true);
 
     const handleMouseMove = (e) => {
       const delta = ((e.clientX - startX) / containerWidth) * 100;
-      if (resizer === 'left') {
-        const newLeft = Math.max(15, Math.min(50, startLeftWidth + delta));
-        setLeftWidth(newLeft);
-      } else {
-        const newRight = Math.max(15, Math.min(50, startRightWidth - delta));
-        setRightWidth(newRight);
-      }
+      const newLeft = Math.max(20, Math.min(60, startLeftWidth + delta));
+      setLeftWidth(newLeft);
     };
 
     const handleMouseUp = () => {
@@ -472,7 +459,7 @@ function ReaderPage() {
     document.addEventListener('mouseup', handleMouseUp);
     document.body.style.cursor = 'col-resize';
     document.body.style.userSelect = 'none';
-  }, [leftWidth, rightWidth]);
+  }, [leftWidth]);
 
   const handleTextSelected = useCallback((selectedText, rects, page) => {
     console.log('选中文本:', selectedText, '页面:', page, '位置:', rects);
@@ -714,13 +701,13 @@ function ReaderPage() {
         </aside>
         <div
           className={`resizer ${isDragging ? 'resizer-active' : ''}`}
-          onMouseDown={(e) => handleMouseDown(e, 'left')}
+          onMouseDown={handleMouseDown}
         />
-        <section className="center-panel" style={{ width: `${100 - leftWidth - rightWidth}%` }}>
+        <section className="center-panel" style={{ width: `${100 - leftWidth}%` }}>
           <div className="panel-title">
             原文阅读
             {activeHighlight && (
-              <button 
+              <button
                 className="delete-highlight-btn"
                 onClick={handleDeleteHighlight}
                 title="删除选中高亮"
@@ -749,30 +736,6 @@ function ReaderPage() {
             )}
           </div>
         </section>
-        <div
-          className={`resizer ${isDragging ? 'resizer-active' : ''}`}
-          onMouseDown={(e) => handleMouseDown(e, 'right')}
-        />
-        <aside className="right-panel" style={{ width: `${rightWidth}%` }}>
-          <div className="panel-title">智能问答</div>
-          <div className="panel-content">
-            <ChatPanel
-              pdfText={pdfText}
-              paperId={parseInt(id)}
-              isChatting={isChatting}
-              setIsChatting={setIsChatting}
-              sendRagMessage={sendRagMessage}
-              sendCrossDocMessage={sendCrossDocMessage}
-              onMessage={onMessage}
-              wsStatus={wsStatus}
-              onNavigateToPage={setCurrentPage}
-              onSwitchPaper={(newPaperId, page) => {
-                // 切换到新论文并跳转到指定页面
-                navigate(`/reader/${newPaperId}${page ? `?page=${page}` : ''}`);
-              }}
-            />
-          </div>
-        </aside>
       </main>
       
       {/* 笔记编辑器弹窗 */}
@@ -787,14 +750,6 @@ function ReaderPage() {
       />
     </div>
   );
-}
-
-// 清理函数 - 组件卸载时重置 chat store
-function useChatCleanup() {
-  const { reset } = useChatStore();
-  useEffect(() => {
-    return () => reset();
-  }, [reset]);
 }
 
 // 带导航栏的布局组件
@@ -815,37 +770,28 @@ function MainApp() {
   const [pdfText, setPdfText] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [explanations, setExplanations] = useState([]);
-  const [chatMessages, setChatMessages] = useState([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [isChatting, setIsChatting] = useState(false);
 
   // 三栏宽度状态（百分比）
-  const [leftWidth, setLeftWidth] = useState(25);
-  const [rightWidth, setRightWidth] = useState(25);
+  const [leftWidth, setLeftWidth] = useState(30);
   const [isDragging, setIsDragging] = useState(false);
   const containerRef = useRef(null);
 
-  const { status: wsStatus, sendMessage, onMessage } = useWebSocket();
+  const { status: wsStatus } = useWebSocket();
 
-  // 拖拽调整面板宽度
-  const handleMouseDown = useCallback((e, resizer) => {
+  // 拖拽调整面板宽度（两栏布局）
+  const handleMouseDown = useCallback((e) => {
     e.preventDefault();
     const startX = e.clientX;
     const containerWidth = containerRef.current.getBoundingClientRect().width;
     const startLeftWidth = leftWidth;
-    const startRightWidth = rightWidth;
 
     setIsDragging(true);
 
     const handleMouseMove = (e) => {
       const delta = ((e.clientX - startX) / containerWidth) * 100;
-      if (resizer === 'left') {
-        const newLeft = Math.max(15, Math.min(50, startLeftWidth + delta));
-        setLeftWidth(newLeft);
-      } else {
-        const newRight = Math.max(15, Math.min(50, startRightWidth - delta));
-        setRightWidth(newRight);
-      }
+      const newLeft = Math.max(20, Math.min(60, startLeftWidth + delta));
+      setLeftWidth(newLeft);
     };
 
     const handleMouseUp = () => {
@@ -860,13 +806,11 @@ function MainApp() {
     document.addEventListener('mouseup', handleMouseUp);
     document.body.style.cursor = 'col-resize';
     document.body.style.userSelect = 'none';
-  }, [leftWidth, rightWidth]);
+  }, [leftWidth]);
 
   const handleFileSelect = useCallback((file) => {
     setPdfFile(file);
-    // 重置状态
     setExplanations([]);
-    setChatMessages([]);
     setPdfText('');
     setCurrentPage(1);
   }, []);
@@ -875,9 +819,7 @@ function MainApp() {
     setPdfFile(null);
     setPdfText('');
     setExplanations([]);
-    setChatMessages([]);
     setIsAnalyzing(false);
-    setIsChatting(false);
     setCurrentPage(1);
   };
 
@@ -904,7 +846,7 @@ function MainApp() {
     );
   }
 
-  // 三栏布局
+  // 两栏布局
   return (
     <div className="app">
       <header className="app-header">
@@ -930,9 +872,9 @@ function MainApp() {
         </aside>
         <div
           className={`resizer ${isDragging ? 'resizer-active' : ''}`}
-          onMouseDown={(e) => handleMouseDown(e, 'left')}
+          onMouseDown={handleMouseDown}
         />
-        <section className="center-panel" style={{ width: `${100 - leftWidth - rightWidth}%` }}>
+        <section className="center-panel" style={{ width: `${100 - leftWidth}%` }}>
           <div className="panel-title">原文阅读</div>
           <div className="pdf-embed-container">
             {pdfFile && (
@@ -948,25 +890,6 @@ function MainApp() {
             )}
           </div>
         </section>
-        <div
-          className={`resizer ${isDragging ? 'resizer-active' : ''}`}
-          onMouseDown={(e) => handleMouseDown(e, 'right')}
-        />
-        <aside className="right-panel" style={{ width: `${rightWidth}%` }}>
-          <div className="panel-title">智能问答</div>
-          <div className="panel-content">
-            <ChatPanel
-              pdfText={pdfText}
-              chatMessages={chatMessages}
-              setChatMessages={setChatMessages}
-              isChatting={isChatting}
-              setIsChatting={setIsChatting}
-              sendMessage={sendMessage}
-              onMessage={onMessage}
-              wsStatus={wsStatus}
-            />
-          </div>
-        </aside>
       </main>
     </div>
   );
@@ -999,6 +922,18 @@ function App() {
           <AppLayout>
             <Suspense fallback={<PageLoader />}>
               <PaperList />
+            </Suspense>
+          </AppLayout>
+        }
+      />
+
+      {/* 聊天页面 */}
+      <Route
+        path="/chat"
+        element={
+          <AppLayout>
+            <Suspense fallback={<PageLoader />}>
+              <ChatPage />
             </Suspense>
           </AppLayout>
         }

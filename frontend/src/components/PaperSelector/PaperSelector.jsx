@@ -19,7 +19,7 @@ const formatDate = (dateString) => {
   });
 };
 
-function PaperSelector({ isOpen, onClose, onConfirm, initialSelectedIds = [], maxSelection = 10 }) {
+function PaperSelector({ isOpen, onClose, onConfirm, initialSelectedIds = [], maxSelection = 10, minSelection = 1 }) {
   const { papers, loading, fetchPapers } = usePaperStore();
   const [selectedIds, setSelectedIds] = useState(initialSelectedIds);
   const [searchQuery, setSearchQuery] = useState('');
@@ -230,7 +230,7 @@ function PaperSelector({ isOpen, onClose, onConfirm, initialSelectedIds = [], ma
           <button 
             className={styles.confirmBtn}
             onClick={handleConfirm}
-            disabled={selectedIds.length < 2}
+            disabled={selectedIds.length < minSelection}
           >
             确认选择 ({selectedIds.length}篇)
           </button>

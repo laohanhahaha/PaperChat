@@ -111,6 +111,23 @@ export default function useWebSocket() {
     return false;
   }, []);
 
+  // 发送统一聊天消息（根据关键词自动路由）
+  const sendUnifiedChatMessage = useCallback((message, paperId = null, paperIds = [], sessionId = null, enableSearch = false) => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({
+        type: 'unified_chat',
+        message,
+        paper_id: paperId,
+        paper_ids: paperIds || [],
+        session_id: sessionId,
+        enable_search: enableSearch
+      }));
+      return true;
+    }
+    console.warn('WebSocket not connected, cannot send message');
+    return false;
+  }, []);
+
   // 注册消息处理器，返回取消注册函数
   const onMessage = useCallback((type, handler) => {
     if (!handlersRef.current.has(type)) {
@@ -126,5 +143,5 @@ export default function useWebSocket() {
     };
   }, []);
 
-  return { status, sendMessage, sendRagMessage, sendCrossDocMessage, onMessage, connect };
+  return { status, sendMessage, sendRagMessage, sendCrossDocMessage, sendUnifiedChatMessage, onMessage, connect };
 }

@@ -329,6 +329,77 @@
   margin-top: 0.5rem;
 }
 
+.welcomeHints {
+  text-align: left;
+  max-width: 400px;
+  margin: 1rem auto;
+}
+
+.welcomeHints p {
+  margin: 0.375rem 0;
+  font-size: 0.8125rem;
+}
+
+.intentIndicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  padding: 0.5rem;
+  background: var(--color-accent-bg);
+  border-radius: 0.5rem;
+}
+
+.intentBadge {
+  padding: 0.25rem 0.625rem;
+  background: var(--color-accent);
+  color: white;
+  border-radius: 0.25rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.intentHint {
+  font-size: 0.6875rem;
+  color: var(--color-text-secondary);
+}
+
+.unifiedWelcome {
+  max-width: 600px;
+  margin: 0 auto;
+  padding: 2rem;
+  text-align: left;
+}
+
+.unifiedWelcome h2 {
+  text-align: center;
+  margin-bottom: 1.5rem;
+  color: var(--color-text-primary);
+}
+
+.unifiedWelcome ul {
+  list-style: none;
+  padding: 0;
+  margin: 1rem 0;
+}
+
+.unifiedWelcome li {
+  padding: 0.5rem 0;
+  border-bottom: 1px dashed var(--color-border);
+}
+
+.unifiedWelcome li:last-child {
+  border-bottom: none;
+}
+
+.unifiedWelcome .hint {
+  text-align: center;
+  margin-top: 1.5rem;
+  color: var(--color-text-muted);
+  font-size: 0.875rem;
+}
+
 .message {
   display: flex;
   flex-direction: column;

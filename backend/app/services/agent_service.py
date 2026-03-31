@@ -344,6 +344,96 @@ INTENT_CLASSIFICATION_PROMPT = """你是用户意图识别专家。请分析用�
 - get_paper_info: 获取论文信息"""
 
 
+INTENT_KEYWORDS = {
+    "chapter_overview": {
+        "keywords": ["章节概述", "概述", "章节总结", "文章结构", "目录", " outline ", "章节内容", "各章节", "章节介绍", "结构分析"],
+        "intent": "chapter_overview",
+        "tool": "analyze_paper"
+    },
+    "deep_analysis": {
+        "keywords": ["深度分析", "深入分析", "详细分析", "深层分析", "分析", "研究分析", "学术分析", "critical analysis", "detailed analysis"],
+        "intent": "deep_analysis",
+        "tool": "deep_analyze_paper"
+    },
+    "key_points": {
+        "keywords": ["核心知识点", "关键点", "重点", "核心要点", "主要观点", "关键概念", "核心概念", "知识点", "key points", "main points", "核心思想"],
+        "intent": "key_points",
+        "tool": "extract_key_points"
+    },
+    "compare": {
+        "keywords": ["对比", "比较", "差异", "异同", "对照", "compare", "comparison", "versus", "vs "],
+        "intent": "comparison",
+        "tool": "compare_content"
+    },
+    "summary": {
+        "keywords": ["摘要", "总结", "概括", "提炼", "summarize", "summary", "概括"],
+        "intent": "summary",
+        "tool": "summarize"
+    },
+    "translate": {
+        "keywords": ["翻译", "译成", "translate", "中译", "英译"],
+        "intent": "translate",
+        "tool": "translate"
+    },
+    "explain": {
+        "keywords": ["解释", "说明", "什么是", "含义", "定义", "explain", "definition", "definition of"],
+        "intent": "explain",
+        "tool": "explain_term"
+    },
+    "cross_doc": {
+        "keywords": ["跨文档", "跨论文", "多篇论文", "多文档", "across papers", "multiple papers"],
+        "intent": "cross_doc",
+        "tool": "cross_doc_chat"
+    },
+    "quality_assessment": {
+        "keywords": ["质量评估", "评估", "好不好", "优缺点", "优劣势", "assess", "quality", "评估质量"],
+        "intent": "quality_assessment",
+        "tool": "assess_quality"
+    },
+    "outline": {
+        "keywords": ["提纲", "大纲", "结构", "写报告", "写综述", "outline", "structure", "报告大纲"],
+        "intent": "outline",
+        "tool": "generate_outline"
+    }
+}
+
+
+def classify_by_keywords(message: str) -> dict:
+    """基于关键词的意图识别（快速识别，用于直接功能触发）
+    
+    Args:
+        message: 用户消息
+        
+    Returns:
+        {"matched": True, "intent": "...", "tool": "...", "confidence": "high|medium|low"}
+        或
+        {"matched": False}
+    """
+    message_lower = message.lower()
+    
+    best_match = None
+    best_score = 0
+    
+    for intent_name, config in INTENT_KEYWORDS.items():
+        score = 0
+        for keyword in config["keywords"]:
+            if keyword.lower() in message_lower:
+                score += 1
+        
+        if score > 0 and score > best_score:
+            best_score = score
+            best_match = {
+                "intent": config["intent"],
+                "tool": config["tool"],
+                "confidence": "high" if score >= 2 else "medium"
+            }
+    
+    if best_match:
+        return {"matched": True, **best_match}
+    
+    return {"matched": False}
+
+
 TASK_PLANNING_PROMPT = """你是任务规划专家。请将用户的复杂请求拆解为有序的子任务。
 
 用户请求：{message}

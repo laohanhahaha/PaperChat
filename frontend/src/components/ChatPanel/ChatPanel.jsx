@@ -5,16 +5,31 @@ import PaperSelector from '../PaperSelector/PaperSelector';
 import MarkdownContent from '../../utils/MarkdownRenderer';
 import styles from './ChatPanel.module.css';
 
-const CHAR_INTERVAL = 30; // 每个字符的显示间隔（毫秒）
+const CHAR_INTERVAL = 30;
 
-function ChatPanel({ 
-  pdfText, 
-  paperId, 
-  isChatting, 
-  setIsChatting, 
-  sendRagMessage, 
+const INTENT_LABELS = {
+  'chapter_overview': '📋 章节概述',
+  'deep_analysis': '🔬 深度分析',
+  'key_points': '🎯 核心知识点',
+  'comparison': '📊 对比分析',
+  'summary': '📝 摘要总结',
+  'translate': '🌐 翻译',
+  'explain': '📖 术语解释',
+  'cross_doc': '📚 跨文档问答',
+  'quality_assessment': '⚖️ 质量评估',
+  'outline': '📃 生成提纲',
+  'simple_qa': '💬 智能问答'
+};
+
+function ChatPanel({
+  pdfText,
+  paperId,
+  isChatting,
+  setIsChatting,
+  sendRagMessage,
   sendCrossDocMessage,
-  onMessage, 
+  sendUnifiedChatMessage,
+  onMessage,
   wsStatus,
   onNavigateToPage,
   onSwitchPaper
@@ -22,15 +37,15 @@ function ChatPanel({
   const [input, setInput] = useState('');
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [showPaperSelector, setShowPaperSelector] = useState(false);
+  const [currentIntent, setCurrentIntent] = useState(null);
   const messagesEndRef = useRef(null);
   const textareaRef = useRef(null);
-  const fullContentRef = useRef('');       // 已从服务端收到的完整文本
-  const displayedLenRef = useRef(0);       // 当前已显示的字符数
-  const timerRef = useRef(null);           // 逐字显示定时器
-  const isDoneRef = useRef(false);         // 服务端是否已发送完毕
-  const currentSessionIdRef = useRef(null); // 当前会话ID
+  const fullContentRef = useRef('');
+  const displayedLenRef = useRef(0);
+  const timerRef = useRef(null);
+  const isDoneRef = useRef(false);
+  const currentSessionIdRef = useRef(null);
 
-  // 使用 chatStore
   const {
     sessions,
     currentSessionId,
@@ -61,27 +76,22 @@ function ChatPanel({
     clearSearchState
   } = useChatStore();
 
-  // 使用 paperStore 获取论文列表
   const { papers, fetchPapers } = usePaperStore();
 
-  // 初始化：加载会话列表
   useEffect(() => {
     if (paperId) {
       getOrCreateSessionByPaper(paperId);
     }
   }, [paperId, getOrCreateSessionByPaper]);
 
-  // 同步 currentSessionId 到 ref
   useEffect(() => {
     currentSessionIdRef.current = currentSessionId;
   }, [currentSessionId]);
 
-  // 自动滚动到底部
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // 自动调整输入框高度
   useEffect(() => {
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
@@ -89,7 +99,6 @@ function ChatPanel({
     }
   }, [input]);
 
-  // 逐字显示的核心函数
   const tickDisplay = useCallback(() => {
     const full = fullContentRef.current;
     const currentLen = displayedLenRef.current;
@@ -100,57 +109,65 @@ function ChatPanel({
       updateLastMessage(displayed);
       timerRef.current = setTimeout(tickDisplay, CHAR_INTERVAL);
     } else if (isDoneRef.current) {
-      // 服务端已完成且所有字符已显示
       setIsChatting(false);
       timerRef.current = null;
     } else {
-      // 等待更多数据到来，暂停定时器
       timerRef.current = null;
     }
   }, [updateLastMessage, setIsChatting]);
 
-  // 启动逐字显示（如果定时器未运行）
   const startTick = useCallback(() => {
     if (!timerRef.current) {
       timerRef.current = setTimeout(tickDisplay, CHAR_INTERVAL);
     }
   }, [tickDisplay]);
 
-  // 监听 WebSocket 消息
   useEffect(() => {
-    // RAG 问答片段
     const unsubRagChunk = onMessage('rag_chat_chunk', (msg) => {
       fullContentRef.current += msg.content;
       startTick();
     });
 
-    // 引用来源
     const unsubRagSources = onMessage('rag_sources', (msg) => {
       setSources(msg.sources || []);
     });
 
-    // 跨文档问答片段
     const unsubCrossDocChunk = onMessage('cross_doc_chunk', (msg) => {
       fullContentRef.current += msg.content;
       startTick();
     });
 
-    // 跨文档引用来源
     const unsubCrossDocSources = onMessage('cross_doc_sources', (msg) => {
       setCrossDocSources(msg.sources || []);
     });
 
-    // 搜索状态
     const unsubSearchStatus = onMessage('search_status', (msg) => {
       setSearchStatus(msg.status);
     });
 
-    // 完成信号
+    const unsubAnalyzeChunk = onMessage('analyze_chunk', (msg) => {
+      fullContentRef.current += msg.data;
+      startTick();
+    });
+
+    const unsubDeepAnalyzeChunk = onMessage('deep_analyze_chunk', (msg) => {
+      fullContentRef.current += msg.data;
+      startTick();
+    });
+
+    const unsubIntentDetected = onMessage('intent_detected', (msg) => {
+      setCurrentIntent({
+        intent: msg.intent,
+        tool: msg.tool,
+        confidence: msg.confidence,
+        matched: msg.matched
+      });
+    });
+
     const unsubDone = onMessage('done', (msg) => {
-      if (msg.channel === 'rag_chat' || msg.channel === 'cross_doc_chat') {
+      if (['rag_chat', 'cross_doc_chat', 'analyze', 'deep_analyze'].includes(msg.channel)) {
         isDoneRef.current = true;
         startTick();
-        // 更新当前会话ID（如果是新会话）
         if (msg.session_id) {
           currentSessionIdRef.current = msg.session_id;
           setCurrentSession(msg.session_id);
@@ -158,7 +175,6 @@ function ChatPanel({
       }
     });
 
-    // 错误处理
     const unsubError = onMessage('error', (msg) => {
       console.error('问答错误:', msg.message);
       if (timerRef.current) {
@@ -175,6 +191,9 @@ function ChatPanel({
       unsubCrossDocChunk();
       unsubCrossDocSources();
       unsubSearchStatus();
+      unsubAnalyzeChunk();
+      unsubDeepAnalyzeChunk();
+      unsubIntentDetected();
       unsubDone();
       unsubError();
       if (timerRef.current) {
@@ -188,19 +207,17 @@ function ChatPanel({
     const trimmed = input.trim();
     if (!trimmed || isChatting || wsStatus !== 'connected') return;
 
-    // 如果没有当前会话，先创建一个
     const sessionId = currentSessionIdRef.current;
-    
-    // 添加用户消息
+
     addMessage({ role: 'user', content: trimmed });
-    // 添加空的助手消息（用于流式显示）
     addMessage({ role: 'assistant', content: '' });
-    
+
     setInput('');
     setIsChatting(true);
-    setSources([]); // 清空之前的来源
-    setCrossDocSources([]); // 清空跨文档来源
-    clearSearchState(); // 清空搜索状态
+    setSources([]);
+    setCrossDocSources([]);
+    clearSearchState();
+    setCurrentIntent(null);
     fullContentRef.current = '';
     displayedLenRef.current = 0;
     isDoneRef.current = false;
@@ -209,12 +226,11 @@ function ChatPanel({
       timerRef.current = null;
     }
 
-    // 根据模式选择发送方式
-    if (isCrossDocMode && selectedPaperIds.length > 0) {
-      // 跨文档问答
+    if (sendUnifiedChatMessage) {
+      sendUnifiedChatMessage(trimmed, paperId, selectedPaperIds, sessionId, enableSearch);
+    } else if (isCrossDocMode && selectedPaperIds.length > 0) {
       sendCrossDocMessage(trimmed, selectedPaperIds, sessionId);
     } else {
-      // 单论文RAG问答
       sendRagMessage(trimmed, paperId, sessionId, null, enableSearch);
     }
   };
@@ -226,9 +242,7 @@ function ChatPanel({
     }
   };
 
-  // 处理新建会话
   const handleNewSession = async () => {
-    // 如果当前是跨文档模式，创建跨文档会话
     if (isCrossDocMode && selectedPaperIds.length > 0) {
       await createCrossDocSession(selectedPaperIds, '跨文档对话');
     } else {
@@ -239,35 +253,28 @@ function ChatPanel({
     isDoneRef.current = false;
   };
 
-  // 处理添加论文到跨文档问答
   const handleAddPaper = () => {
     setShowPaperSelector(true);
   };
 
-  // 处理论文选择器确认
   const handlePaperSelectorConfirm = async (selectedIds) => {
     if (selectedIds.length === 0) return;
-    
-    // 设置跨文档论文列表
+
     setCrossDocPapers(selectedIds);
-    
-    // 如果选择了多篇论文，创建跨文档会话
+
     if (selectedIds.length >= 1) {
       await createCrossDocSession(selectedIds, '跨文档对话');
     }
   };
 
-  // 处理移除跨文档论文
   const handleRemovePaper = (paperIdToRemove) => {
     removePaperFromCrossDoc(paperIdToRemove);
   };
 
-  // 处理清空跨文档论文
   const handleClearCrossDoc = () => {
     clearCrossDocPapers();
   };
 
-  // 处理切换会话
   const handleSwitchSession = async (sessionId) => {
     if (sessionId === currentSessionId) return;
     setCurrentSession(sessionId);
@@ -277,7 +284,6 @@ function ChatPanel({
     isDoneRef.current = false;
   };
 
-  // 处理删除会话
   const handleDeleteSession = async (e, sessionId) => {
     e.stopPropagation();
     if (window.confirm('确定要删除这个会话吗？')) {
@@ -285,9 +291,7 @@ function ChatPanel({
     }
   };
 
-  // 处理点击引用跳转到页面
   const handleSourceClick = (pages, paperId = null) => {
-    // 如果是跨文档引用且需要切换论文
     if (paperId && paperId !== paperId && onSwitchPaper) {
       onSwitchPaper(paperId, pages[0]);
     } else if (pages && pages.length > 0 && onNavigateToPage) {
@@ -295,39 +299,33 @@ function ChatPanel({
     }
   };
 
-  // 获取论文标题
   const getPaperTitle = (pid) => {
     const paper = papers.find(p => p.id === pid);
     return paper ? paper.title : `论文 ${pid}`;
   };
 
-  // 渲染带引用标记的内容
   const renderContentWithCitations = (text) => {
     if (!text) return null;
-    
+
     const parts = [];
     let key = 0;
     let lastIndex = 0;
-    
-    // 匹配跨文档引用格式 [论文X, p.Y] 或 [论文X,p.Y]
+
     const crossDocRegex = /\[论文(\d+)\s*,?\s*p\.(\d+)\]/g;
-    // 匹配单论文引用格式 [p.X]
     const singleDocRegex = /\[p\.(\d+)\]/g;
-    
-    // 先尝试匹配跨文档格式
+
     let match;
     while ((match = crossDocRegex.exec(text)) !== null) {
-      // 添加引用前的文本
       if (match.index > lastIndex) {
         parts.push(
           <span key={key++}>{renderMarkdown(text.slice(lastIndex, match.index))}</span>
         );
       }
-      
+
       const paperId = parseInt(match[1], 10);
       const pageNum = parseInt(match[2], 10);
       const paperTitle = getPaperTitle(paperId);
-      
+
       parts.push(
         <button
           key={key++}
@@ -338,22 +336,20 @@ function ChatPanel({
           [论文{paperId}, p.{pageNum}]
         </button>
       );
-      
+
       lastIndex = match.index + match[0].length;
     }
-    
-    // 处理剩余文本中的单论文引用
+
     const remainingText = text.slice(lastIndex);
     let singleLastIndex = 0;
-    
+
     while ((match = singleDocRegex.exec(remainingText)) !== null) {
-      // 添加引用前的文本
       if (match.index > singleLastIndex) {
         parts.push(
           <span key={key++}>{renderMarkdown(remainingText.slice(singleLastIndex, match.index))}</span>
         );
       }
-      
+
       const pageNum = parseInt(match[1], 10);
       parts.push(
         <button
@@ -365,27 +361,24 @@ function ChatPanel({
           [p.{pageNum}]
         </button>
       );
-      
+
       singleLastIndex = match.index + match[0].length;
     }
-    
-    // 添加剩余文本
+
     if (singleLastIndex < remainingText.length) {
       parts.push(
         <span key={key++}>{renderMarkdown(remainingText.slice(singleLastIndex))}</span>
       );
     }
-    
+
     return parts.length > 0 ? parts : renderMarkdown(text);
   };
 
-  // 简单Markdown渲染：使用 MarkdownContent 组件
   const renderMarkdown = (text) => {
     if (!text) return null;
     return <MarkdownContent content={text} />;
   };
 
-  // 格式化时间
   const formatTime = (timeStr) => {
     if (!timeStr) return '';
     const date = new Date(timeStr);
@@ -394,15 +387,26 @@ function ChatPanel({
 
   if (!pdfText && !paperId) {
     return (
-      <div className={styles.empty}>
-        <p>上传PDF后可以进行提问</p>
+      <div className={styles.container}>
+        <div className={styles.unifiedWelcome}>
+          <h2>🔍 统一智能助手</h2>
+          <p>在这里你可以：</p>
+          <ul>
+            <li><strong>章节概述</strong> - 输入"章节概述"或"概述"分析论文结构</li>
+            <li><strong>深度分析</strong> - 输入"深度分析"或"详细分析"进行深入研究</li>
+            <li><strong>核心知识点</strong> - 输入"核心知识点"提取关键概念</li>
+            <li><strong>智能问答</strong> - 直接输入问题进行 RAG 检索问答</li>
+            <li><strong>跨文档问答</strong> - 添加多篇论文进行跨文档分析</li>
+            <li><strong>翻译/解释</strong> - 输入"翻译xxx"或"解释xxx"进行术语处理</li>
+          </ul>
+          <p className={styles.hint}>上传 PDF 论文后即可开始使用</p>
+        </div>
       </div>
     );
   }
 
   return (
     <div className={styles.container}>
-      {/* 会话侧边栏 */}
       <div className={`${styles.sidebar} ${sidebarOpen ? styles.sidebarOpen : styles.sidebarClosed}`}>
         <div className={styles.sidebarHeader}>
           <button className={styles.newSessionBtn} onClick={handleNewSession}>
@@ -413,12 +417,11 @@ function ChatPanel({
             新建对话
           </button>
         </div>
-        
-        {/* 跨文档论文选择区域 */}
+
         <div className={styles.crossDocSection}>
           <div className={styles.crossDocHeader}>
             <span className={styles.crossDocTitle}>跨文档问答</span>
-            <button 
+            <button
               className={styles.addPaperBtn}
               onClick={handleAddPaper}
               title="添加论文"
@@ -430,8 +433,7 @@ function ChatPanel({
               添加论文
             </button>
           </div>
-          
-          {/* 已选论文列表 */}
+
           {selectedPaperIds.length > 0 && (
             <div className={styles.selectedPapers}>
               {selectedPaperIds.map(pid => (
@@ -439,7 +441,7 @@ function ChatPanel({
                   <span className={styles.paperTagText} title={getPaperTitle(pid)}>
                     {getPaperTitle(pid).slice(0, 15)}{getPaperTitle(pid).length > 15 ? '...' : ''}
                   </span>
-                  <button 
+                  <button
                     className={styles.paperTagRemove}
                     onClick={() => handleRemovePaper(pid)}
                     title="移除"
@@ -449,7 +451,7 @@ function ChatPanel({
                 </div>
               ))}
               {selectedPaperIds.length > 1 && (
-                <button 
+                <button
                   className={styles.clearAllBtn}
                   onClick={handleClearCrossDoc}
                   title="清空选择"
@@ -459,14 +461,14 @@ function ChatPanel({
               )}
             </div>
           )}
-          
+
           {selectedPaperIds.length === 0 && (
             <div className={styles.crossDocHint}>
               点击"添加论文"选择多篇论文进行跨文档问答
             </div>
           )}
         </div>
-        
+
         <div className={styles.sessionList}>
           {sessions.map(session => (
             <div
@@ -499,7 +501,6 @@ function ChatPanel({
         </div>
       </div>
 
-      {/* 侧边栏切换按钮 */}
       <button
         className={styles.sidebarToggle}
         onClick={() => setSidebarOpen(!sidebarOpen)}
@@ -508,12 +509,27 @@ function ChatPanel({
         {sidebarOpen ? '◀' : '▶'}
       </button>
 
-      {/* 主聊天区域 */}
       <div className={styles.chatArea}>
         <div className={styles.messages}>
           {messages.length === 0 && (
             <div className={styles.welcome}>
-              <p>💬 有什么问题？可以针对论文内容进行提问</p>
+              <p>💬 统一智能助手 - 有什么问题可以问我</p>
+              {currentIntent && currentIntent.matched && (
+                <div className={styles.intentIndicator}>
+                  <span className={styles.intentBadge}>
+                    {INTENT_LABELS[currentIntent.intent] || currentIntent.intent}
+                  </span>
+                  <span className={styles.intentHint}>
+                    (置信度: {currentIntent.confidence})
+                  </span>
+                </div>
+              )}
+              <div className={styles.welcomeHints}>
+                <p>📋 输入"章节概述" - 分析论文结构</p>
+                <p>🔬 输入"深度分析" - 深入研究论文</p>
+                <p>🎯 输入"核心知识点" - 提取关键概念</p>
+                <p>📚 添加多篇论文后可以跨文档分析</p>
+              </div>
               <p className={styles.welcomeHint}>回答中的 [p.X] 标记可以点击跳转到对应页面</p>
             </div>
           )}
@@ -524,28 +540,25 @@ function ChatPanel({
             >
               <div className={styles.bubble}>
                 {msg.content ? (
-                  msg.role === 'assistant' 
+                  msg.role === 'assistant'
                     ? renderContentWithCitations(msg.content)
                     : msg.content
                 ) : (isChatting && index === messages.length - 1 ? (
                   <span className={styles.typing}>思考中...</span>
                 ) : '')}
               </div>
-              
-              {/* 显示引用来源（仅对最后一条助手消息） */}
-              {msg.role === 'assistant' && 
-               !isChatting && 
+
+              {msg.role === 'assistant' &&
+               !isChatting &&
                index === messages.length - 1 && (
                 <>
-                  {/* 单论文引用来源 */}
                   {sources.length > 0 && !isCrossDocMode && (
                     <div className={styles.sources}>
                       <div className={styles.sourcesTitle}>引用来源：</div>
                       {sources.map((source, idx) => (
                         source.type === 'web' ? (
-                          // 网络来源
-                          <a 
-                            key={idx} 
+                          <a
+                            key={idx}
                             className={`${styles.sourceItem} ${styles.webSource}`}
                             href={source.href}
                             target="_blank"
@@ -561,9 +574,8 @@ function ChatPanel({
                             </span>
                           </a>
                         ) : (
-                          // 论文来源
-                          <div 
-                            key={idx} 
+                          <div
+                            key={idx}
                             className={styles.sourceItem}
                             onClick={() => handleSourceClick(source.pages)}
                           >
@@ -578,14 +590,13 @@ function ChatPanel({
                       ))}
                     </div>
                   )}
-                  
-                  {/* 跨文档引用来源 */}
+
                   {crossDocSources.length > 0 && isCrossDocMode && (
                     <div className={`${styles.sources} ${styles.crossDocSources}`}>
                       <div className={styles.sourcesTitle}>跨文档引用来源：</div>
                       {crossDocSources.map((source, idx) => (
-                        <div 
-                          key={idx} 
+                        <div
+                          key={idx}
                           className={styles.sourceItem}
                           onClick={() => handleSourceClick(source.pages, source.paper_id)}
                         >
@@ -609,14 +620,14 @@ function ChatPanel({
           ))}
           <div ref={messagesEndRef} />
         </div>
-        {/* 搜索控制面板 */}
+
         <div className={styles.searchControl}>
           <label className={styles.searchToggle}>
-            <input 
-              type="checkbox" 
-              checked={enableSearch} 
-              onChange={toggleSearch} 
-              disabled={isChatting} 
+            <input
+              type="checkbox"
+              checked={enableSearch}
+              onChange={toggleSearch}
+              disabled={isChatting}
             />
             <span className={styles.toggleSlider}></span>
             <span>联网搜索</span>
@@ -638,7 +649,7 @@ function ChatPanel({
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="输入你的问题..."
+            placeholder="输入你的问题，或输入功能关键词（如：章节概述、深度分析）..."
             rows={1}
             disabled={isChatting}
           />
@@ -651,8 +662,7 @@ function ChatPanel({
           </button>
         </div>
       </div>
-      
-      {/* 论文选择器弹窗 */}
+
       <PaperSelector
         isOpen={showPaperSelector}
         onClose={() => setShowPaperSelector(false)}

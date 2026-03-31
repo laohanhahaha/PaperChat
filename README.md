@@ -26,6 +26,7 @@
 
 | 页面 | 路由 | 说明 |
 |------|------|------|
+| 统一聊天 | `/chat` | 统一聊天入口，支持论文问答、分析、联网搜索 |
 | 论文列表 | `/papers` | 论文库管理、批量导入 |
 | 论文阅读 | `/paper/:id` | 三栏布局阅读页面 |
 | 知识库 | `/knowledge` | 知识卡片管理 |
@@ -147,6 +148,7 @@ PaperChat/
 │   │   │   ├── Navbar/          # 导航栏
 │   │   │   └── ProtectedRoute.jsx
 │   │   ├── pages/               # 页面组件
+│   │   │   ├── ChatPage.jsx      # 统一聊天页面
 │   │   │   ├── PaperList.jsx    # 论文列表
 │   │   │   ├── KnowledgePage.jsx# 知识库
 │   │   │   ├── WritingPage.jsx  # 写作辅助
@@ -404,47 +406,29 @@ npm run dev
 - RAG 参数可配置
 - 会话持久化优化
 
-### v3.2 — Agent 前端集成（计划中）
+### v3.2 — Agent 前端集成 + 统一聊天（2026-04-01）
 
-> **状态**：后端已实现，前端待集成
+> **状态**：✅ 已完成
 
-#### 待开发功能
-
-| 功能 | 说明 | 优先级 |
-|------|------|--------|
-| Agent 聊天入口 | 在 ChatPanel 中添加 Agent 模式切换按钮 | 高 |
-| sendAgentMessage | 实现 WebSocket 发送 `agent_chat` 消息 | 高 |
-| AgentProgress 渲染 | 在聊天界面中显示 Agent 执行进度 | 高 |
-| 意图识别展示 | 显示识别到的用户意图和复杂度 | 中 |
-| 任务步骤可视化 | 展示任务规划列表和执行状态 | 中 |
-| 工具调用结果 | 显示每个工具的调用结果摘要 | 中 |
-| Agent 模式切换 | 支持普通 RAG / Agent 模式切换 | 中 |
-
-#### 技术方案
-
-```javascript
-// 1. ChatPanel.jsx 添加 Agent 模式切换
-const [isAgentMode, setIsAgentMode] = useState(false);
-
-// 2. 发送消息时判断模式
-if (isAgentMode) {
-  sendAgentMessage(trimmed, paperId, selectedPaperIds);
-} else if (isCrossDocMode) {
-  sendCrossDocMessage(trimmed, selectedPaperIds, sessionId);
-} else {
-  sendRagMessage(trimmed, paperId, sessionId, null, enableSearch);
-}
-
-// 3. 渲染 AgentProgress 组件
-{isAgentMode && <AgentProgress />}
-```
+- 统一聊天入口：所有功能（问答、分析、联网搜索）聚合到 `/chat` 页面
+- 论文选择支持单篇或多篇
+- Agent 聊天入口
+- sendAgentMessage WebSocket 消息发送
+- AgentProgress 执行进度展示
+- 意图识别展示
+- 任务步骤可视化
+- 工具调用结果展示
+- 普通 RAG / Agent 模式切换
+- 导航栏调整：聊天入口置于论文库之上
 
 #### 涉及文件
 
-- `frontend/src/components/ChatPanel/ChatPanel.jsx` - 添加 Agent 模式入口
-- `frontend/src/hooks/useWebSocket.js` - 添加 sendAgentMessage 方法
-- `frontend/src/App.jsx` - 渲染 AgentProgress 组件
-- `frontend/src/components/AgentProgress/AgentProgress.jsx` - 优化展示样式
+- `frontend/src/pages/ChatPage.jsx` - 新增统一聊天页面
+- `frontend/src/components/ChatPanel/ChatPanel.jsx` - Agent 模式切换
+- `frontend/src/hooks/useWebSocket.js` - sendAgentMessage 方法
+- `frontend/src/components/AgentProgress/AgentProgress.jsx` - 进度展示
+- `frontend/src/components/Navbar/Navbar.jsx` - 导航顺序调整
+- `frontend/src/components/PaperSelector/PaperSelector.jsx` - minSelection 参数
 
 ---
 

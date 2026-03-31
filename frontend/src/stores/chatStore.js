@@ -353,6 +353,41 @@ const useChatStore = create((set, get) => ({
             });
             return null;
         }
+    },
+
+    // ============ 统一聊天相关方法 ============
+
+    // 意图检测状态
+    currentIntent: null,
+
+    // 设置当前意图
+    setCurrentIntent: (intent) => {
+        set({ currentIntent: intent });
+    },
+
+    // 清除意图
+    clearCurrentIntent: () => {
+        set({ currentIntent: null });
+    },
+
+    // 发送统一聊天消息（通过 WebSocket）
+    sendUnifiedChatMessage: (ws, message, paperId, paperIds, sessionId, enableSearch = false) => {
+        if (!ws || ws.readyState !== WebSocket.OPEN) {
+            console.error('WebSocket 未连接');
+            return false;
+        }
+
+        const payload = {
+            type: 'unified_chat',
+            message: message,
+            paper_id: paperId,
+            paper_ids: paperIds || [],
+            session_id: sessionId,
+            enable_search: enableSearch
+        };
+
+        ws.send(JSON.stringify(payload));
+        return true;
     }
 }));
 

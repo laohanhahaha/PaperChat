@@ -2,6 +2,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import styles from './Navbar.module.css';
 
 const navItems = [
+    { path: '/chat', icon: '💬', label: '聊天' },
     { path: '/papers', icon: '📚', label: '论文库' },
     { path: '/knowledge', icon: '💡', label: '知识库' },
     { path: '/writing', icon: '✍️', label: '写作辅助' },

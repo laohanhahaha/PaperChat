@@ -742,6 +742,139 @@ async def websocket_endpoint(websocket: WebSocket):
                 running_tasks["cross_doc_chat"] = asyncio.create_task(
                     handle_cross_doc_chat(message, paper_ids, session_id, user_id)
                 )
+
+            elif msg_type == "unified_chat":
+                """统一聊天入口 - 根据关键词自动路由到不同功能"""
+                message = data.get("message", "")
+                paper_id = data.get("paper_id")
+                paper_ids = data.get("paper_ids", [])
+                session_id = data.get("session_id")
+                user_id = 1
+                enable_search = data.get("enable_search", False)
+                
+                if not message:
+                    await websocket.send_text(json.dumps({
+                        "type": "error",
+                        "message": "消息不能为空"
+                    }))
+                    continue
+                
+                # 使用关键词进行意图识别
+                from app.services.agent_service import classify_by_keywords
+                intent_result = classify_by_keywords(message)
+                
+                # 发送意图识别结果给前端
+                await websocket.send_text(json.dumps({
+                    "type": "intent_detected",
+                    "intent": intent_result.get("intent", "simple_qa") if intent_result.get("matched") else "simple_qa",
+                    "tool": intent_result.get("tool", "rag_chat") if intent_result.get("matched") else "rag_chat",
+                    "confidence": intent_result.get("confidence", "low"),
+                    "matched": intent_result.get("matched", False)
+                }))
+                
+                # 根据意图路由到不同的处理函数
+                if intent_result.get("matched"):
+                    tool = intent_result.get("tool")
+                    
+                    if tool == "analyze_paper":
+                        # 章节概述
+                        if paper_id:
+                            async with AsyncSessionLocal() as db:
+                                result = await db.execute(select(Paper).where(Paper.id == paper_id))
+                                paper = result.scalar_one_or_none()
+                                if paper and paper.full_text:
+                                    running_tasks["unified"] = asyncio.create_task(
+                                        handle_analyze(paper.full_text, paper_id)
+                                    )
+                                else:
+                                    await websocket.send_text(json.dumps({
+                                        "type": "error",
+                                        "message": "论文内容不存在，请先上传并解析论文"
+                                    }))
+                        else:
+                            await websocket.send_text(json.dumps({
+                                "type": "error",
+                                "message": "需要提供 paper_id"
+                            }))
+                            
+                    elif tool == "deep_analyze_paper":
+                        # 深度分析
+                        if paper_id:
+                            async with AsyncSessionLocal() as db:
+                                result = await db.execute(select(Paper).where(Paper.id == paper_id))
+                                paper = result.scalar_one_or_none()
+                                if paper and paper.full_text:
+                                    running_tasks["unified"] = asyncio.create_task(
+                                        handle_deep_analyze(paper.full_text, paper_id)
+                                    )
+                                else:
+                                    await websocket.send_text(json.dumps({
+                                        "type": "error",
+                                        "message": "论文内容不存在，请先上传并解析论文"
+                                    }))
+                        else:
+                            await websocket.send_text(json.dumps({
+                                "type": "error",
+                                "message": "需要提供 paper_id"
+                            }))
+                            
+                    elif tool == "cross_doc_chat":
+                        # 跨文档问答
+                        if not paper_ids or len(paper_ids) == 0:
+                            # 如果没有提供 paper_ids 但有 paper_id，使用单论文
+                            if paper_id:
+                                paper_ids = [paper_id]
+                            else:
+                                await websocket.send_text(json.dumps({
+                                    "type": "error",
+                                    "message": "跨文档问答需要提供论文列表"
+                                }))
+                                continue
+                        
+                        running_tasks["unified"] = asyncio.create_task(
+                            handle_cross_doc_chat(message, paper_ids, session_id, user_id)
+                        )
+                        
+                    elif tool == "rag_chat" or tool == "search_text":
+                        # RAG 问答
+                        if not paper_id:
+                            await websocket.send_text(json.dumps({
+                                "type": "error",
+                                "message": "RAG 问答需要提供 paper_id"
+                            }))
+                            continue
+                        
+                        running_tasks["unified"] = asyncio.create_task(
+                            handle_rag_chat(message, paper_id, session_id, user_id, enable_search)
+                        )
+                    else:
+                        # 其他工具，暂不支持直接调用，使用 RAG 问答
+                        if not paper_id:
+                            paper_id = paper_ids[0] if paper_ids else None
+                        
+                        if paper_id:
+                            running_tasks["unified"] = asyncio.create_task(
+                                handle_rag_chat(message, paper_id, session_id, user_id, enable_search)
+                            )
+                        else:
+                            await websocket.send_text(json.dumps({
+                                "type": "error",
+                                "message": "无法确定论文，请提供 paper_id"
+                            }))
+                else:
+                    # 没有匹配到特定意图，使用 RAG 问答
+                    if not paper_id:
+                        paper_id = paper_ids[0] if paper_ids else None
+                    
+                    if paper_id:
+                        running_tasks["unified"] = asyncio.create_task(
+                            handle_rag_chat(message, paper_id, session_id, user_id, enable_search)
+                        )
+                    else:
+                        await websocket.send_text(json.dumps({
+                            "type": "error",
+                            "message": "请先选择一篇论文再进行问答"
+                        }))
             
             else:
                 await websocket.send_text(json.dumps({
