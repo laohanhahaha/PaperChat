@@ -393,7 +393,7 @@ npm run dev
 - 相似论文推荐
 - 用户设置系统
 
-### v3.1 — Agent 智能体（2026-03-31）
+### v3.1 — Agent 智能体后端（2026-03-31）
 
 - Agent 意图识别
 - 任务规划与执行
@@ -403,6 +403,48 @@ npm run dev
 - 论文对比分析
 - RAG 参数可配置
 - 会话持久化优化
+
+### v3.2 — Agent 前端集成（计划中）
+
+> **状态**：后端已实现，前端待集成
+
+#### 待开发功能
+
+| 功能 | 说明 | 优先级 |
+|------|------|--------|
+| Agent 聊天入口 | 在 ChatPanel 中添加 Agent 模式切换按钮 | 高 |
+| sendAgentMessage | 实现 WebSocket 发送 `agent_chat` 消息 | 高 |
+| AgentProgress 渲染 | 在聊天界面中显示 Agent 执行进度 | 高 |
+| 意图识别展示 | 显示识别到的用户意图和复杂度 | 中 |
+| 任务步骤可视化 | 展示任务规划列表和执行状态 | 中 |
+| 工具调用结果 | 显示每个工具的调用结果摘要 | 中 |
+| Agent 模式切换 | 支持普通 RAG / Agent 模式切换 | 中 |
+
+#### 技术方案
+
+```javascript
+// 1. ChatPanel.jsx 添加 Agent 模式切换
+const [isAgentMode, setIsAgentMode] = useState(false);
+
+// 2. 发送消息时判断模式
+if (isAgentMode) {
+  sendAgentMessage(trimmed, paperId, selectedPaperIds);
+} else if (isCrossDocMode) {
+  sendCrossDocMessage(trimmed, selectedPaperIds, sessionId);
+} else {
+  sendRagMessage(trimmed, paperId, sessionId, null, enableSearch);
+}
+
+// 3. 渲染 AgentProgress 组件
+{isAgentMode && <AgentProgress />}
+```
+
+#### 涉及文件
+
+- `frontend/src/components/ChatPanel/ChatPanel.jsx` - 添加 Agent 模式入口
+- `frontend/src/hooks/useWebSocket.js` - 添加 sendAgentMessage 方法
+- `frontend/src/App.jsx` - 渲染 AgentProgress 组件
+- `frontend/src/components/AgentProgress/AgentProgress.jsx` - 优化展示样式
 
 ---
 
