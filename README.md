@@ -435,7 +435,7 @@ npm run dev
 - RAG 参数可配置
 - 会话持久化优化
 
-### v3.2 — 统一聊天入口 + 设计系统重构（2026-04-01）
+### v3.2 — 统一聊天入口
 
 > **状态**：⚠️ 部分完成
 
@@ -455,13 +455,6 @@ npm run dev
 - 字体系统：新增 Playfair Display 衬线字体
 - 页面样式：ChatPage、Navbar、PaperList 等全面更新
 
-#### 待完成功能（Agent 前端集成）
-
-- [ ] ChatPage Agent 模式开关
-- [ ] AgentProgress 进度展示组件集成
-- [ ] 完整 LLM 意图识别（当前使用关键词匹配）
-- [ ] 任务步骤可视化
-- [ ] 工具调用结果展示
 
 #### 涉及文件
 
@@ -470,7 +463,308 @@ npm run dev
 - `frontend/src/stores/chatStore.js` - 会话管理增强
 - `frontend/src/components/AgentProgress/` - Agent 进度组件（已实现，待集成）
 - `frontend/src/components/Navbar/Navbar.jsx` - 导航顺序调整
-- `frontend/src/index.css` - 设计系统重构
+
+---
+
+## v4.0 更新详情
+
+> 更新日期：2026-04-03
+> 版本状态：已发布
+
+### 一、系统样式重构
+
+#### 1.1 配色方案变更
+
+从冷色调蓝色系全面改为暖色调学术风格：
+
+| 元素 | 旧值 | 新值 | 说明 |
+|------|------|------|------|
+| 主色调 | `#007aff` | `#B8860B` | 蓝色 → 暗金色 |
+| 背景色（主） | `#ffffff` | `#FAFAF6` | 纯白 → 米白 |
+| 背景色（次） | `#f5f5f7` | `#F5F0E8` | 浅灰 → 暖灰 |
+| 背景色（三） | - | `#EDE6D8` | 新增：淡棕 |
+| 文字色（主） | `#1d1d1f` | `#2C2C2C` | 纯黑 → 深灰 |
+| 文字色（次） | `#86868b` | `#5C4033` / `#7A6E62` | 灰色 → 棕色系 |
+| 边框色 | `rgba(0,0,0,0.06)` | `rgba(92,64,51,0.12)` | 黑色系 → 棕色系 |
+| 成功色 | `#34c759` | `#4A7C59` | 亮绿 → 深绿 |
+| 警告色 | `#ff9500` | `#C4841D` / `#C78D3F` | 橙色 → 金橙 |
+| 危险色 | `#ff3b30` | `#B33A3A` / `#B85450` | 亮红 → 暗红 |
+| 强调色（深色主题） | `#6366f1` | `#D4A853` | 紫色 → 金色 |
+
+#### 1.2 字体系统更新
+
+新增学术期刊风格字体栈：
+
+```css
+--sans: 'Source Sans 3', 'Noto Sans SC', system-ui, sans-serif;
+--heading: 'Playfair Display', 'Noto Serif SC', Georgia, serif;  /* 新增衬线字体 */
+--mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Consolas, monospace;
+```
+
+#### 1.3 新增设计元素
+
+| 类名 | 用途 |
+|------|------|
+| `.paper-texture` | 纸张纹理背景效果 |
+| `.academic-divider` | 学术引用风格分隔线 |
+
+#### 1.4 新增 CSS 变量
+
+| 变量类别 | 示例 |
+|----------|------|
+| 背景色层级 | `--color-bg-primary/secondary/tertiary/elevated` |
+| 文字色层级 | `--color-text-primary/secondary/muted` |
+| 边框色层级 | `--color-border/border-strong` |
+| 强调色系列 | `--color-accent/accent-hover/accent-bg` |
+| 语义色 | `--color-success/warning/danger` |
+| 导航栏专用 | `--color-nav-bg/text/text-active/hover-bg/active-bg/border` |
+| 设置页专用 | `--color-settings-bg/card-bg/card-border` |
+| 阴影层级 | `--shadow-sm/md/lg` |
+| 渐变色 | `--color-gradient-primary/accent` |
+
+---
+
+### 二、页面样式更新
+
+#### 2.1 已更新页面
+
+| 页面 | 文件 | 风格描述 |
+|------|------|----------|
+| 全局样式 | `index.css` | 学术精致风设计系统 |
+| 聊天页 | `ChatPage.module.css` | 学术书架风格侧边栏 |
+| 导航栏 | `Navbar.module.css` | 渐变背景 + 悬停展开 |
+| 论文库 | `PaperList.module.css` | 学术书房风格卡片 |
+| 知识库 | `KnowledgePage.module.css` | 学术精致风 |
+| 写作辅助 | `WritingPage.module.css` | 学术精致风 |
+| 设置页 | `SettingsPage.module.css` | 琥珀金强调色 |
+
+#### 2.2 阅读器页面
+
+- 保持三栏布局（左侧面板 + PDF + 右侧面板）
+- 面板宽度支持拖拽调整
+- Tab 切换：论文解析 / 笔记 / 推荐
+
+---
+
+### 三、功能变更
+
+#### 3.1 新增功能
+
+**统一聊天入口 (`/chat`)**
+
+- 整合所有聊天功能：RAG 问答、章节概述、深度分析、跨文档问答
+- 基于关键词的意图自动识别
+- 支持单论文 / 多论文选择
+- 联网搜索开关
+
+**会话管理增强**
+
+- **会话持久化**：聊天记录保存到数据库
+- **会话重命名**：双击会话标题可编辑
+- **自动命名**：基于第一条消息内容自动生成会话标题
+- **跨文档会话**：支持创建跨文档问答会话
+
+**意图识别系统**
+
+基于关键词的意图分类：
+
+| 意图 | 关键词示例 | 路由工具 |
+|------|-----------|----------|
+| 章节概述 | "概述"、"章节结构"、"目录" | `analyze_paper` |
+| 深度分析 | "深度分析"、"详细分析"、"全面分析" | `deep_analyze_paper` |
+| 跨文档问答 | "对比"、"比较"、"这几篇" | `cross_doc_chat` |
+| RAG 问答 | 其他 | `rag_chat` |
+
+**WebSocket 消息类型扩展**
+
+新增消息类型：
+
+| 类型 | 方向 | 说明 |
+|------|------|------|
+| `unified_chat` | 客户端→服务器 | 统一聊天入口 |
+| `intent_detected` | 服务器→客户端 | 意图识别结果 |
+| `cancelled` | 服务器→客户端 | 任务取消确认 |
+
+#### 3.2 功能迁移
+
+| 原位置 | 新位置 | 说明 |
+|--------|--------|------|
+| 论文详情页聊天 | `/chat` | 统一到聊天入口 |
+| 单论文问答 | `/chat` | 整合到统一入口 |
+| 跨文档问答 | `/chat` | 整合到统一入口 |
+
+#### 3.3 功能保留（未变更）
+
+| 功能 | 位置 | 状态 |
+|------|------|------|
+| PDF 阅读器 | `/paper/:id` | ✅ 保留 |
+| 高亮标注 | 阅读器内 | ✅ 保留 |
+| 笔记系统 | 阅读器内 | ✅ 保留 |
+| 知识库管理 | `/knowledge` | ✅ 保留 |
+| 写作辅助 | `/writing` | ✅ 保留 |
+| 系统设置 | `/settings` | ✅ 保留 |
+| 相似论文推荐 | 阅读器内 | ✅ 保留 |
+| 批量导入 | `/papers` | ✅ 保留 |
+| 论文对比 | `/papers` 选择模式 | ✅ 保留 |
+
+#### 3.4 待完善功能（代码存在但未启用）
+
+| 功能 | 当前状态 | 说明 |
+|------|----------|------|
+| Agent 模式 | ⚠️ 代码存在但未启用 | `AgentProgress` 组件已实现，但未在 ChatPage 中集成 |
+| 阅读辅助面板 | ⚠️ 代码存在但未集成 | `ReadingAssist` 组件（术语解释/摘要/翻译）存在，需检查阅读器集成 |
+| 知识图谱 | ⚠️ 页面存在但功能待确认 | `KnowledgeGraphPage` 页面存在 |
+
+---
+
+### 四、后端变更
+
+#### 4.1 WebSocket 路由 (`ws.py`)
+
+新增处理函数：
+
+- `handle_unified_chat()` - 统一聊天入口处理
+- 意图识别集成 `classify_by_keywords()`
+
+#### 4.2 阅读辅助 API (`reading.py`)
+
+新增 SSE 流式接口：
+
+| 端点 | 功能 |
+|------|------|
+| `POST /api/reading/explain-term` | 术语解释（流式） |
+| `POST /api/reading/summarize` | 文本摘要（流式） |
+| `POST /api/reading/translate` | 文本翻译（流式） |
+
+---
+
+### 五、前端 Store 变更
+
+#### 5.1 chatStore 新增方法
+
+| 方法 | 说明 |
+|------|------|
+| `renameSession(sessionId, title)` | 重命名会话 |
+| `autoNameSession(sessionId, firstMessage)` | 自动命名会话 |
+| `toggleSearch()` | 切换联网搜索 |
+| `setSearchStatus(status)` | 设置搜索状态 |
+| `setCrossDocPapers(paperIds)` | 设置跨文档论文 |
+| `removePaperFromCrossDoc(paperId)` | 移除跨文档论文 |
+| `createCrossDocSession(paperIds, title)` | 创建跨文档会话 |
+
+---
+
+### 六、前端组件变更
+
+#### 6.1 新增组件
+
+| 组件 | 路径 | 说明 |
+|------|------|------|
+| AgentProgress | `components/AgentProgress/` | Agent 执行进度展示 |
+| ReadingAssist | `components/ReadingAssist/` | 阅读辅助面板（术语解释/摘要/翻译） |
+| PaperSelector | `components/PaperSelector/` | 论文选择器 |
+
+#### 6.2 组件更新
+
+| 组件 | 变更 |
+|------|------|
+| `Navbar` | 样式更新为学术风格，聊天入口置顶 |
+| `ChatPage` | 完全重构为统一聊天入口 |
+
+---
+
+### 七、路由变更
+
+| 路由 | 页面 | 变更 |
+|------|------|------|
+| `/chat` | ChatPage | 新增：统一聊天入口 |
+| `/papers` | PaperList | 保留 |
+| `/paper/:id` | ReaderPage | 保留（阅读器） |
+| `/knowledge` | KnowledgePage | 保留 |
+| `/knowledge-graph` | KnowledgeGraphPage | 保留 |
+| `/writing` | WritingPage | 保留 |
+| `/settings` | SettingsPage | 保留 |
+| `/auth` | AuthPage | 保留 |
+
+---
+
+### 八、待办事项
+
+#### 8.1 高优先级
+
+- [ ] Agent 模式前端集成（ChatPage 中启用 AgentProgress）
+- [ ] 阅读辅助面板集成到阅读器
+- [ ] 知识图谱功能完善
+
+#### 8.2 中优先级
+
+- [ ] 深色主题优化（当前深色主题配色待调整）
+- [ ] 移动端响应式优化
+- [ ] 性能优化（大论文加载）
+
+#### 8.3 低优先级
+
+- [ ] 用户认证系统完善
+- [ ] 多语言支持
+- [ ] 导出功能（PDF/Markdown）
+
+---
+
+### 九、文件变更清单
+
+#### 9.1 样式文件（已更新）
+
+```
+frontend/src/index.css                          # 设计系统重构
+frontend/src/pages/ChatPage.module.css          # 聊天页样式重构
+frontend/src/components/Navbar/Navbar.module.css # 导航栏样式更新
+frontend/src/pages/PaperList.module.css         # 论文库样式更新
+frontend/src/pages/KnowledgePage.module.css     # 知识库样式更新
+frontend/src/pages/WritingPage.module.css       # 写作辅助样式更新
+frontend/src/pages/SettingsPage.module.css      # 设置页样式更新
+```
+
+#### 9.2 功能文件（已更新）
+
+```
+frontend/src/pages/ChatPage.jsx                 # 统一聊天入口
+frontend/src/stores/chatStore.js                # 会话管理增强
+frontend/src/hooks/useWebSocket.js              # WebSocket 方法扩展
+backend/app/routers/ws.py                       # 统一聊天处理
+```
+
+#### 9.3 新增文件
+
+```
+frontend/src/components/AgentProgress/          # Agent 进度组件
+frontend/src/components/ReadingAssist/          # 阅读辅助组件
+frontend/src/components/PaperSelector/          # 论文选择器
+backend/app/routers/reading.py                  # 阅读辅助 API
+```
+
+---
+
+### 十、升级指南
+
+#### 从 v3.x 升级到 v4.0
+
+1. **前端依赖更新**
+   ```bash
+   cd frontend
+   npm install
+   ```
+
+2. **后端依赖更新**
+   ```bash
+   cd backend
+   pip install -r requirements.txt
+   ```
+
+3. **数据库迁移**
+   - 无需迁移，v4.0 兼容 v3.x 数据库结构
+
+4. **配置更新**
+   - 新增阅读辅助 API 配置（可选）
 
 ---
 
