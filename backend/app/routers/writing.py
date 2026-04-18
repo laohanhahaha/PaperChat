@@ -2,7 +2,7 @@
 
 提供论文大纲生成、段落初稿生成、学术润色、引用格式生成等功能
 """
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -15,8 +15,9 @@ from app.models.paper import Paper
 from app.models.user import User
 from app.services.auth_service import get_current_user
 from app.services.llm_service import llm_service
+from app.rate_limiter import limiter
 
-router = APIRouter(prefix="/api/writing", tags=["writing"])
+router = APIRouter(prefix="/api/v1/writing", tags=["writing"])
 
 
 class OutlineRequest(BaseModel):
@@ -70,7 +71,9 @@ async def fetch_reference_papers(db: AsyncSession, paper_ids: list[int], user_id
 
 
 @router.post("/outline")
+@limiter.limit("20/minute")
 async def generate_outline(
+    request: Request,
     req: OutlineRequest,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
@@ -109,7 +112,9 @@ async def generate_outline(
 
 
 @router.post("/draft")
+@limiter.limit("20/minute")
 async def generate_draft(
+    request: Request,
     req: DraftRequest,
     user: User = Depends(get_current_user)
 ):
@@ -140,7 +145,9 @@ async def generate_draft(
 
 
 @router.post("/polish")
+@limiter.limit("20/minute")
 async def polish_text(
+    request: Request,
     req: PolishRequest,
     user: User = Depends(get_current_user)
 ):

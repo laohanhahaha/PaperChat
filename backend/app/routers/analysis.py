@@ -5,7 +5,7 @@
 import json
 from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,8 +16,9 @@ from app.models.paper import Paper, PaperTextBlock
 from app.models.user import User
 from app.services.auth_service import get_current_user
 from app.services.llm_service import llm_service
+from app.rate_limiter import limiter
 
-router = APIRouter(prefix="/api/analysis", tags=["analysis"])
+router = APIRouter(prefix="/api/v1/analysis", tags=["analysis"])
 
 # 每篇论文最大字符数（约3000字）
 MAX_PAPER_TEXT_LENGTH = 3000
@@ -86,7 +87,9 @@ async def get_paper_text_content(db: AsyncSession, paper_id: int, user_id: int, 
 
 
 @router.post("/compare")
+@limiter.limit("20/minute")
 async def compare_papers(
+    request: Request,
     req: CompareRequest,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
@@ -150,7 +153,9 @@ async def compare_papers(
 
 
 @router.post("/review")
+@limiter.limit("20/minute")
 async def generate_review(
+    request: Request,
     req: CompareRequest,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)

@@ -1,6 +1,7 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, memo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useDropzone } from 'react-dropzone';
+import { useTranslation } from 'react-i18next';
 import usePaperStore from '../stores/paperStore';
 import BatchImport from '../components/BatchImport/BatchImport';
 import Recommendations from '../components/Recommendations/Recommendations';
@@ -42,7 +43,87 @@ const formatFileSize = (bytes) => {
   return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
 };
 
+// 论文卡片组件 - 使用 React.memo 优化渲染性能
+const PaperCard = memo(({ paper, onNavigate, onDeleteClick }) => {
+  return (
+    <div
+      className={styles.paperCard}
+      onClick={() => onNavigate(paper.id)}
+    >
+      <div className={styles.cardHeader}>
+        <div className={styles.statusSection}>
+          <span
+            className={styles.statusBadge}
+            style={{
+              backgroundColor: `${STATUS_MAP[paper.reading_status]?.color}20`,
+              color: STATUS_MAP[paper.reading_status]?.color
+            }}
+          >
+            {STATUS_MAP[paper.reading_status]?.label || paper.reading_status}
+          </span>
+          {paper.last_read_at && (
+            <span className={styles.readTime}>
+              最后阅读: {formatReadTime(paper.last_read_at)}
+            </span>
+          )}
+        </div>
+        <button
+          className={styles.deleteBtn}
+          onClick={(e) => {
+            e.stopPropagation();
+            onDeleteClick(paper);
+          }}
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+          </svg>
+        </button>
+      </div>
+
+      <h3 className={styles.paperTitle} title={paper.title}>
+        {paper.title}
+      </h3>
+
+      {paper.authors && (
+        <p className={styles.paperAuthors} title={paper.authors}>
+          {paper.authors}
+        </p>
+      )}
+
+      {/* 关键词标签 */}
+      {paper.tags && (() => {
+        try {
+          const tags = typeof paper.tags === 'string' ? JSON.parse(paper.tags) : paper.tags;
+          if (!Array.isArray(tags) || tags.length === 0) return null;
+          return (
+            <div className={styles.tagsContainer}>
+              {tags.slice(0, 4).map((tag, idx) => (
+                <span key={idx} className={styles.keywordTag}>{tag}</span>
+              ))}
+              {tags.length > 4 && <span className={styles.tagMore}>+{tags.length - 4}</span>}
+            </div>
+          );
+        } catch { return null; }
+      })()}
+
+      <div className={styles.cardFooter}>
+        <span className={styles.paperMeta}>
+          {paper.page_count} 页 · {formatFileSize(paper.file_size)}
+        </span>
+        <span className={styles.paperDate}>
+          {formatDate(paper.created_at)}
+        </span>
+      </div>
+
+      {paper.category && (
+        <span className={styles.categoryTag}>{paper.category}</span>
+      )}
+    </div>
+  );
+});
+
 function PaperList() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const { 
     papers, 
@@ -64,24 +145,13 @@ function PaperList() {
   const [page, setPage] = useState(1);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [showBatchImport, setShowBatchImport] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
+  const [, setUploadProgress] = useState(0);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
 
   const pageSize = 12;
 
   // 加载论文列表
-  useEffect(() => {
-    loadPapers();
-  }, [page, category, status]);
-
-  // 加载个性化推荐
-  useEffect(() => {
-    fetchPersonalRecommendations(5).catch(err => {
-      console.error('加载个性化推荐失败:', err);
-    });
-  }, []);
-
-  const loadPapers = async () => {
+  const loadPapers = useCallback(async () => {
     try {
       await fetchPapers({
         page,
@@ -93,7 +163,19 @@ function PaperList() {
     } catch (err) {
       console.error('加载论文列表失败:', err);
     }
-  };
+  }, [fetchPapers, page, pageSize, search, category, status]);
+
+  // 加载论文列表
+  useEffect(() => {
+    loadPapers();
+  }, [loadPapers]);
+
+  // 加载个性化推荐
+  useEffect(() => {
+    fetchPersonalRecommendations(5).catch(err => {
+      console.error('加载个性化推荐失败:', err);
+    });
+  }, [fetchPersonalRecommendations]);
 
   // 搜索防抖
   useEffect(() => {
@@ -105,7 +187,7 @@ function PaperList() {
       }
     }, 300);
     return () => clearTimeout(timer);
-  }, [search]);
+  }, [search, page, loadPapers]);
 
   // 文件上传
   const onDrop = useCallback(async (acceptedFiles) => {
@@ -143,6 +225,15 @@ function PaperList() {
     }
   };
 
+  // 使用 useCallback 包装回调函数，确保 prop 稳定
+  const handleNavigateToPaper = useCallback((paperId) => {
+    navigate(`/reader/${paperId}`);
+  }, [navigate]);
+
+  const handleDeleteClick = useCallback((paper) => {
+    setDeleteConfirm(paper);
+  }, []);
+
   const totalPages = Math.ceil(total / pageSize);
 
   return (
@@ -161,7 +252,7 @@ function PaperList() {
             <svg className={styles.icon} viewBox="0 0 24 24" fill="none" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
             </svg>
-            上传论文
+            {t('paper.upload')}
           </button>
           <button 
             className={styles.batchImportBtn}
@@ -197,7 +288,7 @@ function PaperList() {
           </svg>
           <input
             type="text"
-            placeholder="搜索标题或作者..."
+            placeholder={t('common.search') + '...'}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className={styles.searchInput}
@@ -243,87 +334,19 @@ function PaperList() {
       ) : papers.length === 0 ? (
         <div className={styles.empty}>
           <div className={styles.emptyIcon}>📚</div>
-          <h3>还没有论文</h3>
+          <h3>{t('common.noData')}</h3>
           <p>点击上方"上传论文"按钮添加你的第一篇论文</p>
         </div>
       ) : (
         <>
           <div className={styles.paperGrid}>
             {papers.map((paper) => (
-              <div 
-                key={paper.id} 
-                className={styles.paperCard}
-                onClick={() => navigate(`/reader/${paper.id}`)}
-              >
-                <div className={styles.cardHeader}>
-                  <div className={styles.statusSection}>
-                    <span 
-                      className={styles.statusBadge}
-                      style={{ 
-                        backgroundColor: `${STATUS_MAP[paper.reading_status]?.color}20`,
-                        color: STATUS_MAP[paper.reading_status]?.color 
-                      }}
-                    >
-                      {STATUS_MAP[paper.reading_status]?.label || paper.reading_status}
-                    </span>
-                    {paper.last_read_at && (
-                      <span className={styles.readTime}>
-                        最后阅读: {formatReadTime(paper.last_read_at)}
-                      </span>
-                    )}
-                  </div>
-                  <button
-                    className={styles.deleteBtn}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setDeleteConfirm(paper);
-                    }}
-                  >
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
-                  </button>
-                </div>
-                
-                <h3 className={styles.paperTitle} title={paper.title}>
-                  {paper.title}
-                </h3>
-                
-                {paper.authors && (
-                  <p className={styles.paperAuthors} title={paper.authors}>
-                    {paper.authors}
-                  </p>
-                )}
-                
-                {/* 关键词标签 */}
-                {paper.tags && (() => {
-                  try {
-                    const tags = typeof paper.tags === 'string' ? JSON.parse(paper.tags) : paper.tags;
-                    if (!Array.isArray(tags) || tags.length === 0) return null;
-                    return (
-                      <div className={styles.tagsContainer}>
-                        {tags.slice(0, 4).map((tag, idx) => (
-                          <span key={idx} className={styles.keywordTag}>{tag}</span>
-                        ))}
-                        {tags.length > 4 && <span className={styles.tagMore}>+{tags.length - 4}</span>}
-                      </div>
-                    );
-                  } catch { return null; }
-                })()}
-                
-                <div className={styles.cardFooter}>
-                  <span className={styles.paperMeta}>
-                    {paper.page_count} 页 · {formatFileSize(paper.file_size)}
-                  </span>
-                  <span className={styles.paperDate}>
-                    {formatDate(paper.created_at)}
-                  </span>
-                </div>
-                
-                {paper.category && (
-                  <span className={styles.categoryTag}>{paper.category}</span>
-                )}
-              </div>
+              <PaperCard
+                key={paper.id}
+                paper={paper}
+                onNavigate={handleNavigateToPaper}
+                onDeleteClick={handleDeleteClick}
+              />
             ))}
           </div>
 

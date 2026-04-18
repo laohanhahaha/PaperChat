@@ -15,7 +15,7 @@ from app.schemas.user import UserCreate, UserLogin, UserResponse, Token
 from app.services.auth_service import auth_service, get_current_user
 from app.config import settings
 
-router = APIRouter(prefix="/api/auth", tags=["认证"])
+router = APIRouter(prefix="/api/v1/auth", tags=["认证"])
 
 
 class UserUpdateRequest(BaseModel):

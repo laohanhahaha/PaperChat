@@ -12,7 +12,7 @@ from app.models.user import User
 from app.services.auth_service import get_current_user
 from app.services.recommendation_service import recommendation_service
 
-router = APIRouter(prefix="/api", tags=["推荐"])
+router = APIRouter(prefix="/api/v1", tags=["推荐"])
 
 
 @router.get("/papers/{paper_id}/recommendations")

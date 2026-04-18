@@ -124,7 +124,7 @@ class RecommendationService:
             return embedding
             
         except Exception as e:
-            print(f"计算论文 {paper_id} 嵌入失败: {e}")
+            logger.error(f"计算论文 {paper_id} 嵌入失败", exc_info=True)
             return None
     
     async def _cosine_similarity(self, vec1: List[float], vec2: List[float]) -> float:
@@ -253,7 +253,7 @@ class RecommendationService:
             return recommendations
             
         except Exception as e:
-            print(f"获取相似论文失败: {e}")
+            logger.error("获取相似论文失败", exc_info=True)
             return []
     
     async def get_personalized_recommendations(
@@ -395,7 +395,7 @@ class RecommendationService:
             return recommendations
             
         except Exception as e:
-            print(f"获取个性化推荐失败: {e}")
+            logger.error("获取个性化推荐失败", exc_info=True)
             return []
     
     async def _get_recent_papers(
@@ -454,7 +454,7 @@ class RecommendationService:
             return recommendations
             
         except Exception as e:
-            print(f"获取最近论文失败: {e}")
+            logger.error("获取最近论文失败", exc_info=True)
             return []
     
     def _generate_match_reason(self, paper: Paper, profile: Dict[str, Any]) -> str:

@@ -1,7 +1,7 @@
 """高亮标注模型"""
 from datetime import datetime
 
-from sqlalchemy import String, Text, ForeignKey, func
+from sqlalchemy import String, Text, ForeignKey, func, Index
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -11,6 +11,10 @@ class Highlight(Base):
     """高亮标注表模型"""
     
     __tablename__ = "highlights"
+    
+    __table_args__ = (
+        Index('ix_highlights_paper_page', 'paper_id', 'page'),
+    )
     
     id: Mapped[int] = mapped_column(primary_key=True)
     paper_id: Mapped[int] = mapped_column(ForeignKey("papers.id", ondelete="CASCADE"), index=True)

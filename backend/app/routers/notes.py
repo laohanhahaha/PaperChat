@@ -15,7 +15,7 @@ from app.models.user import User
 from app.schemas.note import NoteCreate, NoteUpdate, NoteResponse, NoteWithHighlightResponse
 from app.services.auth_service import get_current_user
 
-router = APIRouter(prefix="/api/notes", tags=["笔记"])
+router = APIRouter(prefix="/api/v1/notes", tags=["笔记"])
 
 
 @router.get("", response_model=List[NoteWithHighlightResponse])

@@ -17,6 +17,8 @@ import useNoteStore from './stores/noteStore';
 import useAgentStore from './stores/agentStore';
 import useSettingsStore from './stores/settingsStore';
 import api from './api';
+import Toast from './components/Toast/Toast';
+import ErrorBoundary from './components/ErrorBoundary/ErrorBoundary';
 import './App.css';
 
 // 初始化主题（在应用启动时立即应用，避免闪烁）
@@ -312,59 +314,18 @@ function ReaderPage() {
       setLoading(true);
       setError(null);
       try {
-        // 获取论文详情
+        // 第一步: 必须先获取 paper 基础信息（后续逻辑依赖 paper 对象）
         const paper = await fetchPaper(id);
-        
-        // 异步标记为阅读中（不阻塞 UI）
+
+        // 设置 PDF URL
+        setPdfUrl(getPaperFileUrl(id));
+
+        // 异步标记为阅读中（fire-and-forget）
         markAsReading(id).catch(err => {
           console.warn('标记阅读状态失败:', err);
         });
-        
-        // 设置 PDF URL
-        setPdfUrl(getPaperFileUrl(id));
-        
-        // 获取全文文本
-        const textData = await fetchPaperText(id);
-        setPdfText(textData.text);
-        
-        // 加载分析缓存
-        try {
-          const res = await api.get(`/papers/${id}/analysis`);
-          const cache = res.data;
-          
-          if (cache.has_section_analysis && cache.section_analysis) {
-            // 解析流式 JSON 行
-            const lines = cache.section_analysis.trim().split('\n');
-            const parsed = lines
-              .filter(line => line.trim().startsWith('{'))
-              .map(line => { try { return JSON.parse(line); } catch { return null; } })
-              .filter(Boolean);
-            setExplanations(parsed);
-          }
-          
-          if (cache.has_deep_analysis && cache.deep_analysis) {
-            const lines = cache.deep_analysis.trim().split('\n');
-            const dimensions = [];
-            const knowledgePoints = [];
-            lines.forEach(line => {
-              try {
-                const obj = JSON.parse(line.trim());
-                if (obj.dimension === 'knowledge_point') {
-                  knowledgePoints.push(obj);
-                } else if (obj.dimension) {
-                  dimensions.push(obj);
-                }
-              } catch {
-                // ignore parse errors
-              }
-            });
-            setDeepAnalysis({ dimensions, knowledgePoints });
-          }
-        } catch (err) {
-          console.warn('加载分析缓存失败:', err);
-        }
-        
-        // 加载已有关键词缓存
+
+        // 加载已有关键词缓存（依赖 paper.tags，同步处理）
         if (paper.tags) {
           try {
             const tags = typeof paper.tags === 'string' ? JSON.parse(paper.tags) : paper.tags;
@@ -375,19 +336,64 @@ function ReaderPage() {
             // ignore parse errors
           }
         }
-        
-        // 加载高亮数据
-        await fetchHighlights(id);
-        
-        // 加载笔记数据
-        await fetchNotes(id);
-        
-        // 加载相似论文推荐
+
+        // 第二步: 所有独立请求并行执行
+        const [textData, analysisRes] = await Promise.all([
+          fetchPaperText(id),
+          api.get(`/papers/${id}/analysis`).catch(() => null),
+          fetchHighlights(id).catch(err => { console.warn('加载高亮失败:', err); }),
+          fetchNotes(id).catch(err => { console.warn('加载笔记失败:', err); }),
+        ]);
+
+        // 处理全文文本
+        if (textData) {
+          setPdfText(textData.text);
+        }
+
+        // 处理分析缓存
+        if (analysisRes) {
+          try {
+            const cache = analysisRes.data;
+
+            if (cache.has_section_analysis && cache.section_analysis) {
+              // 解析流式 JSON 行
+              const lines = cache.section_analysis.trim().split('\n');
+              const parsed = lines
+                .filter(line => line.trim().startsWith('{'))
+                .map(line => { try { return JSON.parse(line); } catch { return null; } })
+                .filter(Boolean);
+              setExplanations(parsed);
+            }
+
+            if (cache.has_deep_analysis && cache.deep_analysis) {
+              const lines = cache.deep_analysis.trim().split('\n');
+              const dimensions = [];
+              const knowledgePoints = [];
+              lines.forEach(line => {
+                try {
+                  const obj = JSON.parse(line.trim());
+                  if (obj.dimension === 'knowledge_point') {
+                    knowledgePoints.push(obj);
+                  } else if (obj.dimension) {
+                    dimensions.push(obj);
+                  }
+                } catch {
+                  // ignore parse errors
+                }
+              });
+              setDeepAnalysis({ dimensions, knowledgePoints });
+            }
+          } catch (err) {
+            console.warn('加载分析缓存失败:', err);
+          }
+        }
+
+        // 加载相似论文推荐（fire-and-forget）
         fetchRecommendations(id).catch(err => {
           console.error('加载推荐失败:', err);
         });
-        
-        // 恢复阅读进度
+
+        // 恢复阅读进度（依赖 paper.last_read_page）
         if (paper.last_read_page > 0) {
           setCurrentPage(paper.last_read_page);
         }
@@ -412,7 +418,7 @@ function ReaderPage() {
       clearRecommendations();
       resetAgent();
     };
-  }, [id, fetchHighlights, clearHighlights, fetchNotes, clearNotes, clearRecommendations]);
+  }, [id, fetchPaper, fetchPaperText, fetchRecommendations, getPaperFileUrl, markAsReading, resetAgent, fetchHighlights, clearHighlights, fetchNotes, clearNotes, clearRecommendations]);
 
   // 触发章节概述分析
   const handleOverviewAnalyze = useCallback(() => {
@@ -573,7 +579,7 @@ function ReaderPage() {
         setCurrentPage(highlight.page);
       }
     }
-  }, [highlights, setActiveHighlight]);
+  }, [highlights, setActiveHighlight, setActiveNote]);
 
   // 处理关闭笔记编辑器
   const handleCloseNoteEditor = useCallback(() => {
@@ -914,91 +920,106 @@ function App() {
   }, [fetchSettings]);
 
   return (
-    <Routes>
-      {/* 论文列表页 */}
-      <Route
-        path="/papers"
-        element={
-          <AppLayout>
-            <Suspense fallback={<PageLoader />}>
-              <PaperList />
-            </Suspense>
-          </AppLayout>
-        }
-      />
+    <ErrorBoundary>
+      <Toast />
+      <Routes>
+        {/* 论文列表页 */}
+        <Route
+          path="/papers"
+          element={
+            <AppLayout>
+              <ErrorBoundary>
+                <Suspense fallback={<PageLoader />}>
+                  <PaperList />
+                </Suspense>
+              </ErrorBoundary>
+            </AppLayout>
+          }
+        />
 
-      {/* 聊天页面 */}
-      <Route
-        path="/chat"
-        element={
-          <AppLayout>
-            <Suspense fallback={<PageLoader />}>
-              <ChatPage />
-            </Suspense>
-          </AppLayout>
-        }
-      />
-      
-      {/* 阅读页面 - 核心页面保持直接加载，不显示导航栏 */}
-      <Route
-        path="/reader/:id"
-        element={
-          <ReaderPage />
-        }
-      />
+        {/* 聊天页面 */}
+        <Route
+          path="/chat"
+          element={
+            <AppLayout>
+              <ErrorBoundary>
+                <Suspense fallback={<PageLoader />}>
+                  <ChatPage />
+                </Suspense>
+              </ErrorBoundary>
+            </AppLayout>
+          }
+        />
+        
+        {/* 阅读页面 - 核心页面保持直接加载，不显示导航栏 */}
+        <Route
+          path="/reader/:id"
+          element={
+            <ErrorBoundary>
+              <ReaderPage />
+            </ErrorBoundary>
+          }
+        />
 
-      {/* 知识库页面 */}
-      <Route
-        path="/knowledge"
-        element={
-          <AppLayout>
-            <Suspense fallback={<PageLoader />}>
-              <KnowledgePage />
-            </Suspense>
-          </AppLayout>
-        }
-      />
+        {/* 知识库页面 */}
+        <Route
+          path="/knowledge"
+          element={
+            <AppLayout>
+              <ErrorBoundary>
+                <Suspense fallback={<PageLoader />}>
+                  <KnowledgePage />
+                </Suspense>
+              </ErrorBoundary>
+            </AppLayout>
+          }
+        />
 
 
-      {/* 写作辅助页面 */}
-      <Route
-        path="/writing"
-        element={
-          <AppLayout>
-            <Suspense fallback={<PageLoader />}>
-              <WritingPage />
-            </Suspense>
-          </AppLayout>
-        }
-      />
+        {/* 写作辅助页面 */}
+        <Route
+          path="/writing"
+          element={
+            <AppLayout>
+              <ErrorBoundary>
+                <Suspense fallback={<PageLoader />}>
+                  <WritingPage />
+                </Suspense>
+              </ErrorBoundary>
+            </AppLayout>
+          }
+        />
 
-      {/* 设置页面 */}
-      <Route
-        path="/settings"
-        element={
-          <AppLayout>
-            <Suspense fallback={<PageLoader />}>
-              <SettingsPage />
-            </Suspense>
-          </AppLayout>
-        }
-      />
-      
-      {/* 原有主页（直接上传） */}
-      <Route
-        path="/"
-        element={
-          <Navigate to="/papers" replace />
-        }
-      />
-      
-      {/* 404 页面 */}
-      <Route path="*" element={
-        <Suspense fallback={<PageLoader />}>
-          <NotFoundPage />
-        </Suspense>
-      } />
-    </Routes>
+        {/* 设置页面 */}
+        <Route
+          path="/settings"
+          element={
+            <AppLayout>
+              <ErrorBoundary>
+                <Suspense fallback={<PageLoader />}>
+                  <SettingsPage />
+                </Suspense>
+              </ErrorBoundary>
+            </AppLayout>
+          }
+        />
+        
+        {/* 原有主页（直接上传） */}
+        <Route
+          path="/"
+          element={
+            <Navigate to="/papers" replace />
+          }
+        />
+        
+        {/* 404 页面 */}
+        <Route path="*" element={
+          <Suspense fallback={<PageLoader />}>
+            <NotFoundPage />
+          </Suspense>
+        } />
+      </Routes>
+    </ErrorBoundary>
   );
 }
 

@@ -72,16 +72,12 @@ export default function KnowledgeGraphPage() {
     
     const {
         graphData,
-        stats,
         loading,
         error,
         fetchGraphData,
         fetchStats,
         deleteCard,
-        findRelations,
-        currentCard,
-        fetchCard,
-        setCurrentCard
+        findRelations
     } = useKnowledgeStore();
     
     const { papers, fetchPapers } = usePaperStore();

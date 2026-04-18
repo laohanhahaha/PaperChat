@@ -5,18 +5,21 @@
 from app.database import Base
 from app.models.user import User
 from app.models.paper import Paper, PaperTextBlock
+from app.models.paper_analysis import PaperAnalysisCache
 from app.models.highlight import Highlight
 from app.models.note import Note
 from app.models.chat import ChatSession, ChatMessage
 from app.models.memory import UserMemory
 from app.models.feedback import MessageFeedback
 from app.models.knowledge import KnowledgeCard, KnowledgeRelation
+from app.models.feature_flag import FeatureFlag
 
 __all__ = [
     "Base",
     "User",
     "Paper",
     "PaperTextBlock",
+    "PaperAnalysisCache",
     "Highlight",
     "Note",
     "ChatSession",
@@ -25,4 +28,5 @@ __all__ = [
     "MessageFeedback",
     "KnowledgeCard",
     "KnowledgeRelation",
+    "FeatureFlag",
 ]

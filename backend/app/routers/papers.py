@@ -20,14 +20,16 @@ from pydantic import BaseModel
 from app.database import get_db, AsyncSessionLocal
 from app.config import settings
 from app.models.paper import Paper, PaperTextBlock
+from app.models.paper_analysis import PaperAnalysisCache
 from app.models.user import User
 from app.schemas.paper import PaperCreate, PaperUpdate, PaperResponse, PaperListResponse, BatchUploadResponse
 from app.services.pdf_service import pdf_service
 from app.services.auth_service import get_current_user
 from app.services.rag_service import rag_service
 from app.services.llm_service import llm_service
+from app.services.event_bus import event_bus, Event, EventTypes
 
-router = APIRouter(prefix="/api/papers", tags=["论文"])
+router = APIRouter(prefix="/api/v1/papers", tags=["论文"])
 
 
 # 确保上传目录存在
@@ -183,6 +185,10 @@ async def upload_paper(
     
     # 读取文件内容
     content = await file.read()
+
+    # 验证 PDF magic bytes
+    if not content[:5] == b'%PDF-':
+        raise HTTPException(status_code=400, detail="上传的文件不是有效的 PDF 格式")
     
     # 验证文件大小
     if len(content) > settings.MAX_FILE_SIZE:
@@ -248,9 +254,15 @@ async def upload_paper(
         
         # 异步建立向量索引（不阻塞上传响应）
         asyncio.create_task(rag_service.index_paper(paper.id, text_blocks))
-        
+
+        # 发布论文上传事件（fire-and-forget）
+        asyncio.create_task(event_bus.publish(Event(
+            type=EventTypes.PAPER_UPLOADED,
+            data={"paper_id": paper.id, "user_id": current_user.id}
+        )))
+
         return PaperResponse.model_validate(paper)
-        
+
     except Exception as e:
         # 清理已保存的文件
         if file_path.exists():
@@ -372,7 +384,13 @@ async def delete_paper(
     # 删除数据库记录（级联删除 text_blocks, highlights, notes）
     await db.delete(paper)
     await db.commit()
-    
+
+    # 发布论文删除事件（fire-and-forget）
+    asyncio.create_task(event_bus.publish(Event(
+        type=EventTypes.PAPER_DELETED,
+        data={"paper_id": paper_id, "user_id": current_user.id}
+    )))
+
     return None
 
 
@@ -550,7 +568,16 @@ async def batch_upload_papers(
             
             # 读取文件内容
             content = await file.read()
-            
+
+            # 验证 PDF magic bytes
+            if not content[:5] == b'%PDF-':
+                errors.append({
+                    "filename": file.filename or "未知文件",
+                    "status": "error",
+                    "message": "上传的文件不是有效的 PDF 格式"
+                })
+                continue
+
             # 验证文件大小
             if len(content) > settings.MAX_FILE_SIZE:
                 errors.append({
@@ -614,7 +641,13 @@ async def batch_upload_papers(
                 
                 # 异步建立向量索引
                 asyncio.create_task(rag_service.index_paper(paper.id, text_blocks))
-                
+
+                # 发布论文上传事件（fire-and-forget）
+                asyncio.create_task(event_bus.publish(Event(
+                    type=EventTypes.PAPER_UPLOADED,
+                    data={"paper_id": paper.id, "user_id": current_user.id}
+                )))
+
                 results.append({
                     "filename": file.filename,
                     "status": "success",
@@ -701,7 +734,16 @@ async def batch_upload_zip(
                 try:
                     # 读取 PDF 文件内容
                     pdf_content = zf.read(pdf_name)
-                    
+
+                    # 验证 PDF magic bytes
+                    if not pdf_content[:5] == b'%PDF-':
+                        errors.append({
+                            "filename": pdf_name,
+                            "status": "error",
+                            "message": "上传的文件不是有效的 PDF 格式"
+                        })
+                        continue
+
                     # 验证文件大小
                     if len(pdf_content) > settings.MAX_FILE_SIZE:
                         errors.append({
@@ -765,7 +807,13 @@ async def batch_upload_zip(
                         
                         # 异步建立向量索引
                         asyncio.create_task(rag_service.index_paper(paper.id, text_blocks))
-                        
+
+                        # 发布论文上传事件（fire-and-forget）
+                        asyncio.create_task(event_bus.publish(Event(
+                            type=EventTypes.PAPER_UPLOADED,
+                            data={"paper_id": paper.id, "user_id": current_user.id}
+                        )))
+
                         results.append({
                             "filename": pdf_name,
                             "status": "success",
@@ -979,12 +1027,18 @@ async def get_paper_analysis_cache(
             detail="论文不存在"
         )
     
+    # 从分析缓存表读取
+    cache_result = await db.execute(
+        select(PaperAnalysisCache).where(PaperAnalysisCache.paper_id == paper_id)
+    )
+    cache = cache_result.scalar_one_or_none()
+    
     return {
         "paper_id": paper_id,
-        "section_analysis": paper.section_analysis,
-        "deep_analysis": paper.deep_analysis,
-        "has_section_analysis": bool(paper.section_analysis),
-        "has_deep_analysis": bool(paper.deep_analysis)
+        "section_analysis": cache.section_analysis if cache else None,
+        "deep_analysis": cache.deep_analysis if cache else None,
+        "has_section_analysis": bool(cache.section_analysis) if cache else False,
+        "has_deep_analysis": bool(cache.deep_analysis) if cache else False
     }
 
 

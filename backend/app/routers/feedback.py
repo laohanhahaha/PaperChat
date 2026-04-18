@@ -2,6 +2,7 @@
 
 提供用户对回答的反馈（点赞/点踩/文字反馈）接口
 """
+import logging
 from typing import Optional
 from datetime import datetime
 
@@ -19,7 +20,9 @@ from app.services.llm_service import llm_service
 from app.services.memory_service import memory_service
 from langchain_community.chat_message_histories import ChatMessageHistory
 
-router = APIRouter(prefix="/api/feedback", tags=["feedback"])
+logger = logging.getLogger(__name__)
+
+router = APIRouter(prefix="/api/v1/feedback", tags=["feedback"])
 
 
 class FeedbackCreate(BaseModel):
@@ -124,7 +127,7 @@ async def submit_feedback(
                 importance=1.2
             )
         except Exception as e:
-            print(f"记录反馈模式失败: {e}")
+            logger.error("记录反馈模式失败", exc_info=True)
     
     return FeedbackResponse(
         id=feedback.id,
@@ -289,7 +292,7 @@ async def regenerate_answer(
                 memory_lines = [f"- {m['content']}" for m in memories]
                 memory_context = "\n".join(memory_lines)
         except Exception as e:
-            print(f"记忆召回失败: {e}")
+            logger.warning(f"记忆召回失败: {e}")
         
         # 构建优化提示词
         optimized_prompt = f"""你是一个专业的学术论文问答助手。用户之前对回答不满意，请重新生成一个更准确、更详细的回答。

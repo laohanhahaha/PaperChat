@@ -1,0 +1,38 @@
+{
+  "common": {
+    "loading": "加载中...",
+    "error": "页面出现了问题",
+    "retry": "重试",
+    "cancel": "取消",
+    "confirm": "确认",
+    "save": "保存",
+    "delete": "删除",
+    "search": "搜索",
+    "noData": "暂无数据",
+    "close": "关闭"
+  },
+  "nav": {
+    "chat": "聊天",
+    "papers": "论文库",
+    "knowledge": "知识库",
+    "writing": "写作辅助",
+    "settings": "设置",
+    "workspace": "个人工作区",
+    "systemSettings": "系统设置"
+  },
+  "chat": {
+    "newSession": "新建对话",
+    "inputPlaceholder": "输入你的问题，或输入功能关键词（如：章节概述、深度分析）...",
+    "send": "发送"
+  },
+  "paper": {
+    "upload": "上传论文",
+    "analyzing": "正在分析...",
+    "analysis": "论文分析"
+  },
+  "error": {
+    "networkError": "网络连接失败，请检查网络",
+    "serverError": "服务器错误，请稍后重试",
+    "unknownError": "发生了未知错误"
+  }
+}

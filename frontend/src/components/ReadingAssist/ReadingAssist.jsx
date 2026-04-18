@@ -110,15 +110,15 @@ function ReadingAssist({ type, content, term, position, visible, onClose }) {
 
       switch (type) {
         case 'explain':
-          endpoint = '/api/reading/explain-term';
+          endpoint = '/api/v1/reading/explain-term';
           body = { term: term || content, context: content };
           break;
         case 'summarize':
-          endpoint = '/api/reading/summarize';
+          endpoint = '/api/v1/reading/summarize';
           body = { text: content };
           break;
         case 'translate':
-          endpoint = '/api/reading/translate';
+          endpoint = '/api/v1/reading/translate';
           body = { text: content, target_lang: 'zh' };
           break;
         default:
@@ -305,4 +305,3 @@ function ReadingAssist({ type, content, term, position, visible, onClose }) {
 }
 
 export default ReadingAssist;
-export { termCache };

@@ -10,6 +10,8 @@ from app.routers.recommendations import router as recommendations_router
 from app.routers.writing import router as writing_router
 from app.routers.knowledge import router as knowledge_router
 from app.routers.settings import router as settings_router
+from app.routers.backup import router as backup_router
+from app.routers.feature_flags import router as feature_flags_router
 
 __all__ = [
     "papers_router",
@@ -23,4 +25,6 @@ __all__ = [
     "writing_router",
     "knowledge_router",
     "settings_router",
+    "backup_router",
+    "feature_flags_router",
 ]

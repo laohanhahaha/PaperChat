@@ -3,9 +3,12 @@
 提供 PDF 文件解析、文本提取、元数据提取等功能
 """
 import os
+import logging
 import pdfplumber
 from typing import Optional, List, Dict, Any
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 
 class PDFService:
@@ -113,7 +116,7 @@ class PDFService:
                         })
                         
         except Exception as e:
-            print(f"提取文本块失败: {e}")
+            logger.error("提取文本块失败", exc_info=True)
             
         return blocks
     
@@ -138,7 +141,7 @@ class PDFService:
                         full_text.append(text)
                         
         except Exception as e:
-            print(f"提取全文失败: {e}")
+            logger.error("提取全文失败", exc_info=True)
             
         return "\n\n".join(full_text)
     

@@ -1,0 +1,36 @@
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.cache/
+.pytest_cache/
+.mypy_cache/
+.dmypy.json
+
+# 数据库和缓存
+chroma_db/
+*.db
+*.sqlite3
+
+# 上传文件
+uploads/*.pdf
+
+# 环境配置
+.env
+.env.local
+.env.*.local
+
+# 版本控制
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 测试和文档
+tests/
+*.md

@@ -14,7 +14,7 @@ from app.models.user import User
 from app.schemas.highlight import HighlightCreate, HighlightUpdate, HighlightResponse
 from app.services.auth_service import get_current_user
 
-router = APIRouter(prefix="/api/highlights", tags=["高亮标注"])
+router = APIRouter(prefix="/api/v1/highlights", tags=["高亮标注"])
 
 
 @router.get("/paper/{paper_id}", response_model=List[HighlightResponse])

@@ -20,7 +20,9 @@ function globalConnect() {
   if (globalWs?.readyState === WebSocket.OPEN || globalWs?.readyState === WebSocket.CONNECTING) return;
 
   notifyStatusChange('connecting');
-  const ws = new WebSocket(WS_URL);
+  const token = localStorage.getItem('token');
+  const wsUrl = token ? `${WS_URL}?token=${token}` : WS_URL;
+  const ws = new WebSocket(wsUrl);
 
   ws.onopen = () => {
     globalRetryCount = 0;

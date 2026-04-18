@@ -18,6 +18,9 @@ class Settings(BaseSettings):
     # App
     APP_NAME: str = "PaperChat"
     DEBUG: bool = True
+
+    # Default User（单用户模式下使用的默认用户 ID）
+    DEFAULT_USER_ID: int = 1
     
     # Database（开发阶段使用 SQLite）
     DATABASE_URL: str = "sqlite+aiosqlite:///./paperchat.db"

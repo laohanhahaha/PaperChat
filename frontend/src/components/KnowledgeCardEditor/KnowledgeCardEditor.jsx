@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import useKnowledgeStore from '../../stores/knowledgeStore';
 import usePaperStore from '../../stores/paperStore';
 import styles from './KnowledgeCardEditor.module.css';
@@ -55,34 +55,39 @@ export default function KnowledgeCardEditor({ card, onClose, isNew = false }) {
     const [existingRelations, setExistingRelations] = useState([]);
     const [showRelations, setShowRelations] = useState(false);
     
-    // 初始化表单数据
-    useEffect(() => {
-        if (card) {
-            setFormData({
-                title: card.title || '',
-                content: card.content || '',
-                summary: card.summary || '',
-                tags: card.tags || [],
-                category: card.category || '',
-                source_type: card.source_type || 'manual',
-                paper_id: card.paper_id || null,
-                importance: card.importance || 1.0
-            });
-            
-            // 加载现有关联
-            loadExistingRelations(card.id);
-        }
-    }, [card]);
-    
     // 加载现有关联
-    const loadExistingRelations = async (cardId) => {
+    const loadExistingRelations = useCallback(async (cardId) => {
         try {
             const relations = await fetchCardRelations(cardId);
             setExistingRelations(relations);
-        } catch (err) {
-            console.error('加载关联失败:', err);
+        } catch (_err) {
+            console.error('加载关联失败:', _err);
         }
-    };
+    }, [fetchCardRelations]);
+    
+    // 使用 ref 追踪 card 变化，避免在 effect 中直接 setState
+    const prevCardIdRef = useRef(null);
+    
+    useEffect(() => {
+        if (card && card.id !== prevCardIdRef.current) {
+            prevCardIdRef.current = card.id;
+            // 使用 setTimeout 将 setState 移出渲染阶段
+            const timer = setTimeout(() => {
+                setFormData({
+                    title: card.title || '',
+                    content: card.content || '',
+                    summary: card.summary || '',
+                    tags: card.tags || [],
+                    category: card.category || '',
+                    source_type: card.source_type || 'manual',
+                    paper_id: card.paper_id || null,
+                    importance: card.importance || 1.0
+                });
+                loadExistingRelations(card.id);
+            }, 0);
+            return () => clearTimeout(timer);
+        }
+    }, [card, loadExistingRelations]);
     
     // 处理表单字段变化
     const handleChange = useCallback((field, value) => {
@@ -130,7 +135,7 @@ export default function KnowledgeCardEditor({ card, onClose, isNew = false }) {
                 tags = await autoTag(card.id);
             } else {
                 // 新卡片，使用服务生成标签
-                const response = await fetch('/api/knowledge/auto-tag-preview', {
+                const response = await fetch('/api/v1/knowledge/auto-tag-preview', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ content: formData.content })
@@ -180,7 +185,7 @@ export default function KnowledgeCardEditor({ card, onClose, isNew = false }) {
             console.error('添加关联失败:', err);
             alert('添加关联失败');
         }
-    }, [card, createRelation]);
+    }, [card, createRelation, loadExistingRelations]);
     
     // 删除关联
     const handleDeleteRelation = useCallback(async (relationId) => {

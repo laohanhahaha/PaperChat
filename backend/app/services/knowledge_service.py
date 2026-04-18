@@ -3,6 +3,7 @@
 提供知识卡片的 CRUD、自动提取、标签生成、关联发现等功能
 """
 import json
+import logging
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 
@@ -15,6 +16,8 @@ from app.models.paper import Paper
 from app.services.llm_service import llm_service
 from app.services.rag_service import rag_service
 from langchain_core.messages import SystemMessage, HumanMessage
+
+logger = logging.getLogger(__name__)
 
 
 # LLM Prompts
@@ -253,7 +256,7 @@ class KnowledgeService:
             tags = [tag.lstrip('0123456789.- ') for tag in tags]
             return tags[:5]  # 最多返回 5 个标签
         except Exception as e:
-            print(f"自动生成标签失败: {e}")
+            logger.error("自动生成标签失败", exc_info=True)
             return []
     
     async def find_relations(
@@ -344,7 +347,7 @@ class KnowledgeService:
             return valid_relations
             
         except Exception as e:
-            print(f"发现关联失败: {e}")
+            logger.error("发现关联失败", exc_info=True)
             return []
     
     async def search(
@@ -399,9 +402,9 @@ class KnowledgeService:
                             "vector_score": vector_results_data["distances"][0][i]
                         })
             except Exception as e:
-                print(f"向量检索失败: {e}")
+                logger.error("向量检索失败", exc_info=True)
         except Exception as e:
-            print(f"向量检索初始化失败: {e}")
+            logger.error("向量检索初始化失败", exc_info=True)
         
         # 2. 数据库关键词搜索
         keyword_pattern = f"%{query}%"
@@ -506,7 +509,7 @@ class KnowledgeService:
             )
             
         except Exception as e:
-            print(f"索引知识卡片 {card.id} 失败: {e}")
+            logger.error(f"索引知识卡片 {card.id} 失败", exc_info=True)
     
     async def delete_card_index(self, user_id: int, card_id: int):
         """删除知识卡片的向量索引
@@ -521,7 +524,7 @@ class KnowledgeService:
             collection = rag_service.chroma_client.get_collection(name=collection_name)
             collection.delete(ids=[f"card_{card_id}"])
         except Exception as e:
-            print(f"删除卡片索引 {card_id} 失败: {e}")
+            logger.error(f"删除卡片索引 {card_id} 失败", exc_info=True)
     
     async def get_graph_data(
         self, 

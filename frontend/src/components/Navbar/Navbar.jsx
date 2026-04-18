@@ -1,16 +1,20 @@
 import { useLocation, useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import styles from './Navbar.module.css';
 
-const navItems = [
-    { path: '/chat', icon: '💬', label: '聊天' },
-    { path: '/papers', icon: '📚', label: '论文库' },
-    { path: '/knowledge', icon: '💡', label: '知识库' },
-    { path: '/writing', icon: '✍️', label: '写作辅助' },
+const NAV_ITEMS = [
+    { path: '/chat', icon: '💬', labelKey: 'nav.chat' },
+    { path: '/papers', icon: '📚', labelKey: 'nav.papers' },
+    { path: '/knowledge', icon: '💡', labelKey: 'nav.knowledge' },
+    { path: '/writing', icon: '✍️', labelKey: 'nav.writing' },
 ];
 
 function Navbar() {
     const location = useLocation();
     const navigate = useNavigate();
+    const { t, i18n } = useTranslation();
+
+    const toggleLang = () => i18n.changeLanguage(i18n.language === 'zh' ? 'en' : 'zh');
 
     return (
         <nav className={styles.navbar}>
@@ -20,15 +24,15 @@ function Navbar() {
             </div>
 
             <div className={styles.navItems}>
-                {navItems.map(item => (
+                {NAV_ITEMS.map(item => (
                     <div
                         key={item.path}
                         className={`${styles.navItem} ${location.pathname === item.path ? styles.active : ''}`}
                         onClick={() => navigate(item.path)}
-                        title={item.label}
+                        title={t(item.labelKey)}
                     >
                         <span className={styles.navIcon}>{item.icon}</span>
-                        <span className={styles.navLabel}>{item.label}</span>
+                        <span className={styles.navLabel}>{t(item.labelKey)}</span>
                     </div>
                 ))}
             </div>
@@ -37,14 +41,21 @@ function Navbar() {
                 <div
                     className={`${styles.navItem} ${location.pathname === '/settings' ? styles.active : ''}`}
                     onClick={() => navigate('/settings')}
-                    title="系统设置"
+                    title={t('nav.systemSettings')}
                 >
                     <span className={styles.navIcon}>⚙️</span>
-                    <span className={styles.navLabel}>设置</span>
+                    <span className={styles.navLabel}>{t('nav.settings')}</span>
                 </div>
-                <div className={styles.userName} title="个人工作区">
-                    个人工作区
+                <div className={styles.userName} title={t('nav.workspace')}>
+                    {t('nav.workspace')}
                 </div>
+                <button
+                    className={styles.langToggle}
+                    onClick={toggleLang}
+                    title={i18n.language === 'zh' ? 'Switch to English' : '切换为中文'}
+                >
+                    {i18n.language === 'zh' ? 'EN' : '中'}
+                </button>
             </div>
         </nav>
     );

@@ -7,9 +7,10 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from app.services.auth_service import get_current_user
-from app.services.llm_service import llm_service
+from app.services.llm.llm_service import LLMService, llm_service
+from app.dependencies import get_llm_service
 
-router = APIRouter(prefix="/api/reading", tags=["reading"])
+router = APIRouter(prefix="/api/v1/reading", tags=["reading"])
 
 
 class ExplainRequest(BaseModel):
@@ -30,7 +31,11 @@ class TranslateRequest(BaseModel):
 
 
 @router.post("/explain-term")
-async def explain_term(req: ExplainRequest, user=Depends(get_current_user)):
+async def explain_term(
+    req: ExplainRequest,
+    user=Depends(get_current_user),
+    llm: LLMService = Depends(get_llm_service)
+):
     """
     流式返回术语解释
     
@@ -43,7 +48,7 @@ async def explain_term(req: ExplainRequest, user=Depends(get_current_user)):
     """
     async def generate():
         try:
-            async for chunk in llm_service.explain_term(req.term, req.context):
+            async for chunk in llm.explain_term(req.term, req.context):
                 yield f"data: {chunk}\n\n"
             yield "data: [DONE]\n\n"
         except Exception as e:

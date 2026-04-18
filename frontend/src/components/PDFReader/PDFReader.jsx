@@ -34,6 +34,7 @@ const PDFReader = ({
   const [selectionRects, setSelectionRects] = useState([]);
   const [selectionPage, setSelectionPage] = useState(null);
   const [pageDimensions, setPageDimensions] = useState({}); // 存储每页的原始尺寸
+  const [visiblePages, setVisiblePages] = useState(new Set([1, 2, 3])); // 滚动模式下可见的页面
   
   // 阅读辅助面板状态
   const [readingAssistVisible, setReadingAssistVisible] = useState(false);
@@ -44,6 +45,8 @@ const PDFReader = ({
   
   const containerRef = useRef(null);
   const pageRefs = useRef({});
+  const scrollContainerRef = useRef(null); // 滚动模式的容器引用
+  const observerRef = useRef(null); // IntersectionObserver 引用
 
   // 文档加载成功
   const onDocumentLoadSuccess = useCallback(({ numPages }) => {
@@ -52,6 +55,8 @@ const PDFReader = ({
     setError(null);
     // 重置页面尺寸缓存
     setPageDimensions({});
+    // 重置可见页面，确保第一页可见
+    setVisiblePages(new Set([1, 2, 3].filter(p => p <= numPages)));
   }, []);
 
   // 文档加载失败
@@ -307,6 +312,66 @@ const PDFReader = ({
     }
   }, [goToPage]);
 
+  // IntersectionObserver 懒加载 - 仅用于滚动模式
+  useEffect(() => {
+    // 只在滚动模式下创建 observer
+    if (viewMode !== 'scroll' || !numPages) {
+      return;
+    }
+
+    // 清理旧的 observer
+    if (observerRef.current) {
+      observerRef.current.disconnect();
+    }
+
+    // 创建新的 IntersectionObserver
+    observerRef.current = new IntersectionObserver(
+      (entries) => {
+        setVisiblePages((prev) => {
+          const newVisible = new Set(prev);
+          entries.forEach((entry) => {
+            const pageNum = parseInt(entry.target.dataset.page, 10);
+            if (entry.isIntersecting) {
+              newVisible.add(pageNum);
+            }
+            // 注意：页面离开视口时不清除，避免重复渲染
+          });
+          return newVisible;
+        });
+      },
+      {
+        root: scrollContainerRef.current,
+        rootMargin: '200% 0px', // 上下各扩展视口高度，预加载邻近页面
+        threshold: 0,
+      }
+    );
+
+    // 注册所有页面元素到 observer
+    Object.values(pageRefs.current).forEach((el) => {
+      if (el && observerRef.current) {
+        observerRef.current.observe(el);
+      }
+    });
+
+    // 清理函数
+    return () => {
+      if (observerRef.current) {
+        observerRef.current.disconnect();
+      }
+    };
+  }, [viewMode, numPages]); // 当视图模式或页数变化时重新创建 observer
+
+  // 注册页面元素到 observer 的回调
+  const registerPageElement = useCallback((el, pageNum) => {
+    if (el) {
+      pageRefs.current[pageNum] = el;
+      // 如果 observer 已存在，注册该元素
+      if (observerRef.current && viewMode === 'scroll') {
+        observerRef.current.observe(el);
+      }
+    }
+  }, [viewMode]);
+
   // 获取指定页面的高亮
   const getHighlightsForPage = useCallback((pageNum) => {
     return highlights.filter(h => h.page === pageNum);
@@ -349,42 +414,70 @@ const PDFReader = ({
       );
     }
 
-    // 滚动模式 - 渲染所有页面
-    return Array.from({ length: numPages || 0 }, (_, i) => i + 1).map((pageNum) => {
-      const pageHighlights = getHighlightsForPage(pageNum);
-      const dims = pageDimensions[pageNum];
-      
-      return (
-        <div
-          key={pageNum}
-          ref={(el) => { pageRefs.current[pageNum] = el; }}
-          className={styles.pageWrapper}
-          data-page-number={pageNum}
-          onMouseUp={(e) => handleMouseUp(e, pageNum)}
-        >
-          <Page
-            pageNumber={pageNum}
-            scale={scale}
-            renderTextLayer={true}
-            renderAnnotationLayer={true}
-            onLoadSuccess={(page) => handlePageLoadSuccess(page, pageNum)}
-            loading={<div className={styles.pageLoading}>加载中...</div>}
-            error={<div className={styles.pageError}>页面加载失败</div>}
-          />
-          {dims && (
-            <HighlightLayer
-              highlights={pageHighlights}
-              pageNumber={pageNum}
-              scale={scale}
-              pageWidth={dims.width}
-              pageHeight={dims.height}
-              activeHighlight={activeHighlight}
-              onHighlightClick={onHighlightClick}
-            />
-          )}
-        </div>
-      );
-    });
+    // 滚动模式 - 使用 IntersectionObserver 懒加载
+    return (
+      <div ref={scrollContainerRef} className={styles.scrollContainer}>
+        {Array.from({ length: numPages || 0 }, (_, i) => i + 1).map((pageNum) => {
+          const pageHighlights = getHighlightsForPage(pageNum);
+          const dims = pageDimensions[pageNum];
+          const isVisible = visiblePages.has(pageNum);
+          const pageHeight = dims?.height ? dims.height * scale : 800;
+
+          return (
+            <div
+              key={pageNum}
+              ref={(el) => registerPageElement(el, pageNum)}
+              className={styles.pageWrapper}
+              data-page={pageNum}
+              data-page-number={pageNum}
+              onMouseUp={(e) => handleMouseUp(e, pageNum)}
+              style={{ minHeight: pageHeight }}
+            >
+              {isVisible ? (
+                <>
+                  <Page
+                    pageNumber={pageNum}
+                    scale={scale}
+                    renderTextLayer={true}
+                    renderAnnotationLayer={true}
+                    onLoadSuccess={(page) => handlePageLoadSuccess(page, pageNum)}
+                    loading={<div className={styles.pageLoading}>加载中...</div>}
+                    error={<div className={styles.pageError}>页面加载失败</div>}
+                  />
+                  {dims && (
+                    <HighlightLayer
+                      highlights={pageHighlights}
+                      pageNumber={pageNum}
+                      scale={scale}
+                      pageWidth={dims.width}
+                      pageHeight={dims.height}
+                      activeHighlight={activeHighlight}
+                      onHighlightClick={onHighlightClick}
+                    />
+                  )}
+                </>
+              ) : (
+                // 占位符 - 与页面同等高度，防止滚动跳动
+                <div
+                  className={styles.pagePlaceholder}
+                  style={{
+                    height: pageHeight,
+                    background: 'var(--bg-tertiary, #f5f5f5)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: 'var(--text-secondary, #999)',
+                    fontSize: '14px',
+                  }}
+                >
+                  第 {pageNum} 页
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    );
   };
 
   const fileSource = getFileSource();

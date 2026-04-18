@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, memo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import useKnowledgeStore from '../stores/knowledgeStore';
 import KnowledgeCardEditor from '../components/KnowledgeCardEditor/KnowledgeCardEditor';
@@ -30,8 +30,105 @@ const truncateText = (text, maxLength = 100) => {
     return text.substring(0, maxLength) + '...';
 };
 
+// 知识卡片组件 - 使用 React.memo 优化渲染性能
+const KnowledgeCard = memo(({ card, viewMode, onEdit, onDelete }) => {
+    const [expanded, setExpanded] = useState(false);
+
+    const sourceInfo = SOURCE_TYPE_MAP[card.source_type] || { label: '未知', icon: '📄', color: '#999' };
+
+    const handleToggleExpand = useCallback(() => {
+        setExpanded(prev => !prev);
+    }, []);
+
+    // 使用 useCallback 包装事件处理函数，确保引用稳定
+    const handleEdit = useCallback(() => {
+        onEdit(card);
+    }, [onEdit, card]);
+
+    const handleDelete = useCallback(() => {
+        onDelete(card.id);
+    }, [onDelete, card.id]);
+
+    if (viewMode === 'list') {
+        return (
+            <div className={styles.listCard}>
+                <div className={styles.listCardHeader}>
+                    <h3 className={styles.cardTitle} onClick={handleEdit}>
+                        {sourceInfo.icon} {card.title}
+                    </h3>
+                    <div className={styles.cardActions}>
+                        <button onClick={handleEdit} className={styles.actionBtn} title="编辑">
+                            ✏️
+                        </button>
+                        <button onClick={handleDelete} className={styles.actionBtn} title="删除">
+                            🗑️
+                        </button>
+                    </div>
+                </div>
+                <p className={styles.cardSummary}>{card.summary || truncateText(card.content, 150)}</p>
+                <div className={styles.cardMeta}>
+                    {card.tags?.map(tag => (
+                        <span key={tag} className={styles.tag}>{tag}</span>
+                    ))}
+                    <span className={styles.cardDate}>{formatDate(card.created_at)}</span>
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div className={styles.card}>
+            <div className={styles.cardHeader}>
+                <span
+                    className={styles.sourceBadge}
+                    style={{ backgroundColor: sourceInfo.color + '20', color: sourceInfo.color }}
+                >
+                    {sourceInfo.icon} {sourceInfo.label}
+                </span>
+                <div className={styles.cardActions}>
+                    <button onClick={handleEdit} className={styles.actionBtn} title="编辑">
+                        ✏️
+                    </button>
+                    <button onClick={handleDelete} className={styles.actionBtn} title="删除">
+                        🗑️
+                    </button>
+                </div>
+            </div>
+
+            <h3 className={styles.cardTitle} onClick={handleToggleExpand}>
+                {card.title}
+            </h3>
+
+            <p className={styles.cardContent}>
+                {expanded ? card.content : truncateText(card.summary || card.content, 120)}
+            </p>
+
+            {card.content.length > 120 && (
+                <button
+                    className={styles.expandBtn}
+                    onClick={handleToggleExpand}
+                >
+                    {expanded ? '收起' : '展开'}
+                </button>
+            )}
+
+            <div className={styles.cardFooter}>
+                <div className={styles.cardTags}>
+                    {card.tags?.slice(0, 3).map(tag => (
+                        <span key={tag} className={styles.tag}>{tag}</span>
+                    ))}
+                    {card.tags?.length > 3 && (
+                        <span className={styles.tagMore}>+{card.tags.length - 3}</span>
+                    )}
+                </div>
+                <span className={styles.cardDate}>{formatDate(card.created_at)}</span>
+            </div>
+        </div>
+    );
+});
+
 export default function KnowledgePage() {
-    const navigate = useNavigate();
+    useNavigate();
     const {
         cards,
         totalCount,
@@ -232,8 +329,8 @@ export default function KnowledgePage() {
                                         key={card.id}
                                         card={card}
                                         viewMode={viewMode}
-                                        onEdit={() => handleEditCard(card)}
-                                        onDelete={() => handleDeleteCard(card.id)}
+                                        onEdit={handleEditCard}
+                                        onDelete={handleDeleteCard}
                                     />
                                 ))}
                             </div>
@@ -343,86 +440,4 @@ export default function KnowledgePage() {
     );
 }
 
-// 知识卡片组件
-function KnowledgeCard({ card, viewMode, onEdit, onDelete }) {
-    const [expanded, setExpanded] = useState(false);
-    
-    const sourceInfo = SOURCE_TYPE_MAP[card.source_type] || { label: '未知', icon: '📄', color: '#999' };
-    
-    if (viewMode === 'list') {
-        return (
-            <div className={styles.listCard}>
-                <div className={styles.listCardHeader}>
-                    <h3 className={styles.cardTitle} onClick={onEdit}>
-                        {sourceInfo.icon} {card.title}
-                    </h3>
-                    <div className={styles.cardActions}>
-                        <button onClick={onEdit} className={styles.actionBtn} title="编辑">
-                            ✏️
-                        </button>
-                        <button onClick={onDelete} className={styles.actionBtn} title="删除">
-                            🗑️
-                        </button>
-                    </div>
-                </div>
-                <p className={styles.cardSummary}>{card.summary || truncateText(card.content, 150)}</p>
-                <div className={styles.cardMeta}>
-                    {card.tags?.map(tag => (
-                        <span key={tag} className={styles.tag}>{tag}</span>
-                    ))}
-                    <span className={styles.cardDate}>{formatDate(card.created_at)}</span>
-                </div>
-            </div>
-        );
-    }
-    
-    return (
-        <div className={styles.card}>
-            <div className={styles.cardHeader}>
-                <span 
-                    className={styles.sourceBadge}
-                    style={{ backgroundColor: sourceInfo.color + '20', color: sourceInfo.color }}
-                >
-                    {sourceInfo.icon} {sourceInfo.label}
-                </span>
-                <div className={styles.cardActions}>
-                    <button onClick={onEdit} className={styles.actionBtn} title="编辑">
-                        ✏️
-                    </button>
-                    <button onClick={onDelete} className={styles.actionBtn} title="删除">
-                        🗑️
-                    </button>
-                </div>
-            </div>
-            
-            <h3 className={styles.cardTitle} onClick={() => setExpanded(!expanded)}>
-                {card.title}
-            </h3>
-            
-            <p className={styles.cardContent}>
-                {expanded ? card.content : truncateText(card.summary || card.content, 120)}
-            </p>
-            
-            {card.content.length > 120 && (
-                <button 
-                    className={styles.expandBtn}
-                    onClick={() => setExpanded(!expanded)}
-                >
-                    {expanded ? '收起' : '展开'}
-                </button>
-            )}
-            
-            <div className={styles.cardFooter}>
-                <div className={styles.cardTags}>
-                    {card.tags?.slice(0, 3).map(tag => (
-                        <span key={tag} className={styles.tag}>{tag}</span>
-                    ))}
-                    {card.tags?.length > 3 && (
-                        <span className={styles.tagMore}>+{card.tags.length - 3}</span>
-                    )}
-                </div>
-                <span className={styles.cardDate}>{formatDate(card.created_at)}</span>
-            </div>
-        </div>
-    );
-}
+

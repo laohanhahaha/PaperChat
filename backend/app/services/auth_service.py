@@ -6,6 +6,7 @@ from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
+from app.config import settings
 from app.database import get_db
 from app.models.user import User
 
@@ -18,15 +19,15 @@ async def get_current_user(db: AsyncSession = Depends(get_db)) -> User:
         db: 数据库会话
         
     Returns:
-        默认用户对象（id=1）
+        默认用户对象
     """
-    result = await db.execute(select(User).where(User.id == 1))
+    result = await db.execute(select(User).where(User.id == settings.DEFAULT_USER_ID))
     user = result.scalar_one_or_none()
     
     if not user:
         # 自动创建默认用户
         user = User(
-            id=1,
+            id=settings.DEFAULT_USER_ID,
             username="default",
             email="default@local.dev",
             hashed_password="not-used",

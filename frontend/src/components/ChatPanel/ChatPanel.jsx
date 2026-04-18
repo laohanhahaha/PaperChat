@@ -1,25 +1,124 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
-import useChatStore from '../../stores/chatStore';
+import React, { useState, useRef, useEffect, useCallback, memo } from 'react';
+import { useVirtualizer } from '@tanstack/react-virtual';
+import { useTranslation } from 'react-i18next';
+import { useSessionStore } from '../../stores/sessionStore';
+import { useMessageStore } from '../../stores/messageStore';
+import { useChatConfigStore } from '../../stores/chatConfigStore';
 import usePaperStore from '../../stores/paperStore';
 import PaperSelector from '../PaperSelector/PaperSelector';
 import MarkdownContent from '../../utils/MarkdownRenderer';
+import { useTypewriter } from '../../hooks/useTypewriter';
+import { useChatMessages } from '../../hooks/useChatMessages';
+import { INTENT_LABELS } from '../../utils/chatConstants';
 import styles from './ChatPanel.module.css';
 
-const CHAR_INTERVAL = 30;
+// MessageItem 组件 - 使用 memo 优化渲染性能
+const MessageItem = memo(function MessageItem({
+  msg,
+  isLast,
+  isChatting,
+  renderContentWithCitations,
+  styles,
+  isCrossDocMode,
+  sources,
+  crossDocSources,
+  getPaperTitle,
+  handleSourceClick
+}) {
+  return (
+    <div
+      className={`${styles.message} ${msg.role === 'user' ? styles.userMessage : styles.assistantMessage}`}
+    >
+      <div className={styles.bubble}>
+        {msg.content ? (
+          msg.role === 'assistant'
+            ? renderContentWithCitations(msg.content)
+            : msg.content
+        ) : (isChatting && isLast ? (
+          <span className={styles.typing}>思考中...</span>
+        ) : '')}
+      </div>
 
-const INTENT_LABELS = {
-  'chapter_overview': '📋 章节概述',
-  'deep_analysis': '🔬 深度分析',
-  'key_points': '🎯 核心知识点',
-  'comparison': '📊 对比分析',
-  'summary': '📝 摘要总结',
-  'translate': '🌐 翻译',
-  'explain': '📖 术语解释',
-  'cross_doc': '📚 跨文档问答',
-  'quality_assessment': '⚖️ 质量评估',
-  'outline': '📃 生成提纲',
-  'simple_qa': '💬 智能问答'
-};
+      {msg.role === 'assistant' &&
+       !isChatting &&
+       isLast && (
+        <>
+          {sources.length > 0 && !isCrossDocMode && (
+            <div className={styles.sources}>
+              <div className={styles.sourcesTitle}>引用来源：</div>
+              {sources.map((source, idx) => (
+                source.type === 'web' ? (
+                  <a
+                    key={idx}
+                    className={`${styles.sourceItem} ${styles.webSource}`}
+                    href={source.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <span className={styles.webSourceIcon}>🌐</span>
+                    <span className={styles.webSourceTitle}>
+                      {source.title || '网络来源'}
+                    </span>
+                    <span className={styles.sourceText}>
+                      {source.text?.substring(0, 50)}...
+                    </span>
+                  </a>
+                ) : (
+                  <div
+                    key={idx}
+                    className={styles.sourceItem}
+                    onClick={() => handleSourceClick(source.pages)}
+                  >
+                    <span className={styles.sourcePages}>
+                      第 {source.pages?.join(', ') || '?'} 页
+                    </span>
+                    <span className={styles.sourceText}>
+                      {source.text?.substring(0, 50)}...
+                    </span>
+                  </div>
+                )
+              ))}
+            </div>
+          )}
+
+          {crossDocSources.length > 0 && isCrossDocMode && (
+            <div className={`${styles.sources} ${styles.crossDocSources}`}>
+              <div className={styles.sourcesTitle}>跨文档引用来源：</div>
+              {crossDocSources.map((source, idx) => (
+                <div
+                  key={idx}
+                  className={styles.sourceItem}
+                  onClick={() => handleSourceClick(source.pages, source.paper_id)}
+                >
+                  <span className={styles.sourcePaper}>
+                    {getPaperTitle(source.paper_id).slice(0, 20)}
+                    {getPaperTitle(source.paper_id).length > 20 ? '...' : ''}
+                  </span>
+                  <span className={styles.sourcePages}>
+                    第 {source.pages?.join(', ') || '?'} 页
+                  </span>
+                  <span className={styles.sourceText}>
+                    {source.text?.substring(0, 40)}...
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}, (prev, next) => {
+  // 只在这些属性变化时才重渲染
+  return prev.msg.id === next.msg.id
+    && prev.msg.content === next.msg.content
+    && prev.isLast === next.isLast
+    && prev.isChatting === next.isChatting
+    && prev.isCrossDocMode === next.isCrossDocMode
+    && prev.sources === next.sources
+    && prev.crossDocSources === next.crossDocSources;
+});
 
 function ChatPanel({
   pdfText,
@@ -34,49 +133,55 @@ function ChatPanel({
   onNavigateToPage,
   onSwitchPaper
 }) {
+  const { t } = useTranslation();
   const [input, setInput] = useState('');
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [showPaperSelector, setShowPaperSelector] = useState(false);
-  const [currentIntent, setCurrentIntent] = useState(null);
-  const messagesEndRef = useRef(null);
   const textareaRef = useRef(null);
-  const fullContentRef = useRef('');
-  const displayedLenRef = useRef(0);
-  const timerRef = useRef(null);
-  const isDoneRef = useRef(false);
   const currentSessionIdRef = useRef(null);
+  const messagesRef = useRef(null);
 
+  // Session Store
   const {
     sessions,
     currentSessionId,
-    messages,
-    sources,
-    selectedPaperIds,
-    crossDocSources,
-    isCrossDocMode,
-    enableSearch,
-    searchStatus,
-    fetchSessions,
     createSession,
     deleteSession,
     setCurrentSession,
     fetchMessages,
+    getOrCreateSessionByPaper,
+    createCrossDocSession,
+  } = useSessionStore();
+  
+  // Message Store
+  const {
+    messages,
+    sources,
+    crossDocSources,
     addMessage,
     updateLastMessage,
     setSources,
     setCrossDocSources,
-    getOrCreateSessionByPaper,
-    addPaperToCrossDoc,
+    hasMore,
+    loadingMore,
+    loadMoreMessages,
+  } = useMessageStore();
+  
+  // Chat Config Store
+  const {
+    selectedPaperIds,
+    isCrossDocMode,
+    enableSearch,
+    searchStatus,
     removePaperFromCrossDoc,
     clearCrossDocPapers,
     setCrossDocPapers,
-    createCrossDocSession,
     toggleSearch,
     setSearchStatus,
-    clearSearchState
-  } = useChatStore();
+    clearSearchState,
+  } = useChatConfigStore();
 
-  const { papers, fetchPapers } = usePaperStore();
+  const { papers } = usePaperStore();
 
   useEffect(() => {
     if (paperId) {
@@ -88,9 +193,34 @@ function ChatPanel({
     currentSessionIdRef.current = currentSessionId;
   }, [currentSessionId]);
 
+  // ---- 虚拟滚动 ----
+  // eslint-disable-next-line react-hooks/incompatible-library -- TanStack Virtual's useVirtualizer returns non-memoizable functions; this is expected and handled by skipping compilation
+  const virtualizer = useVirtualizer({
+    count: messages.length,
+    getScrollElement: () => messagesRef.current,
+    estimateSize: () => 120,
+    overscan: 5,
+    measureElement: (el) => {
+      return el.getBoundingClientRect().height;
+    },
+  });
+
+  // 自动滚动到底部（仅在非加载更多时）
+  const lastMessageContent = messages[messages.length - 1]?.content;
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+    if (messages.length > 0 && !loadingMore) {
+      virtualizer.scrollToIndex(messages.length - 1, { align: 'end', behavior: 'smooth' });
+    }
+  }, [messages.length, lastMessageContent, virtualizer, loadingMore]);
+  
+  // ---- 滚动加载更多 ----
+  const handleScroll = useCallback((e) => {
+    const { scrollTop } = e.target;
+    // 滚动到顶部且还有更多消息时加载更多
+    if (scrollTop === 0 && hasMore && !loadingMore && currentSessionId) {
+      loadMoreMessages(currentSessionId);
+    }
+  }, [hasMore, loadingMore, currentSessionId, loadMoreMessages]);
 
   useEffect(() => {
     if (textareaRef.current) {
@@ -99,109 +229,31 @@ function ChatPanel({
     }
   }, [input]);
 
-  const tickDisplay = useCallback(() => {
-    const full = fullContentRef.current;
-    const currentLen = displayedLenRef.current;
+  const handleComplete = useCallback(() => {
+    setIsChatting(false);
+  }, [setIsChatting]);
 
-    if (currentLen < full.length) {
-      displayedLenRef.current = currentLen + 1;
-      const displayed = full.slice(0, displayedLenRef.current);
-      updateLastMessage(displayed);
-      timerRef.current = setTimeout(tickDisplay, CHAR_INTERVAL);
-    } else if (isDoneRef.current) {
-      setIsChatting(false);
-      timerRef.current = null;
-    } else {
-      timerRef.current = null;
-    }
-  }, [updateLastMessage, setIsChatting]);
+  const typewriter = useTypewriter(updateLastMessage, handleComplete, {
+    charInterval: 50,
+    charsPerTick: 3,
+  });
 
-  const startTick = useCallback(() => {
-    if (!timerRef.current) {
-      timerRef.current = setTimeout(tickDisplay, CHAR_INTERVAL);
-    }
-  }, [tickDisplay]);
-
-  useEffect(() => {
-    const unsubRagChunk = onMessage('rag_chat_chunk', (msg) => {
-      fullContentRef.current += msg.content;
-      startTick();
-    });
-
-    const unsubRagSources = onMessage('rag_sources', (msg) => {
-      setSources(msg.sources || []);
-    });
-
-    const unsubCrossDocChunk = onMessage('cross_doc_chunk', (msg) => {
-      fullContentRef.current += msg.content;
-      startTick();
-    });
-
-    const unsubCrossDocSources = onMessage('cross_doc_sources', (msg) => {
-      setCrossDocSources(msg.sources || []);
-    });
-
-    const unsubSearchStatus = onMessage('search_status', (msg) => {
-      setSearchStatus(msg.status);
-    });
-
-    const unsubAnalyzeChunk = onMessage('analyze_chunk', (msg) => {
-      fullContentRef.current += msg.data;
-      startTick();
-    });
-
-    const unsubDeepAnalyzeChunk = onMessage('deep_analyze_chunk', (msg) => {
-      fullContentRef.current += msg.data;
-      startTick();
-    });
-
-    const unsubIntentDetected = onMessage('intent_detected', (msg) => {
-      setCurrentIntent({
-        intent: msg.intent,
-        tool: msg.tool,
-        confidence: msg.confidence,
-        matched: msg.matched
-      });
-    });
-
-    const unsubDone = onMessage('done', (msg) => {
-      if (['rag_chat', 'cross_doc_chat', 'analyze', 'deep_analyze'].includes(msg.channel)) {
-        isDoneRef.current = true;
-        startTick();
-        if (msg.session_id) {
-          currentSessionIdRef.current = msg.session_id;
-          setCurrentSession(msg.session_id);
-        }
-      }
-    });
-
-    const unsubError = onMessage('error', (msg) => {
+  const { currentIntent, setCurrentIntent } = useChatMessages({
+    onMessage,
+    typewriter,
+    currentSessionIdRef,
+    setSources,
+    setCrossDocSources,
+    setSearchStatus,
+    updateLastMessage,
+    setCurrentSession,
+    onError: useCallback((msg) => {
       console.error('问答错误:', msg.message);
-      if (timerRef.current) {
-        clearTimeout(timerRef.current);
-        timerRef.current = null;
-      }
-      updateLastMessage('请求失败，请重试。');
+      typewriter.stop();
+      updateLastMessage(msg.message || '请求失败，请重试。');
       setIsChatting(false);
-    });
-
-    return () => {
-      unsubRagChunk();
-      unsubRagSources();
-      unsubCrossDocChunk();
-      unsubCrossDocSources();
-      unsubSearchStatus();
-      unsubAnalyzeChunk();
-      unsubDeepAnalyzeChunk();
-      unsubIntentDetected();
-      unsubDone();
-      unsubError();
-      if (timerRef.current) {
-        clearTimeout(timerRef.current);
-        timerRef.current = null;
-      }
-    };
-  }, [onMessage, startTick, setSources, setCrossDocSources, setSearchStatus, setIsChatting, updateLastMessage, setCurrentSession]);
+    }, [typewriter, updateLastMessage, setIsChatting]),
+  });
 
   const handleSend = () => {
     const trimmed = input.trim();
@@ -218,13 +270,8 @@ function ChatPanel({
     setCrossDocSources([]);
     clearSearchState();
     setCurrentIntent(null);
-    fullContentRef.current = '';
-    displayedLenRef.current = 0;
-    isDoneRef.current = false;
-    if (timerRef.current) {
-      clearTimeout(timerRef.current);
-      timerRef.current = null;
-    }
+    typewriter.reset();
+    typewriter.start();
 
     if (sendUnifiedChatMessage) {
       sendUnifiedChatMessage(trimmed, paperId, selectedPaperIds, sessionId, enableSearch);
@@ -248,9 +295,7 @@ function ChatPanel({
     } else {
       await createSession(paperId, '新对话');
     }
-    fullContentRef.current = '';
-    displayedLenRef.current = 0;
-    isDoneRef.current = false;
+    typewriter.reset();
   };
 
   const handleAddPaper = () => {
@@ -278,10 +323,8 @@ function ChatPanel({
   const handleSwitchSession = async (sessionId) => {
     if (sessionId === currentSessionId) return;
     setCurrentSession(sessionId);
-    await fetchMessages(sessionId);
-    fullContentRef.current = '';
-    displayedLenRef.current = 0;
-    isDoneRef.current = false;
+    await fetchMessages(sessionId, true); // true = reset and fetch from beginning
+    typewriter.reset();
   };
 
   const handleDeleteSession = async (e, sessionId) => {
@@ -291,9 +334,9 @@ function ChatPanel({
     }
   };
 
-  const handleSourceClick = (pages, paperId = null) => {
-    if (paperId && paperId !== paperId && onSwitchPaper) {
-      onSwitchPaper(paperId, pages[0]);
+  const handleSourceClick = (pages, targetPaperId = null) => {
+    if (targetPaperId && targetPaperId !== paperId && onSwitchPaper) {
+      onSwitchPaper(targetPaperId, pages[0]);
     } else if (pages && pages.length > 0 && onNavigateToPage) {
       onNavigateToPage(pages[0]);
     }
@@ -414,7 +457,7 @@ function ChatPanel({
               <line x1="12" y1="5" x2="12" y2="19"></line>
               <line x1="5" y1="12" x2="19" y2="12"></line>
             </svg>
-            新建对话
+            {t('chat.newSession')}
           </button>
         </div>
 
@@ -510,7 +553,14 @@ function ChatPanel({
       </button>
 
       <div className={styles.chatArea}>
-        <div className={styles.messages}>
+        <div ref={messagesRef} className={styles.messages} onScroll={handleScroll}>
+          {/* 加载更多指示器 */}
+          {loadingMore && (
+            <div className={styles.loadingMoreIndicator}>
+              <span className={styles.loadingSpinner}></span>
+              加载更多消息...
+            </div>
+          )}
           {messages.length === 0 && (
             <div className={styles.welcome}>
               <p>💬 统一智能助手 - 有什么问题可以问我</p>
@@ -533,92 +583,42 @@ function ChatPanel({
               <p className={styles.welcomeHint}>回答中的 [p.X] 标记可以点击跳转到对应页面</p>
             </div>
           )}
-          {messages.map((msg, index) => (
-            <div
-              key={msg.id || index}
-              className={`${styles.message} ${msg.role === 'user' ? styles.userMessage : styles.assistantMessage}`}
-            >
-              <div className={styles.bubble}>
-                {msg.content ? (
-                  msg.role === 'assistant'
-                    ? renderContentWithCitations(msg.content)
-                    : msg.content
-                ) : (isChatting && index === messages.length - 1 ? (
-                  <span className={styles.typing}>思考中...</span>
-                ) : '')}
-              </div>
-
-              {msg.role === 'assistant' &&
-               !isChatting &&
-               index === messages.length - 1 && (
-                <>
-                  {sources.length > 0 && !isCrossDocMode && (
-                    <div className={styles.sources}>
-                      <div className={styles.sourcesTitle}>引用来源：</div>
-                      {sources.map((source, idx) => (
-                        source.type === 'web' ? (
-                          <a
-                            key={idx}
-                            className={`${styles.sourceItem} ${styles.webSource}`}
-                            href={source.href}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            <span className={styles.webSourceIcon}>🌐</span>
-                            <span className={styles.webSourceTitle}>
-                              {source.title || '网络来源'}
-                            </span>
-                            <span className={styles.sourceText}>
-                              {source.text?.substring(0, 50)}...
-                            </span>
-                          </a>
-                        ) : (
-                          <div
-                            key={idx}
-                            className={styles.sourceItem}
-                            onClick={() => handleSourceClick(source.pages)}
-                          >
-                            <span className={styles.sourcePages}>
-                              第 {source.pages?.join(', ') || '?'} 页
-                            </span>
-                            <span className={styles.sourceText}>
-                              {source.text?.substring(0, 50)}...
-                            </span>
-                          </div>
-                        )
-                      ))}
-                    </div>
-                  )}
-
-                  {crossDocSources.length > 0 && isCrossDocMode && (
-                    <div className={`${styles.sources} ${styles.crossDocSources}`}>
-                      <div className={styles.sourcesTitle}>跨文档引用来源：</div>
-                      {crossDocSources.map((source, idx) => (
-                        <div
-                          key={idx}
-                          className={styles.sourceItem}
-                          onClick={() => handleSourceClick(source.pages, source.paper_id)}
-                        >
-                          <span className={styles.sourcePaper}>
-                            {getPaperTitle(source.paper_id).slice(0, 20)}
-                            {getPaperTitle(source.paper_id).length > 20 ? '...' : ''}
-                          </span>
-                          <span className={styles.sourcePages}>
-                            第 {source.pages?.join(', ') || '?'} 页
-                          </span>
-                          <span className={styles.sourceText}>
-                            {source.text?.substring(0, 40)}...
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </>
-              )}
+          {messages.length > 0 && (
+            <div style={{ height: virtualizer.getTotalSize(), width: '100%', position: 'relative' }}>
+              {virtualizer.getVirtualItems().map((virtualRow) => {
+                const msg = messages[virtualRow.index];
+                const isLast = virtualRow.index === messages.length - 1;
+                return (
+                  <div
+                    key={msg.id || `msg-${virtualRow.index}`}
+                    data-index={virtualRow.index}
+                    ref={virtualizer.measureElement}
+                    style={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      width: '100%',
+                      transform: `translateY(${virtualRow.start}px)`,
+                    }}
+                  >
+                    <MessageItem
+                      msg={msg}
+                      index={virtualRow.index}
+                      isLast={isLast}
+                      isChatting={isChatting}
+                      renderContentWithCitations={renderContentWithCitations}
+                      styles={styles}
+                      isCrossDocMode={isCrossDocMode}
+                      sources={sources}
+                      crossDocSources={crossDocSources}
+                      getPaperTitle={getPaperTitle}
+                      handleSourceClick={handleSourceClick}
+                    />
+                  </div>
+                );
+              })}
             </div>
-          ))}
-          <div ref={messagesEndRef} />
+          )}
         </div>
 
         <div className={styles.searchControl}>
@@ -649,7 +649,7 @@ function ChatPanel({
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="输入你的问题，或输入功能关键词（如：章节概述、深度分析）..."
+            placeholder={t('chat.inputPlaceholder')}
             rows={1}
             disabled={isChatting}
           />
@@ -658,7 +658,7 @@ function ChatPanel({
             onClick={handleSend}
             disabled={!input.trim() || isChatting}
           >
-            发送
+            {t('chat.send')}
           </button>
         </div>
       </div>

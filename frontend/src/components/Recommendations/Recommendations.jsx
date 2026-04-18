@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { useState } from 'react';
+import { useState, useCallback, memo } from 'react';
 import usePaperStore from '../../stores/paperStore';
 import styles from './Recommendations.module.css';
 
@@ -9,6 +9,89 @@ const STATUS_MAP = {
   reading: { label: '阅读中', color: '#f59e0b' },
   finished: { label: '已完成', color: '#10b981' },
 };
+
+// 渲染相似度指示器
+const SimilarityBadge = memo(({ similarity }) => {
+  if (similarity === null || similarity === undefined) return null;
+
+  // 根据相似度设置颜色
+  let color = '#6b7280';
+  if (similarity >= 80) color = '#10b981';
+  else if (similarity >= 60) color = '#3b82f6';
+  else if (similarity >= 40) color = '#f59e0b';
+
+  return (
+    <div className={styles.similarityBadge} style={{ backgroundColor: `${color}20`, color }}>
+      <svg className={styles.similarityIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+      </svg>
+      <span>{similarity}% 匹配</span>
+    </div>
+  );
+});
+
+// 渲染匹配原因标签
+const MatchReason = memo(({ reason }) => {
+  if (!reason) return null;
+
+  return (
+    <span className={styles.matchReason}>
+      {reason}
+    </span>
+  );
+});
+
+// 推荐论文卡片组件 - 使用 React.memo 优化渲染性能
+const PaperCardItem = memo(({ paper, onClick }) => {
+  return (
+    <div
+      className={styles.paperCard}
+      onClick={() => onClick(paper.id)}
+    >
+      <div className={styles.cardHeader}>
+        <SimilarityBadge similarity={paper.similarity} />
+        <MatchReason reason={paper.match_reason} />
+        {!paper.similarity && !paper.match_reason && paper.reading_status && (
+          <span
+            className={styles.statusBadge}
+            style={{
+              backgroundColor: `${STATUS_MAP[paper.reading_status]?.color}20`,
+              color: STATUS_MAP[paper.reading_status]?.color
+            }}
+          >
+            {STATUS_MAP[paper.reading_status]?.label || paper.reading_status}
+          </span>
+        )}
+      </div>
+
+      <h4 className={styles.paperTitle} title={paper.title}>
+        {paper.title}
+      </h4>
+
+      {paper.authors && (
+        <p className={styles.paperAuthors} title={paper.authors}>
+          {paper.authors}
+        </p>
+      )}
+
+      {paper.abstract_preview && (
+        <p className={styles.abstractPreview}>
+          {paper.abstract_preview}
+        </p>
+      )}
+
+      <div className={styles.cardFooter}>
+        <span className={styles.metaInfo}>
+          {paper.page_count > 0 && `${paper.page_count} 页`}
+          {paper.category && ` · ${paper.category}`}
+        </span>
+        <svg className={styles.arrowIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+        </svg>
+      </div>
+    </div>
+  );
+});
 
 /**
  * 推荐论文组件
@@ -44,44 +127,13 @@ function Recommendations({
   const { 
     webRecommendations, 
     webRecommendationsLoading, 
-    fetchWebRecommendations, 
-    clearWebRecommendations 
+    fetchWebRecommendations
   } = usePaperStore();
 
-  const handlePaperClick = (paperId) => {
+  // 使用 useCallback 包装回调函数，确保 prop 稳定
+  const handlePaperClick = useCallback((paperId) => {
     navigate(`/reader/${paperId}`);
-  };
-
-  // 渲染相似度指示器
-  const renderSimilarity = (similarity) => {
-    if (similarity === null || similarity === undefined) return null;
-    
-    // 根据相似度设置颜色
-    let color = '#6b7280';
-    if (similarity >= 80) color = '#10b981';
-    else if (similarity >= 60) color = '#3b82f6';
-    else if (similarity >= 40) color = '#f59e0b';
-    
-    return (
-      <div className={styles.similarityBadge} style={{ backgroundColor: `${color}20`, color }}>
-        <svg className={styles.similarityIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-        </svg>
-        <span>{similarity}% 匹配</span>
-      </div>
-    );
-  };
-
-  // 渲染匹配原因标签
-  const renderMatchReason = (reason) => {
-    if (!reason) return null;
-    
-    return (
-      <span className={styles.matchReason}>
-        {reason}
-      </span>
-    );
-  };
+  }, [navigate]);
 
   if (loading) {
     return (
@@ -151,53 +203,11 @@ function Recommendations({
       {!isCollapsed && (
         <div className={styles.paperList}>
           {papers.map((paper) => (
-            <div
+            <PaperCardItem
               key={paper.id}
-              className={styles.paperCard}
-              onClick={() => handlePaperClick(paper.id)}
-            >
-              <div className={styles.cardHeader}>
-                {renderSimilarity(paper.similarity)}
-                {paper.match_reason && renderMatchReason(paper.match_reason)}
-                {!paper.similarity && !paper.match_reason && paper.reading_status && (
-                  <span 
-                    className={styles.statusBadge}
-                    style={{ 
-                      backgroundColor: `${STATUS_MAP[paper.reading_status]?.color}20`,
-                      color: STATUS_MAP[paper.reading_status]?.color 
-                    }}
-                  >
-                    {STATUS_MAP[paper.reading_status]?.label || paper.reading_status}
-                  </span>
-                )}
-              </div>
-              
-              <h4 className={styles.paperTitle} title={paper.title}>
-                {paper.title}
-              </h4>
-              
-              {paper.authors && (
-                <p className={styles.paperAuthors} title={paper.authors}>
-                  {paper.authors}
-                </p>
-              )}
-              
-              {paper.abstract_preview && (
-                <p className={styles.abstractPreview}>
-                  {paper.abstract_preview}
-                </p>
-              )}
-              
-              <div className={styles.cardFooter}>
-                <span className={styles.metaInfo}>
-                  {paper.page_count > 0 && `${paper.page_count} 页`}
-                  {paper.category && ` · ${paper.category}`}
-                </span>
-                <svg className={styles.arrowIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                </svg>
-              </div>
-            </div>
+              paper={paper}
+              onClick={handlePaperClick}
+            />
           ))}
         </div>
       )}

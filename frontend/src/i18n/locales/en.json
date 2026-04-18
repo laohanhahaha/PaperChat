@@ -1,0 +1,38 @@
+{
+  "common": {
+    "loading": "Loading...",
+    "error": "A problem occurred on this page",
+    "retry": "Retry",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "save": "Save",
+    "delete": "Delete",
+    "search": "Search",
+    "noData": "No data",
+    "close": "Close"
+  },
+  "nav": {
+    "chat": "Chat",
+    "papers": "Papers",
+    "knowledge": "Knowledge Base",
+    "writing": "Writing Aid",
+    "settings": "Settings",
+    "workspace": "Workspace",
+    "systemSettings": "System Settings"
+  },
+  "chat": {
+    "newSession": "New Chat",
+    "inputPlaceholder": "Type your question, or enter a feature keyword (e.g., chapter overview, deep analysis)...",
+    "send": "Send"
+  },
+  "paper": {
+    "upload": "Upload Paper",
+    "analyzing": "Analyzing...",
+    "analysis": "Paper Analysis"
+  },
+  "error": {
+    "networkError": "Network error, please check connection",
+    "serverError": "Server error, please try later",
+    "unknownError": "An unknown error occurred"
+  }
+}

@@ -2,35 +2,140 @@
 
 提供论文分析和问答的实时 WebSocket 通信
 支持会话持久化和溯源引用
+
+仅负责：WebSocket 连接生命周期管理、消息类型路由分发、调用对应 handler
 """
 import json
 import asyncio
-from datetime import datetime
+import logging
+import time
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
+from jose import jwt, JWTError
 from langchain_community.chat_message_histories import ChatMessageHistory
-from langchain_core.messages import HumanMessage, AIMessage
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, desc
 
-from app.services.llm_service import llm_service, RAG_CHAT_SYSTEM_PROMPT, RAG_CHAT_WITH_SEARCH_SYSTEM_PROMPT
-from app.services.agent_service import agent_service
-from app.services.search_service import search_service
+from app.config import settings
 from app.database import AsyncSessionLocal
-from app.models.chat import ChatSession, ChatMessage
-from app.models.paper import Paper, PaperTextBlock
+from app.models.user import User
+
+logger = logging.getLogger(__name__)
+from app.services.auth_service import get_current_user
+from app.services.session_service import get_paper_by_id
+from app.services.message_service import get_paper_full_text, get_paper_text_preview
+from app.handlers.analyze_handler import handle_analyze, handle_deep_analyze
+from app.handlers.chat_handler import handle_chat
+from app.handlers.rag_handler import handle_rag_chat
+from app.handlers.agent_handler import handle_agent_chat
+from app.handlers.cross_doc_handler import handle_cross_doc_chat
 
 router = APIRouter(tags=["WebSocket"])
 
 
-async def get_paper_full_text(db: AsyncSession, paper_id: int) -> str:
-    """从 PaperTextBlock 表获取论文完整文本"""
-    result = await db.execute(
-        select(PaperTextBlock.text).where(PaperTextBlock.paper_id == paper_id)
-        .order_by(PaperTextBlock.page_number, PaperTextBlock.y0)
-    )
-    texts = result.scalars().all()
-    return "\n".join(texts) if texts else ""
+class ChunkBuffer:
+    """合并高频 WebSocket chunk 消息，减少发送次数
+
+    性能影响说明：
+    - 默认 50ms 的合并间隔对用户体验影响极小（人眼感知延迟约 100ms）
+    - 可显著减少 WebSocket 消息数量（通常减少 80-90%）
+    - 降低前端 React 重渲染频率，提升整体流畅度
+    """
+    def __init__(self, websocket, interval_ms=50):
+        self.websocket = websocket
+        self.interval = interval_ms / 1000  # 转换为秒
+        self.buffer = ""
+        self.last_flush = time.time()
+        self._lock = asyncio.Lock()
+        self._closed = False
+
+    async def add(self, chunk: str, msg_type: str = "stream"):
+        """添加 chunk 到缓冲区，如果达到间隔时间则自动 flush
+
+        Args:
+            chunk: 要发送的文本内容
+            msg_type: 消息类型，默认 "stream"，也可用于 "chat_chunk", "rag_chat_chunk" 等
+        """
+        if self._closed:
+            return
+
+        async with self._lock:
+            self.buffer += chunk
+            now = time.time()
+            if now - self.last_flush >= self.interval:
+                await self._flush(msg_type)
+
+    async def flush(self, msg_type: str = "stream"):
+        """强制刷新缓冲区，发送所有累积的内容"""
+        if self._closed:
+            return
+
+        async with self._lock:
+            await self._flush(msg_type)
+
+    async def _flush(self, msg_type: str):
+        """内部刷新方法（需在持有锁的情况下调用）"""
+        if self.buffer:
+            await self.websocket.send_text(json.dumps({
+                "type": msg_type,
+                "content": self.buffer
+            }))
+            self.buffer = ""
+            self.last_flush = time.time()
+
+    def close(self):
+        """关闭 buffer，不再接受新内容"""
+        self._closed = True
+
+
+async def send_chunk_with_buffer(websocket, chunk_buffer, chunk: str, msg_type: str = "stream"):
+    """使用 buffer 发送 chunk 的辅助函数
+
+    如果 chunk_buffer 为 None，则直接发送；否则使用 buffer。
+    这样允许 handler 选择是否使用缓冲功能。
+    """
+    if chunk_buffer is not None:
+        await chunk_buffer.add(chunk, msg_type)
+    else:
+        await websocket.send_text(json.dumps({
+            "type": msg_type,
+            "content": chunk
+        }))
+
+
+async def verify_websocket_token(token: str = None):
+    """验证 WebSocket token，无 token 时降级为默认用户"""
+    if not token:
+        # 向后兼容：无 token 时使用默认用户（个人使用模式）
+        async with AsyncSessionLocal() as db:
+            return await get_current_user(db)
+
+    try:
+        payload = jwt.decode(
+            token,
+            settings.JWT_SECRET_KEY,
+            algorithms=[settings.JWT_ALGORITHM]
+        )
+        user_id = int(payload.get("sub"))
+        async with AsyncSessionLocal() as db:
+            result = await db.execute(select(User).where(User.id == user_id))
+            user = result.scalar_one_or_none()
+            if user and user.is_active:
+                return user
+        return None
+    except Exception:
+        return None
+
+
+class ConnectionState:
+    """WebSocket 连接状态，在各 handler 间共享"""
+    def __init__(self):
+        self.paper_context = ""
+        self.current_paper_id = None
+        self.current_session_id = None
+        self.current_user_id = None
+        self.chat_history = ChatMessageHistory()
+        self.running_tasks = {}
 
 
 async def get_db_session():
@@ -42,73 +147,14 @@ async def get_db_session():
             await session.close()
 
 
-async def get_or_create_session(db: AsyncSession, session_id: int, user_id: int, paper_id: int = None) -> ChatSession:
-    """获取或创建会话"""
-    if session_id:
-        # 查找现有会话
-        result = await db.execute(
-            select(ChatSession).where(
-                and_(
-                    ChatSession.id == session_id,
-                    ChatSession.user_id == user_id
-                )
-            )
-        )
-        session = result.scalar_one_or_none()
-        if session:
-            return session
-    
-    # 创建新会话
-    new_session = ChatSession(
-        user_id=user_id,
-        paper_id=paper_id,
-        title="新对话"
-    )
-    db.add(new_session)
-    await db.commit()
-    await db.refresh(new_session)
-    return new_session
-
-
-async def load_chat_history(db: AsyncSession, session_id: int, limit: int = 10) -> ChatMessageHistory:
-    """从数据库加载会话历史"""
-    history = ChatMessageHistory()
-    
-    result = await db.execute(
-        select(ChatMessage)
-        .where(ChatMessage.session_id == session_id)
-        .order_by(desc(ChatMessage.created_at))
-        .limit(limit)
-    )
-    messages = result.scalars().all()
-    
-    # 按时间正序排列
-    for msg in reversed(messages):
-        if msg.role == "user":
-            history.add_user_message(msg.content)
-        else:
-            history.add_ai_message(msg.content)
-    
-    return history
-
-
-async def save_message(db: AsyncSession, session_id: int, role: str, content: str, sources: list = None):
-    """保存消息到数据库"""
-    message = ChatMessage(
-        session_id=session_id,
-        role=role,
-        content=content,
-        sources=sources
-    )
-    db.add(message)
-    await db.commit()
-
-
 @router.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket):
+async def websocket_endpoint(websocket: WebSocket, token: str = Query(default=None)):
     """
     WebSocket 端点 - 论文分析与问答
-    
+
+    参数:
+        token: JWT 认证 token（可选，无 token 时降级为默认用户）
+
     消息格式:
         - 分析论文: {"type": "analyze", "text": "论文文本内容"}
         - 问答: {"type": "chat", "message": "用户问题"}
@@ -116,7 +162,7 @@ async def websocket_endpoint(websocket: WebSocket):
         - 跨文档问答: {"type": "cross_doc_chat", "message": "用户问题", "paper_ids": [1, 2, 3], "session_id": 456, "user_id": 789}
         - 深度分析: {"type": "deep_analyze", "text": "论文文本内容"}
         - Agent问答: {"type": "agent_chat", "message": "用户问题", "paper_id": 123, "paper_ids": [1, 2, 3]}
-    
+
     响应格式:
         - 分析片段: {"type": "analyze_chunk", "data": "..."}
         - 问答片段: {"type": "chat_chunk", "data": "..."}
@@ -128,566 +174,40 @@ async def websocket_endpoint(websocket: WebSocket):
         - 完成: {"type": "done", "channel": "analyze|chat|rag_chat|cross_doc_chat", "session_id": 456}
         - 错误: {"type": "error", "message": "..."}
     """
-    await websocket.accept()
-    
-    # 每个连接维护独立状态
-    paper_context = ""
-    current_paper_id = None
-    current_session_id = None
-    current_user_id = None
-    chat_history = ChatMessageHistory()
-    # 跟踪正在运行的任务
-    running_tasks = {}
-    
-    async def _extract_keywords_async(paper_id, text, ws):
-        """异步提取关键词，不阻塞主分析流程"""
-        try:
-            async with AsyncSessionLocal() as kw_db:
-                result = await kw_db.execute(select(Paper).where(Paper.id == paper_id))
-                paper_obj = result.scalar_one_or_none()
-                if paper_obj and not paper_obj.tags:
-                    keywords = await asyncio.wait_for(
-                        llm_service.extract_keywords(
-                            text=text[:3000],
-                            title=paper_obj.title or "",
-                            max_keywords=5
-                        ),
-                        timeout=15.0  # 15秒超时
-                    )
-                    if keywords:
-                        paper_obj.tags = json.dumps(keywords, ensure_ascii=False)
-                        await kw_db.commit()
-                        try:
-                            await ws.send_text(json.dumps({
-                                "type": "keywords_result",
-                                "keywords": keywords,
-                                "paper_id": paper_id
-                            }))
-                        except:
-                            pass  # WebSocket 可能已关闭
-                elif paper_obj and paper_obj.tags:
-                    # 已有关键词，直接发送
-                    try:
-                        existing_keywords = json.loads(paper_obj.tags)
-                        await ws.send_text(json.dumps({
-                            "type": "keywords_result",
-                            "keywords": existing_keywords,
-                            "paper_id": paper_id
-                        }))
-                    except:
-                        pass
-        except asyncio.TimeoutError:
-            print(f"[WARN] 论文 {paper_id} 关键词提取超时")
-        except Exception as e:
-            print(f"[WARN] 论文 {paper_id} 关键词提取失败: {e}")
-    
-    async def handle_analyze(text, paper_id=None):
-        """异步处理论文分析"""
-        nonlocal paper_context
-        paper_context = text
-        chat_history.clear()
-        
-        full_response = ""
-        try:
-            async for chunk in llm_service.analyze_paper(text):
-                full_response += chunk
-                await websocket.send_text(json.dumps({
-                    "type": "analyze_chunk",
-                    "data": chunk
-                }))
-            
-            # 保存章节概述缓存
-            if paper_id:
-                try:
-                    async with AsyncSessionLocal() as cache_db:
-                        result = await cache_db.execute(select(Paper).where(Paper.id == paper_id))
-                        paper = result.scalar_one_or_none()
-                        if paper:
-                            paper.section_analysis = full_response
-                            paper.last_analyzed_at = datetime.now()
-                            await cache_db.commit()
-                except Exception as e:
-                    print(f"[WARN] 保存章节概述缓存失败: {e}")
-            
-            # 先发送 done 消息，确保前端立即结束加载状态
-            await websocket.send_text(json.dumps({
-                "type": "done",
-                "channel": "analyze"
-            }))
-            
-            # 异步提取关键词（不阻塞主流程）
-            if paper_id:
-                asyncio.create_task(_extract_keywords_async(paper_id, text, websocket))
-        except asyncio.CancelledError:
-            pass
-        except Exception as e:
-            await websocket.send_text(json.dumps({
-                "type": "error",
-                "message": f"分析失败: {str(e)}"
-            }))
-        finally:
-            running_tasks.pop("analyze", None)
-    
-    async def handle_chat(message):
-        """异步处理问答（使用全文上下文）"""
-        try:
-            async for chunk in llm_service.chat(message, paper_context, chat_history):
-                await websocket.send_text(json.dumps({
-                    "type": "chat_chunk",
-                    "data": chunk
-                }))
-            await websocket.send_text(json.dumps({
-                "type": "done",
-                "channel": "chat"
-            }))
-        except asyncio.CancelledError:
-            pass
-        except Exception as e:
-            await websocket.send_text(json.dumps({
-                "type": "error",
-                "message": f"问答失败: {str(e)}"
-            }))
-        finally:
-            running_tasks.pop("chat", None)
-    
-    async def handle_rag_chat(message, paper_id, session_id, user_id, enable_search=False):
-        """异步处理RAG问答（使用检索上下文，支持会话持久化和联网搜索）"""
-        nonlocal current_session_id, current_paper_id, current_user_id
-        
-        current_paper_id = paper_id
-        current_user_id = user_id
-        
-        # 创建数据库会话
-        async with AsyncSessionLocal() as db:
-            try:
-                # 1. 获取或创建会话
-                session = await get_or_create_session(db, session_id, user_id, paper_id)
-                current_session_id = session.id
-                
-                # 2. 保存用户消息
-                await save_message(db, session.id, "user", message)
-                
-                # 3. 加载会话历史（最近10条）
-                history = await load_chat_history(db, session.id, limit=10)
-                
-                # 4. RAG 检索
-                from app.services.rag_service import rag_service
-                relevant_chunks = await rag_service.search(paper_id, message, top_k=5)
-                
-                # 如果没有检索到内容，尝试检查并重建索引
-                if not relevant_chunks:
-                    # 检查论文是否有文本块
-                    text_blocks_result = await db.execute(
-                        select(PaperTextBlock).where(PaperTextBlock.paper_id == paper_id).limit(1)
-                    )
-                    has_text_blocks = text_blocks_result.scalar_one_or_none() is not None
-                    
-                    if has_text_blocks:
-                        # 有文本块但没有索引，尝试重建索引
-                        await websocket.send_text(json.dumps({
-                            "type": "status",
-                            "message": "正在为论文建立索引，请稍候..."
-                        }))
-                        
-                        # 获取所有文本块
-                        all_blocks_result = await db.execute(
-                            select(PaperTextBlock).where(PaperTextBlock.paper_id == paper_id)
-                            .order_by(PaperTextBlock.page_number, PaperTextBlock.y0)
-                        )
-                        all_blocks = all_blocks_result.scalars().all()
-                        
-                        blocks_data = [
-                            {
-                                "text": block.text,
-                                "page_number": block.page_number,
-                                "metadata": {"page": block.page_number}
-                            }
-                            for block in all_blocks
-                        ]
-                        
-                        # 重建索引
-                        await rag_service.reindex_paper(paper_id, blocks_data)
-                        
-                        # 重新检索
-                        relevant_chunks = await rag_service.search(paper_id, message, top_k=5)
-                    else:
-                        # 论文没有文本块，可能还没解析完成
-                        error_msg = "论文尚未解析完成或内容为空，请稍后再试。如果问题持续，请尝试重新上传论文。"
-                        await websocket.send_text(json.dumps({
-                            "type": "rag_chat_chunk",
-                            "content": error_msg
-                        }))
-                        await save_message(db, session.id, "assistant", error_msg, [])
-                        await websocket.send_text(json.dumps({
-                            "type": "done",
-                            "channel": "rag_chat",
-                            "session_id": session.id
-                        }))
-                        return
-                
-                # 5. 网络搜索（如果启用）
-                web_results = []
-                if enable_search:
-                    # 推送搜索状态
-                    await websocket.send_text(json.dumps({
-                        "type": "search_status",
-                        "status": "searching"
-                    }))
-                    # 执行搜索
-                    web_results = await search_service.search(message, max_results=5)
-                    # 推送搜索完成
-                    await websocket.send_text(json.dumps({
-                        "type": "search_status",
-                        "status": "completed",
-                        "results_count": len(web_results)
-                    }))
-                
-                if not relevant_chunks and not web_results:
-                    # 如果没有检索到内容也没有搜索结果
-                    no_content_msg = "抱歉，未能从论文中检索到相关内容，网络搜索也未返回结果。请尝试重新表述问题。"
-                    await websocket.send_text(json.dumps({
-                        "type": "rag_chat_chunk",
-                        "content": no_content_msg
-                    }))
-                    await save_message(db, session.id, "assistant", no_content_msg, [])
-                    await websocket.send_text(json.dumps({
-                        "type": "done",
-                        "channel": "rag_chat",
-                        "session_id": session.id
-                    }))
-                    return
-                
-                # 6. 组装引用来源
-                sources = [
-                    {
-                        "type": "paper",
-                        "text": chunk["text"][:200] + "..." if len(chunk["text"]) > 200 else chunk["text"],
-                        "pages": chunk["pages"],
-                        "score": chunk["score"]
-                    }
-                    for chunk in relevant_chunks
-                ]
-                
-                # 添加网络来源
-                for wr in web_results:
-                    sources.append({
-                        "type": "web",
-                        "title": wr.get("title", ""),
-                        "href": wr.get("href", ""),
-                        "text": wr.get("body", "")[:200] + "..." if len(wr.get("body", "")) > 200 else wr.get("body", "")
-                    })
-                
-                # 7. 组装上下文
-                from langchain_core.messages import SystemMessage
-                
-                if enable_search and web_results:
-                    # 有网络搜索结果，使用合并提示词
-                    # 组装论文上下文
-                    paper_context_parts = []
-                    for chunk in relevant_chunks:
-                        pages_str = ",".join(map(str, chunk['pages'])) if chunk['pages'] else "未知"
-                        paper_context_parts.append(f"[来源: 第{pages_str}页]\n{chunk['text']}")
-                    paper_context = "\n\n---\n\n".join(paper_context_parts) if paper_context_parts else "无相关论文内容"
-                    
-                    # 组装网络上下文
-                    web_context_parts = []
-                    for i, wr in enumerate(web_results, 1):
-                        web_context_parts.append(f"[{i}] {wr.get('title', '未知标题')}\n{wr.get('body', '')}\n来源: {wr.get('href', '')}")
-                    web_context = "\n\n---\n\n".join(web_context_parts)
-                    
-                    # 使用带搜索的系统提示词
-                    system_content = RAG_CHAT_WITH_SEARCH_SYSTEM_PROMPT.format(
-                        paper_context=paper_context,
-                        web_context=web_context
-                    )
-                else:
-                    # 仅使用论文内容
-                    context_parts = []
-                    for chunk in relevant_chunks:
-                        pages_str = ",".join(map(str, chunk['pages'])) if chunk['pages'] else "未知"
-                        context_parts.append(f"[来源: 第{pages_str}页]\n{chunk['text']}")
-                    context = "\n\n---\n\n".join(context_parts)
-                    
-                    system_content = RAG_CHAT_SYSTEM_PROMPT.format(context=context)
-                
-                # 8. 构建消息
-                messages = [SystemMessage(content=system_content)]
-                messages.extend(history.messages)
-                messages.append(HumanMessage(content=message))
-                
-                # 9. 流式获取回复
-                full_response = ""
-                async for chunk in llm_service.llm.astream(messages):
-                    if chunk.content:
-                        full_response += chunk.content
-                        await websocket.send_text(json.dumps({
-                            "type": "rag_chat_chunk",
-                            "content": chunk.content
-                        }))
-                
-                # 10. 发送引用来源
-                await websocket.send_text(json.dumps({
-                    "type": "rag_sources",
-                    "sources": sources
-                }))
-                
-                # 11. 保存 assistant 消息到数据库
-                await save_message(db, session.id, "assistant", full_response, sources)
-                
-                # 12. 更新会话标题（如果是第一条消息）
-                result = await db.execute(
-                    select(ChatMessage).where(ChatMessage.session_id == session.id)
-                )
-                all_messages = result.scalars().all()
-                if len(all_messages) <= 2 and session.title == "新对话":
-                    # 使用用户问题的前20字作为标题
-                    session.title = message[:30] + "..." if len(message) > 30 else message
-                    await db.commit()
-                
-                # 13. 发送完成信号
-                await websocket.send_text(json.dumps({
-                    "type": "done",
-                    "channel": "rag_chat",
-                    "session_id": session.id
-                }))
-                
-            except asyncio.CancelledError:
-                pass
-            except Exception as e:
-                await websocket.send_text(json.dumps({
-                    "type": "error",
-                    "message": f"RAG问答失败: {str(e)}"
-                }))
-            finally:
-                running_tasks.pop("rag_chat", None)
-    
-    async def handle_deep_analyze(text, paper_id=None):
-        """异步处理深度分析"""
-        nonlocal paper_context
-        paper_context = text
-        chat_history.clear()
-        
-        full_response = ""
-        try:
-            async for chunk in llm_service.deep_analyze_paper(text):
-                full_response += chunk
-                await websocket.send_text(json.dumps({
-                    "type": "deep_analyze_chunk",
-                    "data": chunk
-                }))
-            
-            # 保存深度分析缓存
-            if paper_id:
-                try:
-                    async with AsyncSessionLocal() as cache_db:
-                        result = await cache_db.execute(select(Paper).where(Paper.id == paper_id))
-                        paper = result.scalar_one_or_none()
-                        if paper:
-                            paper.deep_analysis = full_response
-                            paper.last_analyzed_at = datetime.now()
-                            await cache_db.commit()
-                except Exception as e:
-                    print(f"[WARN] 保存深度分析缓存失败: {e}")
-            
-            # 先发送 done 消息，确保前端立即结束加载状态
-            await websocket.send_text(json.dumps({
-                "type": "done",
-                "channel": "deep_analyze"
-            }))
-            
-            # 异步提取关键词（不阻塞主流程）
-            if paper_id:
-                asyncio.create_task(_extract_keywords_async(paper_id, text, websocket))
-        except asyncio.CancelledError:
-            pass
-        except Exception as e:
-            await websocket.send_text(json.dumps({
-                "type": "error",
-                "message": f"深度分析失败: {str(e)}"
-            }))
-        finally:
-            running_tasks.pop("deep_analyze", None)
-    
-    async def handle_agent_chat(message, paper_id, paper_ids):
-        """异步处理 Agent 智能问答
-        
-        Agent 模式：意图识别 -> 任务规划 -> 逐步执行 -> 结果聚合
-        """
-        db = None
-        try:
-            # 创建数据库会话
-            db = AsyncSessionLocal()
-            
-            # 1. 意图识别
-            intent = await agent_service.classify_intent(message)
-            await websocket.send_text(json.dumps({
-                "type": "agent_intent",
-                "intent": intent
-            }))
-            
-            # 2. 任务规划
-            context = {"paper_id": paper_id, "paper_ids": paper_ids}
-            plan = await agent_service.plan_tasks(message, intent, context)
-            await websocket.send_text(json.dumps({
-                "type": "agent_plan",
-                "plan": plan
-            }))
-            
-            # 3. 逐步执行
-            context["db"] = db
-            context["original_question"] = message
-            
-            async for progress in agent_service.execute_plan(plan, context):
-                if progress["type"] == "step_start":
-                    await websocket.send_text(json.dumps({
-                        "type": "agent_step",
-                        **progress
-                    }))
-                elif progress["type"] == "step_result":
-                    await websocket.send_text(json.dumps({
-                        "type": "agent_step_result",
-                        **progress
-                    }))
-                elif progress["type"] == "final_answer_chunk":
-                    await websocket.send_text(json.dumps({
-                        "type": "agent_answer_chunk",
-                        "content": progress["content"]
-                    }))
-            
-            await websocket.send_text(json.dumps({
-                "type": "done",
-                "channel": "agent_chat"
-            }))
-            
-        except asyncio.CancelledError:
-            pass
-        except Exception as e:
-            await websocket.send_text(json.dumps({
-                "type": "error",
-                "message": f"Agent 问答失败: {str(e)}"
-            }))
-        finally:
-            running_tasks.pop("agent_chat", None)
-            if db:
-                await db.close()
+    user = await verify_websocket_token(token)
+    if not user:
+        await websocket.accept()
+        await websocket.close(code=4001, reason="Unauthorized")
+        return
 
-    async def handle_cross_doc_chat(message, paper_ids, session_id, user_id):
-        """异步处理跨文档 RAG 问答"""
-        nonlocal current_session_id, current_paper_id, current_user_id
-        
-        current_user_id = user_id
-        
-        # 创建数据库会话
-        async with AsyncSessionLocal() as db:
-            try:
-                # 1. 获取或创建会话
-                session = await get_or_create_session(db, session_id, user_id, paper_id=None)
-                current_session_id = session.id
-                
-                # 2. 保存用户消息（附带 paper_ids 信息）
-                await save_message(db, session.id, "user", message, {"paper_ids": paper_ids})
-                
-                # 3. 加载会话历史（最近10条）
-                history = await load_chat_history(db, session.id, limit=10)
-                
-                # 4. 跨文档 RAG 检索
-                from app.services.rag_service import rag_service
-                results = await rag_service.search_multiple_papers(paper_ids, message, top_k=8)
-                
-                if not results:
-                    # 如果没有检索到内容
-                    no_content_msg = "抱歉，未能从论文中检索到相关内容。请尝试重新表述问题，或检查论文是否已完成索引。"
-                    await websocket.send_text(json.dumps({
-                        "type": "cross_doc_chunk",
-                        "content": no_content_msg
-                    }))
-                    await save_message(db, session.id, "assistant", no_content_msg, [])
-                    await websocket.send_text(json.dumps({
-                        "type": "done",
-                        "channel": "cross_doc_chat",
-                        "session_id": session.id
-                    }))
-                    return
-                
-                # 5. 组装引用来源（附带 paper_id）
-                sources = [
-                    {
-                        "text": r["text"][:200] + "..." if len(r["text"]) > 200 else r["text"],
-                        "pages": r["pages"],
-                        "paper_id": r["paper_id"],
-                        "score": r["score"]
-                    }
-                    for r in results
-                ]
-                
-                # 6. 发送引用来源
-                await websocket.send_text(json.dumps({
-                    "type": "cross_doc_sources",
-                    "sources": sources
-                }))
-                
-                # 7. 流式获取回复
-                full_response = ""
-                async for chunk in llm_service.chat_cross_doc(message, paper_ids, history, top_k=8):
-                    full_response += chunk
-                    await websocket.send_text(json.dumps({
-                        "type": "cross_doc_chunk",
-                        "content": chunk
-                    }))
-                
-                # 8. 保存 assistant 消息到数据库
-                await save_message(db, session.id, "assistant", full_response, sources)
-                
-                # 9. 更新会话标题（如果是第一条消息）
-                result = await db.execute(
-                    select(ChatMessage).where(ChatMessage.session_id == session.id)
-                )
-                all_messages = result.scalars().all()
-                if len(all_messages) <= 2 and session.title == "新对话":
-                    # 使用用户问题的前30字作为标题
-                    session.title = message[:30] + "..." if len(message) > 30 else message
-                    await db.commit()
-                
-                # 10. 发送完成信号
-                await websocket.send_text(json.dumps({
-                    "type": "done",
-                    "channel": "cross_doc_chat",
-                    "session_id": session.id
-                }))
-                
-            except asyncio.CancelledError:
-                pass
-            except Exception as e:
-                await websocket.send_text(json.dumps({
-                    "type": "error",
-                    "message": f"跨文档问答失败: {str(e)}"
-                }))
-            finally:
-                running_tasks.pop("cross_doc_chat", None)
-    
+    await websocket.accept()
+
+    state = ConnectionState()
+    state.current_user_id = user.id
+
     try:
         while True:
             raw = await websocket.receive_text()
             data = json.loads(raw)
             msg_type = data.get("type")
-            
+
             if msg_type == "analyze":
                 text = data.get("text", "")
-                paper_id = data.get("paper_id")  # 获取 paper_id
+                paper_id = data.get("paper_id")
                 if not text or len(text.strip()) < 50:
                     await websocket.send_text(json.dumps({
                         "type": "error",
                         "message": "论文内容过短，请提供完整的论文文本"
                     }))
                     continue
-            
-                # 取消之前正在进行的分析
-                if "analyze" in running_tasks:
-                    running_tasks["analyze"].cancel()
-            
-                # 启动新的异步分析任务
-                running_tasks["analyze"] = asyncio.create_task(handle_analyze(text, paper_id))
-            
+
+                if "analyze" in state.running_tasks:
+                    state.running_tasks["analyze"].cancel()
+
+                state.running_tasks["analyze"] = asyncio.create_task(
+                    handle_analyze(websocket, state, text, paper_id)
+                )
+
             elif msg_type == "chat":
                 message = data.get("message", "")
                 if not message:
@@ -696,118 +216,117 @@ async def websocket_endpoint(websocket: WebSocket):
                         "message": "消息不能为空"
                     }))
                     continue
-                
-                # 取消之前正在进行的问答
-                if "chat" in running_tasks:
-                    running_tasks["chat"].cancel()
-                
-                # 启动新的异步问答任务
-                running_tasks["chat"] = asyncio.create_task(handle_chat(message))
-            
+
+                if "chat" in state.running_tasks:
+                    state.running_tasks["chat"].cancel()
+
+                state.running_tasks["chat"] = asyncio.create_task(
+                    handle_chat(websocket, state, message)
+                )
+
             elif msg_type == "rag_chat":
                 message = data.get("message", "")
                 paper_id = data.get("paper_id")
-                session_id = data.get("session_id")  # 可选
-                user_id = 1  # 使用默认用户（个人使用模式）
-                enable_search = data.get("enable_search", False)  # 是否启用联网搜索
-                
+                session_id = data.get("session_id")
+                user_id = state.current_user_id
+                enable_search = data.get("enable_search", False)
+
                 if not message:
                     await websocket.send_text(json.dumps({
                         "type": "error",
                         "message": "消息不能为空"
                     }))
                     continue
-                
+
                 if not paper_id:
                     await websocket.send_text(json.dumps({
                         "type": "error",
                         "message": "RAG问答需要提供 paper_id"
                     }))
                     continue
-                
-                # 更新当前论文ID
-                current_paper_id = paper_id
-                
-                # 取消之前正在进行的RAG问答
-                if "rag_chat" in running_tasks:
-                    running_tasks["rag_chat"].cancel()
-                
-                # 启动新的异步RAG问答任务
-                running_tasks["rag_chat"] = asyncio.create_task(
-                    handle_rag_chat(message, paper_id, session_id, user_id, enable_search)
-                )
-            
+
+                state.current_paper_id = paper_id
+
+                if "rag_chat" in state.running_tasks:
+                    state.running_tasks["rag_chat"].cancel()
+
+                async def _run_rag_chat():
+                    async with AsyncSessionLocal() as db:
+                        await handle_rag_chat(websocket, db, state, message, paper_id, session_id, user_id, enable_search)
+
+                state.running_tasks["rag_chat"] = asyncio.create_task(_run_rag_chat())
+
             elif msg_type == "deep_analyze":
                 text = data.get("text", "")
-                paper_id = data.get("paper_id")  # 获取 paper_id
+                paper_id = data.get("paper_id")
                 if not text or len(text.strip()) < 50:
                     await websocket.send_text(json.dumps({
                         "type": "error",
                         "message": "论文内容过短，请提供完整的论文文本"
                     }))
                     continue
-            
-                # 取消之前正在进行的深度分析
-                if "deep_analyze" in running_tasks:
-                    running_tasks["deep_analyze"].cancel()
-            
-                # 启动新的异步深度分析任务
-                running_tasks["deep_analyze"] = asyncio.create_task(handle_deep_analyze(text, paper_id))
-            
+
+                if "deep_analyze" in state.running_tasks:
+                    state.running_tasks["deep_analyze"].cancel()
+
+                state.running_tasks["deep_analyze"] = asyncio.create_task(
+                    handle_deep_analyze(websocket, state, text, paper_id)
+                )
+
             elif msg_type == "agent_chat":
                 message = data.get("message", "")
                 paper_id = data.get("paper_id")
-                paper_ids = data.get("paper_ids", [])  # 多论文场景
-                
+                paper_ids = data.get("paper_ids", [])
+
                 if not message:
                     await websocket.send_text(json.dumps({
                         "type": "error",
                         "message": "消息不能为空"
                     }))
                     continue
-                
-                # 取消之前正在进行的 Agent 问答
-                if "agent_chat" in running_tasks:
-                    running_tasks["agent_chat"].cancel()
-                
-                # 启动新的异步 Agent 问答任务
-                running_tasks["agent_chat"] = asyncio.create_task(
-                    handle_agent_chat(message, paper_id, paper_ids)
-                )
-            
+
+                if "agent_chat" in state.running_tasks:
+                    state.running_tasks["agent_chat"].cancel()
+
+                async def _run_agent_chat():
+                    async with AsyncSessionLocal() as db:
+                        await handle_agent_chat(websocket, db, state, message, paper_id, paper_ids)
+
+                state.running_tasks["agent_chat"] = asyncio.create_task(_run_agent_chat())
+
             elif msg_type == "cross_doc_chat":
                 message = data.get("message", "")
                 paper_ids = data.get("paper_ids", [])
                 session_id = data.get("session_id")
-                user_id = 1  # 使用默认用户（个人使用模式）
-                
+                user_id = state.current_user_id
+
                 if not message:
                     await websocket.send_text(json.dumps({
                         "type": "error",
                         "message": "消息不能为空"
                     }))
                     continue
-                
+
                 if not paper_ids or len(paper_ids) == 0:
                     await websocket.send_text(json.dumps({
                         "type": "error",
                         "message": "跨文档问答需要提供 paper_ids"
                     }))
                     continue
-                
-                # 取消之前正在进行的跨文档问答
-                if "cross_doc_chat" in running_tasks:
-                    running_tasks["cross_doc_chat"].cancel()
-                
-                # 启动新的异步跨文档问答任务
-                running_tasks["cross_doc_chat"] = asyncio.create_task(
-                    handle_cross_doc_chat(message, paper_ids, session_id, user_id)
-                )
+
+                if "cross_doc_chat" in state.running_tasks:
+                    state.running_tasks["cross_doc_chat"].cancel()
+
+                async def _run_cross_doc_chat():
+                    async with AsyncSessionLocal() as db:
+                        await handle_cross_doc_chat(websocket, db, state, message, paper_ids, session_id, user_id)
+
+                state.running_tasks["cross_doc_chat"] = asyncio.create_task(_run_cross_doc_chat())
 
             elif msg_type == "cancel":
-                for key in list(running_tasks.keys()):
-                    running_tasks[key].cancel()
-                    del running_tasks[key]
+                for key in list(state.running_tasks.keys()):
+                    state.running_tasks[key].cancel()
+                    del state.running_tasks[key]
                 await websocket.send_text(json.dumps({
                     "type": "cancelled",
                     "message": "已取消当前任务"
@@ -820,24 +339,24 @@ async def websocket_endpoint(websocket: WebSocket):
                 paper_id = data.get("paper_id")
                 paper_ids = data.get("paper_ids", [])
                 session_id = data.get("session_id")
-                user_id = 1
+                user_id = state.current_user_id
                 enable_search = data.get("enable_search", False)
 
-                if "unified" in running_tasks:
-                    running_tasks["unified"].cancel()
-                    del running_tasks["unified"]
-                
+                if "unified" in state.running_tasks:
+                    state.running_tasks["unified"].cancel()
+                    del state.running_tasks["unified"]
+
                 if not message:
                     await websocket.send_text(json.dumps({
                         "type": "error",
                         "message": "消息不能为空"
                     }))
                     continue
-                
+
                 # 使用关键词进行意图识别
                 from app.services.agent_service import classify_by_keywords
                 intent_result = classify_by_keywords(message)
-                
+
                 # 发送意图识别结果给前端
                 await websocket.send_text(json.dumps({
                     "type": "intent_detected",
@@ -846,22 +365,21 @@ async def websocket_endpoint(websocket: WebSocket):
                     "confidence": intent_result.get("confidence", "low"),
                     "matched": intent_result.get("matched", False)
                 }))
-                
+
                 # 根据意图路由到不同的处理函数
                 if intent_result.get("matched"):
                     tool = intent_result.get("tool")
-                    
+
                     if tool == "analyze_paper":
                         # 章节概述
                         if paper_id:
                             async with AsyncSessionLocal() as db:
-                                result = await db.execute(select(Paper).where(Paper.id == paper_id))
-                                paper = result.scalar_one_or_none()
+                                paper = await get_paper_by_id(db, paper_id)
                                 if paper:
-                                    paper_text = await get_paper_full_text(db, paper_id)
+                                    paper_text = await get_paper_text_preview(db, paper_id)
                                     if paper_text:
-                                        running_tasks["unified"] = asyncio.create_task(
-                                            handle_analyze(paper_text, paper_id)
+                                        state.running_tasks["unified"] = asyncio.create_task(
+                                            handle_analyze(websocket, state, paper_text, paper_id, task_key="unified")
                                         )
                                     else:
                                         await websocket.send_text(json.dumps({
@@ -878,18 +396,17 @@ async def websocket_endpoint(websocket: WebSocket):
                                 "type": "error",
                                 "message": "需要提供 paper_id"
                             }))
-                            
+
                     elif tool == "deep_analyze_paper":
                         # 深度分析
                         if paper_id:
                             async with AsyncSessionLocal() as db:
-                                result = await db.execute(select(Paper).where(Paper.id == paper_id))
-                                paper = result.scalar_one_or_none()
+                                paper = await get_paper_by_id(db, paper_id)
                                 if paper:
-                                    paper_text = await get_paper_full_text(db, paper_id)
+                                    paper_text = await get_paper_text_preview(db, paper_id)
                                     if paper_text:
-                                        running_tasks["unified"] = asyncio.create_task(
-                                            handle_deep_analyze(paper_text, paper_id)
+                                        state.running_tasks["unified"] = asyncio.create_task(
+                                            handle_deep_analyze(websocket, state, paper_text, paper_id, task_key="unified")
                                         )
                                     else:
                                         await websocket.send_text(json.dumps({
@@ -906,11 +423,10 @@ async def websocket_endpoint(websocket: WebSocket):
                                 "type": "error",
                                 "message": "需要提供 paper_id"
                             }))
-                            
+
                     elif tool == "cross_doc_chat":
                         # 跨文档问答
                         if not paper_ids or len(paper_ids) == 0:
-                            # 如果没有提供 paper_ids 但有 paper_id，使用单论文
                             if paper_id:
                                 paper_ids = [paper_id]
                             else:
@@ -919,11 +435,13 @@ async def websocket_endpoint(websocket: WebSocket):
                                     "message": "跨文档问答需要提供论文列表"
                                 }))
                                 continue
-                        
-                        running_tasks["unified"] = asyncio.create_task(
-                            handle_cross_doc_chat(message, paper_ids, session_id, user_id)
-                        )
-                        
+
+                        async def _run_unified_cross_doc():
+                            async with AsyncSessionLocal() as db:
+                                await handle_cross_doc_chat(websocket, db, state, message, paper_ids, session_id, user_id, task_key="unified")
+
+                        state.running_tasks["unified"] = asyncio.create_task(_run_unified_cross_doc())
+
                     elif tool == "rag_chat" or tool == "search_text":
                         # RAG 问答
                         if not paper_id:
@@ -932,19 +450,23 @@ async def websocket_endpoint(websocket: WebSocket):
                                 "message": "RAG 问答需要提供 paper_id"
                             }))
                             continue
-                        
-                        running_tasks["unified"] = asyncio.create_task(
-                            handle_rag_chat(message, paper_id, session_id, user_id, enable_search)
-                        )
+
+                        async def _run_unified_rag():
+                            async with AsyncSessionLocal() as db:
+                                await handle_rag_chat(websocket, db, state, message, paper_id, session_id, user_id, enable_search, task_key="unified")
+
+                        state.running_tasks["unified"] = asyncio.create_task(_run_unified_rag())
                     else:
                         # 其他工具，暂不支持直接调用，使用 RAG 问答
                         if not paper_id:
                             paper_id = paper_ids[0] if paper_ids else None
-                        
+
                         if paper_id:
-                            running_tasks["unified"] = asyncio.create_task(
-                                handle_rag_chat(message, paper_id, session_id, user_id, enable_search)
-                            )
+                            async def _run_unified_rag_fallback():
+                                async with AsyncSessionLocal() as db:
+                                    await handle_rag_chat(websocket, db, state, message, paper_id, session_id, user_id, enable_search, task_key="unified")
+
+                            state.running_tasks["unified"] = asyncio.create_task(_run_unified_rag_fallback())
                         else:
                             await websocket.send_text(json.dumps({
                                 "type": "error",
@@ -954,30 +476,32 @@ async def websocket_endpoint(websocket: WebSocket):
                     # 没有匹配到特定意图，使用 RAG 问答
                     if not paper_id:
                         paper_id = paper_ids[0] if paper_ids else None
-                    
+
                     if paper_id:
-                        running_tasks["unified"] = asyncio.create_task(
-                            handle_rag_chat(message, paper_id, session_id, user_id, enable_search)
-                        )
+                        async def _run_unified_rag_default():
+                            async with AsyncSessionLocal() as db:
+                                await handle_rag_chat(websocket, db, state, message, paper_id, session_id, user_id, enable_search, task_key="unified")
+
+                        state.running_tasks["unified"] = asyncio.create_task(_run_unified_rag_default())
                     else:
                         await websocket.send_text(json.dumps({
                             "type": "error",
                             "message": "请先选择一篇论文再进行问答"
                         }))
-            
+
             else:
                 await websocket.send_text(json.dumps({
                     "type": "error",
                     "message": f"未知消息类型: {msg_type}"
                 }))
-    
+
     except WebSocketDisconnect:
-        print("WebSocket client disconnected")
+        logger.info("WebSocket client disconnected")
     except Exception as e:
-        print(f"WebSocket error: {e}")
+        logger.error(f"WebSocket error: {e}")
     finally:
         # 清理所有运行中的任务
-        for task in running_tasks.values():
+        for task in state.running_tasks.values():
             task.cancel()
         try:
             await websocket.close()

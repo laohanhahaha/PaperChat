@@ -4,6 +4,7 @@
 """
 import json
 import asyncio
+import logging
 from datetime import datetime, timedelta
 from typing import List, Dict, Optional, Any
 from concurrent.futures import ThreadPoolExecutor
@@ -15,6 +16,8 @@ import numpy as np
 
 from app.models.memory import UserMemory
 from app.config import settings
+
+logger = logging.getLogger(__name__)
 
 
 # 记忆提取提示词
@@ -150,7 +153,7 @@ class MemoryService:
             return valid_memories
             
         except Exception as e:
-            print(f"记忆提取失败: {e}")
+            logger.error("记忆提取失败", exc_info=True)
             return []
     
     async def store_memory(
@@ -219,7 +222,7 @@ class MemoryService:
             return memory
             
         except Exception as e:
-            print(f"存储记忆失败: {e}")
+            logger.error("存储记忆失败", exc_info=True)
             await db.rollback()
             return None
     
@@ -296,7 +299,7 @@ class MemoryService:
             ]
             
         except Exception as e:
-            print(f"记忆召回失败: {e}")
+            logger.error("记忆召回失败", exc_info=True)
             return []
     
     def _calculate_time_decay(self, last_accessed: datetime) -> float:
@@ -352,7 +355,7 @@ class MemoryService:
             return profile
             
         except Exception as e:
-            print(f"构建用户画像失败: {e}")
+            logger.error("构建用户画像失败", exc_info=True)
             return {"user_id": user_id, "error": str(e)}
     
     async def decay_memories(self, user_id: int, db: AsyncSession):
@@ -380,7 +383,7 @@ class MemoryService:
             await db.commit()
             
         except Exception as e:
-            print(f"记忆衰减处理失败: {e}")
+            logger.error("记忆衰减处理失败", exc_info=True)
             await db.rollback()
     
     async def delete_memory(self, memory_id: int, user_id: int, db: AsyncSession) -> bool:
@@ -403,7 +406,7 @@ class MemoryService:
             return False
             
         except Exception as e:
-            print(f"删除记忆失败: {e}")
+            logger.error("删除记忆失败", exc_info=True)
             await db.rollback()
             return False
     
@@ -429,7 +432,7 @@ class MemoryService:
             return [mem.to_dict() for mem in memories]
             
         except Exception as e:
-            print(f"获取用户记忆失败: {e}")
+            logger.error("获取用户记忆失败", exc_info=True)
             return []
 
 

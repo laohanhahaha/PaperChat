@@ -324,6 +324,35 @@
   gap: 0.75rem;
 }
 
+/* 加载更多指示器 */
+.loadingMoreIndicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px;
+  color: var(--color-text-secondary, #6B6B6B);
+  font-size: 13px;
+  background: var(--color-bg-secondary, #F5F3EE);
+  border-bottom: 1px solid var(--color-border, rgba(92, 64, 51, 0.1));
+  flex-shrink: 0;
+}
+
+.loadingSpinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--color-border, rgba(92, 64, 51, 0.15));
+  border-top-color: var(--color-accent, #B8860B);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .welcome {
   text-align: center;
   color: var(--color-text-secondary);

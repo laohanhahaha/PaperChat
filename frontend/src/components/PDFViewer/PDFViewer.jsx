@@ -13,7 +13,7 @@ const PDFViewer = ({ file, pdfData, currentPage, onCanvasReady, children }) => {
   const containerRef = useRef(null);
   const [pdfDoc, setPdfDoc] = useState(null);
   const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0, scale: 1 });
-  const [totalPages, setTotalPages] = useState(0);
+  const [, setTotalPages] = useState(0);
 
   // 加载PDF文档
   useEffect(() => {
@@ -57,7 +57,7 @@ const PDFViewer = ({ file, pdfData, currentPage, onCanvasReady, children }) => {
       const pdfPageWidth = pdfData?.page_width || page.getViewport({ scale: 1 }).width;
       const pdfPageHeight = pdfData?.page_height || page.getViewport({ scale: 1 }).height;
       const scaleX = viewport.width / pdfPageWidth;
-      const scaleY = viewport.height / pdfPageHeight;
+      void scaleX; // Y缩放比例与X一致，直接使用scaleX
 
       const newCanvasSize = {
         width: viewport.width,

@@ -123,7 +123,7 @@ const AgentProgress = () => {
                 <div className={styles.planSection}>
                     <div className={styles.sectionTitle}>执行计划</div>
                     <div className={styles.stepsList}>
-                        {plan.map((step, index) => (
+                        {plan.map((step) => (
                             <div
                                 key={step.step}
                                 className={`${styles.stepItem} ${getStepClass(step.step)}`}

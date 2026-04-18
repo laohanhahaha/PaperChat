@@ -2,10 +2,14 @@
 
 统一处理应用中的各种异常，返回标准化的错误响应
 """
+import logging
+
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 from sqlalchemy.exc import SQLAlchemyError
+
+logger = logging.getLogger(__name__)
 
 
 async def validation_exception_handler(request: Request, exc: ValidationError):
@@ -43,7 +47,7 @@ async def http_exception_handler(request: Request, exc: HTTPException):
 async def sqlalchemy_exception_handler(request: Request, exc: SQLAlchemyError):
     """处理数据库异常"""
     # 记录详细错误日志（生产环境应该使用日志框架）
-    print(f"Database error: {exc}")
+    logger.error(f"Database error: {exc}", exc_info=True)
     
     return JSONResponse(
         status_code=500,
@@ -58,7 +62,7 @@ async def sqlalchemy_exception_handler(request: Request, exc: SQLAlchemyError):
 async def general_exception_handler(request: Request, exc: Exception):
     """处理所有其他未捕获的异常"""
     # 记录详细错误日志
-    print(f"Unexpected error: {exc}")
+    logger.error(f"Unexpected error: {exc}", exc_info=True)
     
     return JSONResponse(
         status_code=500,

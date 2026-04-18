@@ -16,7 +16,7 @@ from app.services.auth_service import get_current_user
 from app.services.knowledge_service import knowledge_service
 from pydantic import BaseModel, Field
 
-router = APIRouter(prefix="/api/knowledge", tags=["knowledge"])
+router = APIRouter(prefix="/api/v1/knowledge", tags=["knowledge"])
 
 
 # ============== 请求/响应模型 ==============

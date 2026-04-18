@@ -1,6 +1,9 @@
 import os
 import json
 import asyncio
+import logging
+
+logger = logging.getLogger(__name__)
 
 # 设置 HuggingFace 镜像（国内下载加速）- 必须在导入任何 huggingface 相关库之前设置
 os.environ['HF_ENDPOINT'] = 'https://hf-mirror.com'
@@ -134,9 +137,9 @@ async def websocket_endpoint(websocket: WebSocket):
                 }))
     
     except WebSocketDisconnect:
-        print("WebSocket client disconnected")
+        logger.info("WebSocket client disconnected")
     except Exception as e:
-        print(f"WebSocket error: {e}")
+        logger.error(f"WebSocket error: {e}")
     finally:
         # 清理所有运行中的任务
         for task in running_tasks.values():

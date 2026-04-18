@@ -3,11 +3,14 @@
 提供记忆上下文增强和对话后记忆提取功能
 """
 import asyncio
+import logging
 from typing import Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.memory_service import memory_service
+
+logger = logging.getLogger(__name__)
 
 
 async def enrich_context_with_memory(
@@ -55,7 +58,7 @@ async def enrich_context_with_memory(
 """
     
     except Exception as e:
-        print(f"记忆上下文增强失败: {e}")
+        logger.error("记忆上下文增强失败", exc_info=True)
         return ""
 
 
@@ -82,7 +85,7 @@ async def post_chat_memory_extraction(
             _extract_memory_async(user_id, question, answer, db)
         )
     except Exception as e:
-        print(f"启动记忆提取任务失败: {e}")
+        logger.error("启动记忆提取任务失败", exc_info=True)
 
 
 async def _extract_memory_async(
@@ -100,7 +103,7 @@ async def _extract_memory_async(
             await memory_service.extract_memory(user_id, question, answer, new_db)
             await new_db.commit()
     except Exception as e:
-        print(f"异步记忆提取失败: {e}")
+        logger.error("异步记忆提取失败", exc_info=True)
 
 
 async def build_memory_aware_prompt(

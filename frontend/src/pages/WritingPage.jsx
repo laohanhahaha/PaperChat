@@ -24,7 +24,7 @@ const parseCompareChunks = (chunks) => {
           dimensions.push(data);
         }
       }
-    } catch (e) {
+    } catch {
       // 忽略解析失败的行
     }
   }
@@ -43,19 +43,12 @@ function OutlineTab() {
   const { papers, fetchPapers } = usePaperStore();
   const { 
     isGenerating, 
-    streamingContent, 
     generateOutline 
   } = useWritingStore();
   
   useEffect(() => {
     fetchPapers();
   }, [fetchPapers]);
-  
-  useEffect(() => {
-    if (streamingContent) {
-      setOutput(streamingContent);
-    }
-  }, [streamingContent]);
   
   const handleGenerate = async () => {
     if (!topic.trim()) return;
@@ -191,13 +184,7 @@ function DraftTab() {
   const [output, setOutput] = useState('');
   const [isEditing, setIsEditing] = useState(false);
   
-  const { isGenerating, streamingContent, generateDraft } = useWritingStore();
-  
-  useEffect(() => {
-    if (streamingContent) {
-      setOutput(streamingContent);
-    }
-  }, [streamingContent]);
+  const { isGenerating, generateDraft } = useWritingStore();
   
   const handleGenerate = async () => {
     if (!outlineSection.trim()) return;
@@ -304,13 +291,7 @@ function PolishTab() {
   const [output, setOutput] = useState('');
   const [showCompare, setShowCompare] = useState(false);
   
-  const { isGenerating, streamingContent, polishText } = useWritingStore();
-  
-  useEffect(() => {
-    if (streamingContent) {
-      setOutput(streamingContent);
-    }
-  }, [streamingContent]);
+  const { isGenerating, polishText } = useWritingStore();
   
   const handlePolish = async () => {
     if (!inputText.trim()) return;
@@ -577,9 +558,10 @@ function CompareTab() {
   
   // 清理
   useEffect(() => {
+    const controller = abortControllerRef.current;
     return () => {
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
+      if (controller) {
+        controller.abort();
       }
     };
   }, []);
@@ -621,7 +603,7 @@ function CompareTab() {
       const headers = { 'Content-Type': 'application/json' };
       // 单用户模式，不需要 Authorization header
 
-      const response = await fetch('/api/analysis/compare', {
+      const response = await fetch('/api/v1/analysis/compare', {
         method: 'POST',
         headers,
         body: JSON.stringify({ paper_ids: selectedPaperIds }),
@@ -634,7 +616,7 @@ function CompareTab() {
         try {
           const errorData = await response.json();
           errorMsg = errorData.detail || errorMsg;
-        } catch (e) { /* ignore */ }
+        } catch { /* ignore */ }
         throw new Error(errorMsg);
       }
 
@@ -642,7 +624,6 @@ function CompareTab() {
       const decoder = new TextDecoder();
       let buffer = '';
       let hasReceivedData = false;
-      let streamDone = false;
 
       while (true) {
         const { done, value } = await reader.read();
@@ -662,13 +643,13 @@ function CompareTab() {
               hasReceivedData = true;
               setCompareChunks(prev => [...prev, data.chunk]);
             } else if (data.done) {
-              streamDone = true;
+              // 流结束
             } else if (data.error) {
               setError(data.error);
               setIsLoading(false);
               return;
             }
-          } catch (e) {
+          } catch {
             console.warn('[CompareTab] SSE 解析失败:', trimmed);
           }
         }
@@ -682,11 +663,11 @@ function CompareTab() {
             hasReceivedData = true;
             setCompareChunks(prev => [...prev, data.chunk]);
           } else if (data.done) {
-            streamDone = true;
+            // 流结束
           } else if (data.error) {
             setError(data.error);
           }
-        } catch (e) { /* ignore */ }
+        } catch { /* ignore */ }
       }
 
       if (!hasReceivedData) {
@@ -849,9 +830,10 @@ function ReviewTab() {
   
   // 清理
   useEffect(() => {
+    const controller = abortControllerRef.current;
     return () => {
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
+      if (controller) {
+        controller.abort();
       }
     };
   }, []);
@@ -884,7 +866,7 @@ function ReviewTab() {
       const headers = { 'Content-Type': 'application/json' };
       // 单用户模式，不需要 Authorization header
 
-      const response = await fetch('/api/analysis/review', {
+      const response = await fetch('/api/v1/analysis/review', {
         method: 'POST',
         headers,
         body: JSON.stringify({ paper_ids: selectedPaperIds }),
@@ -897,7 +879,7 @@ function ReviewTab() {
         try {
           const errorData = await response.json();
           errorMsg = errorData.detail || errorMsg;
-        } catch (e) { /* ignore */ }
+        } catch { /* ignore */ }
         throw new Error(errorMsg);
       }
 
@@ -905,7 +887,6 @@ function ReviewTab() {
       const decoder = new TextDecoder();
       let buffer = '';
       let hasReceivedData = false;
-      let streamDone = false;
 
       while (true) {
         const { done, value } = await reader.read();
@@ -925,13 +906,13 @@ function ReviewTab() {
               hasReceivedData = true;
               setReviewContent(prev => prev + data.chunk);
             } else if (data.done) {
-              streamDone = true;
+              // 流结束
             } else if (data.error) {
               setError(data.error);
               setIsLoading(false);
               return;
             }
-          } catch (e) {
+          } catch {
             console.warn('[ReviewTab] SSE 解析失败:', trimmed);
           }
         }
@@ -945,11 +926,11 @@ function ReviewTab() {
             hasReceivedData = true;
             setReviewContent(prev => prev + data.chunk);
           } else if (data.done) {
-            streamDone = true;
+            // 流结束
           } else if (data.error) {
             setError(data.error);
           }
-        } catch (e) { /* ignore */ }
+        } catch { /* ignore */ }
       }
 
       if (!hasReceivedData) {

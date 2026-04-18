@@ -13,17 +13,6 @@ const dimensionIcons = {
   knowledge_point: '🎯',
 };
 
-// 维度标题映射
-const dimensionTitles = {
-  overview: '研究概述',
-  research_question: '研究问题与目标',
-  methodology: '研究方法',
-  results: '核心结果与发现',
-  contributions: '研究贡献与创新点',
-  limitations: '局限性与未来方向',
-  knowledge_point: '核心知识点',
-};
-
 function ExplanationPanel({ 
   pdfText, 
   explanations, 

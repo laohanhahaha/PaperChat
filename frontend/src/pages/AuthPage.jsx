@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import useAuthStore from '../stores/authStore';
 import styles from './AuthPage.module.css';
@@ -27,11 +27,12 @@ function AuthPage() {
     }
   }, [isAuthenticated, navigate, location]);
 
-  // 清除错误
-  useEffect(() => {
+  // 清除错误 - 使用 handleLoginTypeChange 替代
+  const handleLoginTypeChange = useCallback((loginType) => {
     clearError();
     setFormError('');
-  }, [isLogin, clearError]);
+    setIsLogin(loginType);
+  }, [clearError]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -87,7 +88,7 @@ function AuthPage() {
       });
       if (result.success) {
         // 注册成功，自动切换到登录
-        setIsLogin(true);
+        handleLoginTypeChange(true);
         setFormData(prev => ({ ...prev, password: '', confirmPassword: '' }));
         setFormError('注册成功，请登录');
       } else {
@@ -97,14 +98,14 @@ function AuthPage() {
   };
 
   const toggleMode = () => {
-    setIsLogin(!isLogin);
+    const newLoginState = !isLogin;
+    handleLoginTypeChange(newLoginState);
     setFormData({
       username: '',
       email: '',
       password: '',
       confirmPassword: '',
     });
-    setFormError('');
   };
 
   return (
@@ -120,14 +121,14 @@ function AuthPage() {
         <div className={styles.tabContainer}>
           <button
             className={`${styles.tab} ${isLogin ? styles.tabActive : ''}`}
-            onClick={() => setIsLogin(true)}
+            onClick={() => handleLoginTypeChange(true)}
             type="button"
           >
             登录
           </button>
           <button
             className={`${styles.tab} ${!isLogin ? styles.tabActive : ''}`}
-            onClick={() => setIsLogin(false)}
+            onClick={() => handleLoginTypeChange(false)}
             type="button"
           >
             注册

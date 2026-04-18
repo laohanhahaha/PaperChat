@@ -5,7 +5,7 @@
 from datetime import datetime
 from typing import Optional, List
 
-from sqlalchemy import String, Text, DateTime, ForeignKey, Integer, JSON, func
+from sqlalchemy import String, Text, DateTime, ForeignKey, Integer, JSON, func, Index
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -54,6 +54,10 @@ class ChatMessage(Base):
     """聊天消息表模型"""
     
     __tablename__ = "chat_messages"
+    
+    __table_args__ = (
+        Index('ix_messages_session_created', 'session_id', 'created_at'),
+    )
     
     id: Mapped[int] = mapped_column(primary_key=True)
     session_id: Mapped[int] = mapped_column(ForeignKey("chat_sessions.id"), nullable=False)

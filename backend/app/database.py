@@ -14,7 +14,9 @@ class Base(DeclarativeBase):
 engine = create_async_engine(
     settings.DATABASE_URL,
     echo=settings.DEBUG,  # 调试模式下输出 SQL 语句
-    future=True
+    future=True,
+    pool_pre_ping=True,
+    connect_args={"timeout": 30, "check_same_thread": False},
 )
 
 # 创建异步会话工厂
@@ -59,10 +61,10 @@ async def init_db():
     async with AsyncSessionLocal() as db:
         from app.models.user import User
         from sqlalchemy import select, text
-        result = await db.execute(select(User).where(User.id == 1))
+        result = await db.execute(select(User).where(User.id == settings.DEFAULT_USER_ID))
         if not result.scalar_one_or_none():
             user = User(
-                id=1,
+                id=settings.DEFAULT_USER_ID,
                 username="default",
                 email="default@local.dev",
                 hashed_password="not-used",
@@ -71,24 +73,6 @@ async def init_db():
             db.add(user)
             await db.commit()
     
-    # 添加分析缓存字段迁移（兼容已有数据库）
-    from sqlalchemy import text
-    alter_statements = [
-        "ALTER TABLE papers ADD COLUMN section_analysis TEXT",
-        "ALTER TABLE papers ADD COLUMN deep_analysis TEXT",
-        "ALTER TABLE papers ADD COLUMN analysis_status VARCHAR(20) DEFAULT 'not_generated'",
-        "ALTER TABLE papers ADD COLUMN last_analyzed_at DATETIME",
-        "ALTER TABLE papers ADD COLUMN last_read_at DATETIME",
-    ]
-    for stmt in alter_statements:
-        try:
-            async with AsyncSessionLocal() as db:
-                await db.execute(text(stmt))
-                await db.commit()
-        except Exception:
-            # 列已存在，忽略错误
-            pass
-
 
 async def close_db():
     """

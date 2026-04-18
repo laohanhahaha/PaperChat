@@ -11,10 +11,10 @@ from app.services.auth_service import get_current_user
 from app.models.user import User
 from app.services.settings_service import settings_service
 
-router = APIRouter(tags=["settings"])
+router = APIRouter(prefix="/api/v1/settings", tags=["settings"])
 
 
-@router.get("/api/settings")
+@router.get("")
 async def get_settings(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -28,7 +28,7 @@ async def get_settings(
     return await settings_service.get_settings(current_user.id, db)
 
 
-@router.put("/api/settings")
+@router.put("")
 async def update_settings(
     settings: Dict[str, Dict[str, Any]],
     db: AsyncSession = Depends(get_db),
@@ -62,7 +62,7 @@ async def update_settings(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.post("/api/settings/reset")
+@router.post("/reset")
 async def reset_settings(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -80,7 +80,7 @@ async def reset_settings(
     return result
 
 
-@router.get("/api/settings/values")
+@router.get("/values")
 async def get_setting_values(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)

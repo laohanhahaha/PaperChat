@@ -5,12 +5,16 @@
 import os
 import json
 import asyncio
-from typing import List, Optional, Dict, Any
+import logging
+import time
+from typing import List, Optional, Dict, Any, Tuple
 from concurrent.futures import ThreadPoolExecutor
 
 import chromadb
 from chromadb.config import Settings as ChromaSettings
 from rank_bm25 import BM25Okapi
+
+logger = logging.getLogger(__name__)
 
 
 class RAGService:
@@ -39,8 +43,14 @@ class RAGService:
         self._model_lock = asyncio.Lock()
         
         # 线程池用于同步模型的异步调用
-        self._executor = ThreadPoolExecutor(max_workers=2)
+        self._executor = ThreadPoolExecutor(max_workers=min(4, (os.cpu_count() or 4) + 1))
         
+        # BM25 索引缓存（paper_id -> (bm25_instance, all_docs)）
+        self._bm25_cache: Dict[str, Tuple] = {}
+
+        # 索引状态追踪（正在索引的论文ID集合）
+        self._indexing_papers: set = set()
+
         # 运行时配置
         self._top_k = 5  # 默认检索数量
         self._chunk_size = 800  # 默认分块大小
@@ -157,6 +167,26 @@ class RAGService:
         
         return chunks
     
+    def _get_or_build_bm25(self, paper_id, collection):
+        """获取或构建 BM25 索引（带缓存）
+
+        首次调用时从 collection 获取所有文档并构建 BM25 索引，
+        后续调用直接返回缓存，避免重复构建（节省 100-500ms）。
+        """
+        cache_key = str(paper_id)
+        if cache_key in self._bm25_cache:
+            return self._bm25_cache[cache_key]
+
+        all_docs = collection.get()
+        tokenized = [doc.split() for doc in all_docs["documents"]]
+        bm25 = BM25Okapi(tokenized)
+        self._bm25_cache[cache_key] = (bm25, all_docs)
+        return bm25, all_docs
+
+    def invalidate_bm25_cache(self, paper_id):
+        """索引重建或删除时清除缓存"""
+        self._bm25_cache.pop(str(paper_id), None)
+
     async def index_paper(self, paper_id: int, text_blocks: List[Dict[str, Any]]) -> bool:
         """将论文文本块向量化并存入 ChromaDB
         
@@ -168,6 +198,7 @@ class RAGService:
             是否成功建立索引
         """
         try:
+            start_time = time.time()
             collection = self.get_or_create_collection(paper_id)
             
             # 检查是否已建立索引
@@ -201,10 +232,13 @@ class RAGService:
                 ids=ids
             )
             
+            duration_ms = round((time.time() - start_time) * 1000)
+            logger.info(f"RAG index_paper completed", extra={"paper_id": paper_id, "duration_ms": duration_ms, "chunk_count": len(chunks)})
+            
             return True
             
         except Exception as e:
-            print(f"索引论文 {paper_id} 失败: {e}")
+            logger.error(f"索引论文 {paper_id} 失败", exc_info=True)
             return False
     
     async def search(self, paper_id: int, query: str, top_k: int = None) -> List[Dict[str, Any]]:
@@ -222,6 +256,7 @@ class RAGService:
         """
         # 使用传入参数或配置值
         top_k = top_k or self._top_k
+        start_time = time.time()
         try:
             collection = self.get_or_create_collection(paper_id)
             
@@ -241,10 +276,8 @@ class RAGService:
                 n_results=min(top_k * 2, collection.count())
             )
             
-            # 2. BM25 关键词检索
-            all_docs = collection.get()
-            tokenized_corpus = [doc.split() for doc in all_docs["documents"]]
-            bm25 = BM25Okapi(tokenized_corpus)
+            # 2. BM25 关键词检索（使用缓存）
+            bm25, all_docs = self._get_or_build_bm25(paper_id, collection)
             bm25_scores = bm25.get_scores(query.split())
             
             # 3. 融合排序（RRF - Reciprocal Rank Fusion）
@@ -278,10 +311,13 @@ class RAGService:
                     "chunk_index": metadata.get("chunk_index", 0)
                 })
             
+            duration_ms = round((time.time() - start_time) * 1000)
+            logger.info(f"RAG search completed", extra={"paper_id": paper_id, "duration_ms": duration_ms, "results_count": len(results)})
+            
             return results
             
         except Exception as e:
-            print(f"检索论文 {paper_id} 失败: {e}")
+            logger.error(f"检索论文 {paper_id} 失败", exc_info=True)
             return []
     
     async def search_multiple_papers(self, paper_ids: List[int], query: str, top_k: int = 5) -> List[Dict[str, Any]]:
@@ -295,13 +331,20 @@ class RAGService:
         Returns:
             检索结果列表，包含 paper_id, text, score, pages, chunk_index
         """
+        # 并行检索所有论文
+        tasks = [self.search(pid, query, top_k=3) for pid in paper_ids]
+        results_list = await asyncio.gather(*tasks, return_exceptions=True)
+
+        # 合并结果，跳过异常
         all_results = []
-        for paper_id in paper_ids:
-            results = await self.search(paper_id, query, top_k=3)
-            for r in results:
+        for paper_id, result in zip(paper_ids, results_list):
+            if isinstance(result, Exception):
+                logger.error(f"跨论文检索 {paper_id} 失败: {result}")
+                continue
+            for r in result:
                 r["paper_id"] = paper_id
-            all_results.extend(results)
-        
+            all_results.extend(result)
+
         # 按分数排序
         all_results.sort(key=lambda x: x["score"], reverse=True)
         return all_results[:top_k]
@@ -315,12 +358,13 @@ class RAGService:
         Returns:
             是否成功删除
         """
+        self.invalidate_bm25_cache(paper_id)
         try:
             collection_name = f"paper_{paper_id}"
             self.chroma_client.delete_collection(name=collection_name)
             return True
         except Exception as e:
-            print(f"删除论文 {paper_id} 索引失败: {e}")
+            logger.error(f"删除论文 {paper_id} 索引失败", exc_info=True)
             return False
     
     async def reindex_paper(self, paper_id: int, text_blocks: List[Dict[str, Any]]) -> bool:
@@ -333,11 +377,40 @@ class RAGService:
         Returns:
             是否成功重建索引
         """
+        # 清除旧缓存
+        self.invalidate_bm25_cache(paper_id)
         # 先删除旧索引
         await self.delete_paper_index(paper_id)
         # 重新建立索引
         return await self.index_paper(paper_id, text_blocks)
     
+    def is_indexing(self, paper_id: int) -> bool:
+        """检查论文是否正在索引"""
+        return paper_id in self._indexing_papers
+
+    def try_start_indexing(self, paper_id: int) -> bool:
+        """原子检查+标记。若已在索引中返回 False，否则标记并返回 True"""
+        if paper_id in self._indexing_papers:
+            return False
+        self._indexing_papers.add(paper_id)
+        return True
+
+    def finish_indexing(self, paper_id: int):
+        """标记索引完成"""
+        self._indexing_papers.discard(paper_id)
+
+    async def reindex_paper_async(self, paper_id: int, blocks_data: list):
+        """异步重建索引（带状态追踪）
+        
+        注意：此方法由调用方负责调用 try_start_indexing 和 finish_indexing
+        如需原子操作，请使用 try_start_indexing + finish_indexing 组合
+        """
+        self._indexing_papers.add(paper_id)
+        try:
+            await self.reindex_paper(paper_id, blocks_data)
+        finally:
+            self._indexing_papers.discard(paper_id)
+
     async def get_index_status(self, paper_id: int) -> Dict[str, Any]:
         """获取论文索引状态
         

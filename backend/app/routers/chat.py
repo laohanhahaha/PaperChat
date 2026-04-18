@@ -5,17 +5,16 @@
 from typing import List, Optional
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, desc, and_
-from sqlalchemy.orm import selectinload
 
 from app.database import get_db
-from app.models.chat import ChatSession, ChatMessage
 from app.models.user import User
 from app.services.auth_service import get_current_user
+from app.repositories import session_repository, message_repository, paper_repository
+from app.rate_limiter import limiter
 
-router = APIRouter(prefix="/api/chat", tags=["chat"])
+router = APIRouter(prefix="/api/v1/chat", tags=["chat"])
 
 
 @router.get("/sessions")
@@ -29,24 +28,7 @@ async def get_sessions(
     Args:
         paper_id: 可选，筛选特定论文的会话
     """
-    query = select(ChatSession).where(ChatSession.user_id == current_user.id).options(
-        selectinload(ChatSession.messages)
-    )
-    
-    if paper_id is not None:
-        # 筛选包含该论文的会话（单论文或多论文）
-        from sqlalchemy import or_
-        query = query.where(
-            or_(
-                ChatSession.paper_id == paper_id,
-                ChatSession.paper_ids.contains([paper_id])
-            )
-        )
-    
-    query = query.order_by(desc(ChatSession.updated_at))
-    
-    result = await db.execute(query)
-    sessions = result.scalars().all()
+    sessions = await session_repository.get_sessions_by_user(db, current_user.id, paper_id=paper_id)
     
     return {
         "sessions": [
@@ -66,7 +48,9 @@ async def get_sessions(
 
 
 @router.post("/sessions")
+@limiter.limit("30/minute")
 async def create_session(
+    request: Request,
     paper_id: Optional[int] = None,
     paper_ids: Optional[list] = None,
     title: str = "新对话",
@@ -82,30 +66,14 @@ async def create_session(
     """
     # 如果提供了 paper_id，验证论文是否存在且属于当前用户
     if paper_id is not None:
-        from app.models.paper import Paper
-        result = await db.execute(
-            select(Paper).where(
-                and_(
-                    Paper.id == paper_id,
-                    Paper.user_id == current_user.id
-                )
-            )
-        )
-        paper = result.scalar_one_or_none()
+        paper = await paper_repository.get_paper_by_id_and_user(db, paper_id, current_user.id)
         if paper is None:
             # 论文不存在或不属于当前用户，创建无关联论文的会话
             paper_id = None
     
-    session = ChatSession(
-        user_id=current_user.id,
-        paper_id=paper_id,
-        paper_ids=paper_ids,
-        title=title
+    session = await session_repository.create_session(
+        db, user_id=current_user.id, paper_id=paper_id, paper_ids=paper_ids, title=title
     )
-    
-    db.add(session)
-    await db.commit()
-    await db.refresh(session)
     
     return {
         "id": session.id,
@@ -125,15 +93,7 @@ async def get_session(
     current_user: User = Depends(get_current_user)
 ):
     """获取会话详情（含消息历史）"""
-    result = await db.execute(
-        select(ChatSession).where(
-            and_(
-                ChatSession.id == session_id,
-                ChatSession.user_id == current_user.id
-            )
-        )
-    )
-    session = result.scalar_one_or_none()
+    session = await session_repository.get_session_by_id(db, session_id, user_id=current_user.id)
     
     if not session:
         raise HTTPException(
@@ -142,12 +102,7 @@ async def get_session(
         )
     
     # 加载消息
-    messages_result = await db.execute(
-        select(ChatMessage)
-        .where(ChatMessage.session_id == session_id)
-        .order_by(ChatMessage.created_at)
-    )
-    messages = messages_result.scalars().all()
+    messages = await message_repository.get_messages_by_session(db, session_id)
     
     return {
         "id": session.id,
@@ -179,17 +134,12 @@ async def get_session_messages(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """获取会话消息列表（分页）"""
+    """获取会话消息列表（分页）
+    
+    消息按时间倒序返回（最新的在前），前端需要 reverse 后展示
+    """
     # 验证会话归属
-    result = await db.execute(
-        select(ChatSession).where(
-            and_(
-                ChatSession.id == session_id,
-                ChatSession.user_id == current_user.id
-            )
-        )
-    )
-    session = result.scalar_one_or_none()
+    session = await session_repository.get_session_by_id(db, session_id, user_id=current_user.id)
     
     if not session:
         raise HTTPException(
@@ -198,14 +148,10 @@ async def get_session_messages(
         )
     
     # 查询消息
-    messages_result = await db.execute(
-        select(ChatMessage)
-        .where(ChatMessage.session_id == session_id)
-        .order_by(ChatMessage.created_at)
-        .offset(offset)
-        .limit(limit)
-    )
-    messages = messages_result.scalars().all()
+    messages = await message_repository.get_messages_by_session(db, session_id, limit=limit, offset=offset)
+    
+    # 获取消息总数
+    total = await message_repository.count_messages(db, session_id)
     
     return {
         "messages": [
@@ -218,7 +164,7 @@ async def get_session_messages(
             }
             for m in messages
         ],
-        "total": len(messages),
+        "total": total,
         "limit": limit,
         "offset": offset
     }
@@ -232,15 +178,7 @@ async def update_session(
     current_user: User = Depends(get_current_user)
 ):
     """更新会话标题"""
-    result = await db.execute(
-        select(ChatSession).where(
-            and_(
-                ChatSession.id == session_id,
-                ChatSession.user_id == current_user.id
-            )
-        )
-    )
-    session = result.scalar_one_or_none()
+    session = await session_repository.get_session_by_id(db, session_id, user_id=current_user.id)
     
     if not session:
         raise HTTPException(
@@ -248,10 +186,7 @@ async def update_session(
             detail="会话不存在"
         )
     
-    session.title = title
-    session.updated_at = datetime.utcnow()
-    await db.commit()
-    await db.refresh(session)
+    await session_repository.update_title(db, session, title)
     
     return {
         "id": session.id,
@@ -270,24 +205,13 @@ async def delete_session(
     current_user: User = Depends(get_current_user)
 ):
     """删除会话（级联删除所有消息）"""
-    result = await db.execute(
-        select(ChatSession).where(
-            and_(
-                ChatSession.id == session_id,
-                ChatSession.user_id == current_user.id
-            )
-        )
-    )
-    session = result.scalar_one_or_none()
+    deleted = await session_repository.delete_session(db, session_id, current_user.id)
     
-    if not session:
+    if not deleted:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="会话不存在"
         )
-    
-    await db.delete(session)
-    await db.commit()
     
     return {"message": "会话已删除"}
 
@@ -303,18 +227,7 @@ async def get_or_create_session_by_paper(
     用于切换论文时自动查找或创建会话
     """
     # 查找该论文的现有会话
-    result = await db.execute(
-        select(ChatSession)
-        .where(
-            and_(
-                ChatSession.user_id == current_user.id,
-                ChatSession.paper_id == paper_id
-            )
-        )
-        .order_by(desc(ChatSession.updated_at))
-        .limit(1)
-    )
-    session = result.scalar_one_or_none()
+    session = await session_repository.get_session_by_paper(db, current_user.id, paper_id)
     
     if session:
         return {
@@ -329,15 +242,9 @@ async def get_or_create_session_by_paper(
         }
     
     # 创建新会话
-    new_session = ChatSession(
-        user_id=current_user.id,
-        paper_id=paper_id,
-        title="新对话"
+    new_session = await session_repository.create_session(
+        db, user_id=current_user.id, paper_id=paper_id, title="新对话"
     )
-    
-    db.add(new_session)
-    await db.commit()
-    await db.refresh(new_session)
     
     return {
         "id": new_session.id,
@@ -352,7 +259,9 @@ async def get_or_create_session_by_paper(
 
 
 @router.post("/sessions/cross-doc")
+@limiter.limit("30/minute")
 async def create_cross_doc_session(
+    request: Request,
     paper_ids: list,
     title: str = "跨文档对话",
     db: AsyncSession = Depends(get_db),
@@ -370,21 +279,8 @@ async def create_cross_doc_session(
             detail="跨文档会话需要提供至少一个论文ID"
         )
     
-    # 验证所有论文 ID 是否有效且属于当前用户
-    from app.models.paper import Paper
-    valid_paper_ids = []
-    for pid in paper_ids:
-        result = await db.execute(
-            select(Paper).where(
-                and_(
-                    Paper.id == pid,
-                    Paper.user_id == current_user.id
-                )
-            )
-        )
-        paper = result.scalar_one_or_none()
-        if paper is not None:
-            valid_paper_ids.append(pid)
+    # 验证所有论文 ID 是否有效且属于当前用户（批量验证，替代逐条查询）
+    valid_paper_ids = await paper_repository.validate_papers(db, paper_ids, current_user.id)
     
     # 如果没有有效的论文 ID，返回错误
     if len(valid_paper_ids) == 0:
@@ -393,16 +289,9 @@ async def create_cross_doc_session(
             detail="没有有效的论文ID，请重新选择"
         )
     
-    session = ChatSession(
-        user_id=current_user.id,
-        paper_id=None,  # 跨文档会话不设置单论文ID
-        paper_ids=valid_paper_ids,
-        title=title
+    session = await session_repository.create_session(
+        db, user_id=current_user.id, paper_id=None, paper_ids=valid_paper_ids, title=title
     )
-    
-    db.add(session)
-    await db.commit()
-    await db.refresh(session)
     
     return {
         "id": session.id,

@@ -1,90 +1,83 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import usePaperStore from '../stores/paperStore';
-import useChatStore from '../stores/chatStore';
+import { useSessionStore } from '../stores/sessionStore';
+import { useMessageStore } from '../stores/messageStore';
+import { useChatConfigStore } from '../stores/chatConfigStore';
 import PaperSelector from '../components/PaperSelector/PaperSelector';
 import MarkdownContent from '../utils/MarkdownRenderer';
+import { INTENT_LABELS, SUGGESTIONS } from '../utils/chatConstants';
 import useWebSocket from '../hooks/useWebSocket';
+import { useTypewriter } from '../hooks/useTypewriter';
+import { useChatMessages } from '../hooks/useChatMessages';
+import { useSessionManager } from '../hooks/useSessionManager';
+import MessageItem from '../components/ChatPage/MessageItem';
+import SelectedPapersBar from '../components/ChatPage/SelectedPapersBar';
+import InputBar from '../components/ChatPage/InputBar';
+import SessionSidebar from '../components/ChatPage/SessionSidebar';
 import styles from './ChatPage.module.css';
-
-const CHAR_INTERVAL = 30;
 
 let msgIdCounter = 0;
 function genMsgId() {
   return `local-${Date.now()}-${++msgIdCounter}`;
 }
 
-const INTENT_LABELS = {
-  'chapter_overview': '📋 章节概述',
-  'deep_analysis': '🔬 深度分析',
-  'key_points': '🎯 核心知识点',
-  'comparison': '📊 对比分析',
-  'summary': '📝 摘要总结',
-  'translate': '🌐 翻译',
-  'explain': '📖 术语解释',
-  'cross_doc': '📚 跨文档问答',
-  'quality_assessment': '⚖️ 质量评估',
-  'outline': '📃 生成提纲',
-  'simple_qa': '💬 智能问答'
-};
-
-const SUGGESTIONS = [
-  { text: '帮我概述这篇论文的章节结构' },
-  { text: '对这篇论文进行深度分析' },
-  { text: '提取论文的核心知识点' },
-  { text: '生成论文摘要总结' },
-  { text: '翻译论文的关键段落' },
-  { text: '评估论文的研究质量' },
-];
-
 function ChatPage() {
   const { papers, fetchPapers } = usePaperStore();
+  
+  // Session Store
   const {
     sessions,
     currentSessionId,
-    messages,
-    sources,
-    selectedPaperIds,
-    crossDocSources,
-    isCrossDocMode,
-    enableSearch,
-    searchStatus,
     fetchSessions,
     createSession,
     deleteSession,
     setCurrentSession,
+    renameSession,
+    autoNameSession,
+    createCrossDocSession,
+  } = useSessionStore();
+  
+  // Message Store
+  const {
+    messages,
+    sources,
+    crossDocSources,
     fetchMessages,
     addMessage,
     updateLastMessage,
     setSources,
     setCrossDocSources,
+    hasMore,
+    loadingMore,
+    loadMoreMessages,
+  } = useMessageStore();
+  
+  // Chat Config Store
+  const {
+    selectedPaperIds,
+    isCrossDocMode,
+    enableSearch,
+    searchStatus,
     setCrossDocPapers,
     removePaperFromCrossDoc,
-    createCrossDocSession,
     toggleSearch,
     setSearchStatus,
     clearSearchState,
-    renameSession,
-    autoNameSession,
-  } = useChatStore();
+  } = useChatConfigStore();
 
   const [input, setInput] = useState('');
   const [selectedPaperId, setSelectedPaperId] = useState(null);
   const [showPaperSelector, setShowPaperSelector] = useState(false);
   const [isChatting, setIsChatting] = useState(false);
-  const [currentIntent, setCurrentIntent] = useState(null);
-  const [editingSessionId, setEditingSessionId] = useState(null);
-  const [editingTitle, setEditingTitle] = useState('');
   const { status: wsStatus, sendUnifiedChatMessage, sendCancel, onMessage } = useWebSocket();
 
-  const messagesEndRef = useRef(null);
   const textareaRef = useRef(null);
-  const fullContentRef = useRef('');
-  const displayedLenRef = useRef(0);
-  const timerRef = useRef(null);
-  const isDoneRef = useRef(false);
   const currentSessionIdRef = useRef(null);
   const isChattingRef = useRef(false);
+  const messageListRef = useRef(null);
 
+  // 初始化加载
   useEffect(() => {
     fetchPapers({ page: 1, page_size: 100 });
     fetchSessions();
@@ -95,160 +88,135 @@ function ChatPage() {
   }, [currentSessionId]);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
-
-  useEffect(() => {
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
       textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, 150) + 'px';
     }
   }, [input]);
 
-  const resetStreamState = useCallback(() => {
-    if (timerRef.current) {
-      clearTimeout(timerRef.current);
-      timerRef.current = null;
-    }
-    fullContentRef.current = '';
-    displayedLenRef.current = 0;
-    isDoneRef.current = false;
+  // ---- Typewriter ----
+  const handleComplete = useCallback(() => {
     setIsChatting(false);
     isChattingRef.current = false;
   }, []);
 
-  const tickFnRef = useRef(null);
+  const typewriter = useTypewriter(updateLastMessage, handleComplete, {
+    charInterval: 50,
+    charsPerTick: 3,
+  });
 
-  useEffect(() => {
-    tickFnRef.current = () => {
-      if (!isChattingRef.current) return;
-      const full = fullContentRef.current;
-      const currentLen = displayedLenRef.current;
-      if (currentLen < full.length) {
-        const step = Math.min(3, full.length - currentLen);
-        displayedLenRef.current = currentLen + step;
-        updateLastMessage(full.slice(0, displayedLenRef.current));
-        timerRef.current = setTimeout(() => tickFnRef.current?.(), CHAR_INTERVAL);
-      } else if (isDoneRef.current) {
-        updateLastMessage(full);
-        setIsChatting(false);
-        isChattingRef.current = false;
-        timerRef.current = null;
-      } else {
-        timerRef.current = null;
-      }
-    };
-  }, [updateLastMessage]);
+  const resetStreamState = useCallback(() => {
+    typewriter.stop();
+    typewriter.reset();
+    setIsChatting(false);
+    isChattingRef.current = false;
+  }, [typewriter]);
 
-  const startTick = useCallback(() => {
-    if (!timerRef.current && isChattingRef.current) {
-      timerRef.current = setTimeout(() => tickFnRef.current?.(), CHAR_INTERVAL);
-    }
-  }, []);
-
-  useEffect(() => {
-    const unsubs = [
-      onMessage('rag_chat_chunk', (msg) => {
-        if (!isChattingRef.current) return;
-        fullContentRef.current += msg.content;
-        startTick();
-      }),
-      onMessage('rag_sources', (msg) => { setSources(msg.sources || []); }),
-      onMessage('cross_doc_chunk', (msg) => {
-        if (!isChattingRef.current) return;
-        fullContentRef.current += msg.content;
-        startTick();
-      }),
-      onMessage('cross_doc_sources', (msg) => { setCrossDocSources(msg.sources || []); }),
-      onMessage('search_status', (msg) => { setSearchStatus(msg.status); }),
-      onMessage('analyze_chunk', (msg) => {
-        if (!isChattingRef.current) return;
-        fullContentRef.current += msg.data;
-        startTick();
-      }),
-      onMessage('deep_analyze_chunk', (msg) => {
-        if (!isChattingRef.current) return;
-        fullContentRef.current += msg.data;
-        startTick();
-      }),
-      onMessage('intent_detected', (msg) => {
-        setCurrentIntent({ intent: msg.intent, tool: msg.tool, confidence: msg.confidence, matched: msg.matched });
-      }),
-      onMessage('done', (msg) => {
-        if (['rag_chat', 'cross_doc_chat', 'analyze', 'deep_analyze'].includes(msg.channel)) {
-          isDoneRef.current = true;
-          if (isChattingRef.current) startTick();
-          if (msg.session_id && msg.session_id !== currentSessionIdRef.current) {
-            currentSessionIdRef.current = msg.session_id;
-            setCurrentSession(msg.session_id);
-            fetchSessions();
-          }
-        }
-      }),
-      onMessage('cancelled', () => {
-        if (fullContentRef.current) {
-          updateLastMessage(fullContentRef.current + '\n\n*[已停止]*');
-        } else {
-          updateLastMessage('*[已停止]*');
-        }
-        resetStreamState();
-      }),
-      onMessage('error', (msg) => {
-        console.error('问答错误:', msg.message);
-        updateLastMessage(msg.message || '请求失败，请重试。');
-        resetStreamState();
-      }),
-    ];
-    return () => {
-      unsubs.forEach(fn => fn());
-    };
-  }, [onMessage, startTick, setSources, setCrossDocSources, setSearchStatus, updateLastMessage, setCurrentSession, fetchSessions, resetStreamState]);
-
-  useEffect(() => {
-    return () => {
-      if (timerRef.current) {
-        clearTimeout(timerRef.current);
-        timerRef.current = null;
-      }
-    };
-  }, []);
-
+  // ---- 停止生成 ----
   const handleStop = useCallback(() => {
     sendCancel();
-    if (fullContentRef.current) {
-      updateLastMessage(fullContentRef.current + '\n\n*[已停止]*');
+    if (typewriter.fullContentRef.current) {
+      updateLastMessage(typewriter.fullContentRef.current + '\n\n*[已停止]*');
     } else {
       updateLastMessage('*[已停止]*');
     }
     resetStreamState();
-  }, [sendCancel, updateLastMessage, resetStreamState]);
+  }, [sendCancel, updateLastMessage, resetStreamState, typewriter]);
 
-  const handlePaperSelect = (selectedIds) => {
-    setCrossDocPapers(selectedIds);
-    if (selectedIds.length === 1) {
-      setSelectedPaperId(selectedIds[0]);
-    } else if (selectedIds.length > 1) {
-      setSelectedPaperId(null);
+  // ---- Hooks ----
+  const { currentIntent, setCurrentIntent } = useChatMessages({
+    onMessage,
+    typewriter,
+    isChattingRef,
+    currentSessionIdRef,
+    setSources,
+    setCrossDocSources,
+    setSearchStatus,
+    updateLastMessage,
+    setCurrentSession,
+    fetchSessions,
+    onCancelled: useCallback(() => {
+      if (typewriter.fullContentRef.current) {
+        updateLastMessage(typewriter.fullContentRef.current + '\n\n*[已停止]*');
+      } else {
+        updateLastMessage('*[已停止]*');
+      }
+      resetStreamState();
+    }, [typewriter, updateLastMessage, resetStreamState]),
+    resetStreamState,
+  });
+
+  const {
+    handleNewSession,
+    handleSwitchSession,
+    handleDeleteSession,
+    handleStartEditing,
+    handleSaveTitle,
+    handleEditKeyDown,
+    editingSessionId,
+    editingTitle,
+    setEditingTitle,
+  } = useSessionManager({
+    isChatting,
+    isCrossDocMode,
+    selectedPaperIds,
+    selectedPaperId,
+    currentSessionId,
+    handleStop,
+    resetStreamState,
+    createCrossDocSession,
+    createSession,
+    setCurrentSession,
+    fetchMessages,
+    deleteSession,
+    renameSession,
+  });
+
+  // ---- 虚拟滚动 ----
+  // eslint-disable-next-line react-hooks/incompatible-library -- TanStack Virtual's useVirtualizer returns non-memoizable functions; this is expected and handled by skipping compilation
+  const virtualizer = useVirtualizer({
+    count: messages.length,
+    getScrollElement: () => messageListRef.current,
+    estimateSize: () => 120,
+    overscan: 5,
+    measureElement: (el) => {
+      // 使用 getBoundingClientRect 获取精确高度
+      return el.getBoundingClientRect().height;
+    },
+  });
+
+  // 自动滚动到底部（仅在非加载更多时）
+  const lastMessageContent = messages[messages.length - 1]?.content;
+  useEffect(() => {
+    if (messages.length > 0 && !loadingMore) {
+      virtualizer.scrollToIndex(messages.length - 1, { align: 'end', behavior: 'smooth' });
     }
-    setShowPaperSelector(false);
-  };
+  }, [messages.length, lastMessageContent, virtualizer, loadingMore]);
+  
+  // ---- 滚动加载更多 ----
+  const handleScroll = useCallback((e) => {
+    const { scrollTop } = e.target;
+    // 滚动到顶部且还有更多消息时加载更多
+    if (scrollTop === 0 && hasMore && !loadingMore && currentSessionId) {
+      loadMoreMessages(currentSessionId);
+    }
+  }, [hasMore, loadingMore, currentSessionId, loadMoreMessages]);
 
+  // ---- 发送消息 ----
   const handleSend = (text) => {
     const trimmed = (text || input).trim();
     if (!trimmed || isChatting || wsStatus !== 'connected') return;
 
     const sessionId = currentSessionIdRef.current;
-    
-    // 检查是否需要自动命名（第一条消息且标题为"新对话"或"跨文档对话"）
     const currentSession = sessions.find(s => s.id === sessionId);
     const isFirstMessage = messages.length === 0;
-    const needsAutoName = currentSession && isFirstMessage && 
+    const needsAutoName = currentSession && isFirstMessage &&
       (currentSession.title === '新对话' || currentSession.title === '跨文档对话');
-    
+
     if (needsAutoName) {
       autoNameSession(sessionId, trimmed);
     }
-    
+
     addMessage({ id: genMsgId(), role: 'user', content: trimmed });
     addMessage({ id: genMsgId(), role: 'assistant', content: '' });
 
@@ -259,10 +227,8 @@ function ChatPage() {
     setCrossDocSources([]);
     clearSearchState();
     setCurrentIntent(null);
-    fullContentRef.current = '';
-    displayedLenRef.current = 0;
-    isDoneRef.current = false;
-    if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; }
+    typewriter.reset();
+    typewriter.start();
 
     sendUnifiedChatMessage(trimmed, selectedPaperId, selectedPaperIds, sessionId, enableSearch);
   };
@@ -274,67 +240,17 @@ function ChatPage() {
     }
   };
 
-  const handleNewSession = async () => {
-    if (isChatting) handleStop();
-    if (isCrossDocMode && selectedPaperIds.length > 0) {
-      await createCrossDocSession(selectedPaperIds, '跨文档对话');
-    } else {
-      await createSession(selectedPaperId, '新对话');
+  const handlePaperSelect = (selectedIds) => {
+    setCrossDocPapers(selectedIds);
+    if (selectedIds.length === 1) {
+      setSelectedPaperId(selectedIds[0]);
+    } else if (selectedIds.length > 1) {
+      setSelectedPaperId(null);
     }
-    resetStreamState();
+    setShowPaperSelector(false);
   };
 
-  const handleSwitchSession = async (sessionId) => {
-    if (sessionId === currentSessionId) return;
-    if (isChatting) handleStop();
-    resetStreamState();
-    setCurrentSession(sessionId);
-    await fetchMessages(sessionId);
-  };
-
-  const handleDeleteSession = async (e, sessionId) => {
-    e.stopPropagation();
-    if (window.confirm('确定要删除这个会话吗？')) {
-      if (sessionId === currentSessionId && isChatting) handleStop();
-      await deleteSession(sessionId);
-    }
-  };
-
-  // 开始编辑会话标题
-  const handleStartEditing = (e, session) => {
-    e.stopPropagation();
-    setEditingSessionId(session.id);
-    setEditingTitle(session.title);
-  };
-
-  // 保存编辑的标题
-  const handleSaveTitle = async () => {
-    if (!editingSessionId) return;
-    
-    const trimmedTitle = editingTitle.trim();
-    if (trimmedTitle) {
-      await renameSession(editingSessionId, trimmedTitle);
-    }
-    setEditingSessionId(null);
-    setEditingTitle('');
-  };
-
-  // 取消编辑
-  const handleCancelEditing = () => {
-    setEditingSessionId(null);
-    setEditingTitle('');
-  };
-
-  // 处理编辑时的键盘事件
-  const handleEditKeyDown = (e) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      handleSaveTitle();
-    } else if (e.key === 'Escape') {
-      handleCancelEditing();
-    }
-  };
-
+  // ---- 辅助函数 ----
   const getPaperTitle = (pid) => {
     const paper = papers.find(p => p.id === pid);
     return paper ? paper.title : `论文 ${pid}`;
@@ -363,170 +279,34 @@ function ChatPage() {
   const hasConversation = messages.length > 0;
   const hasPapers = selectedPaperIds.length > 0 || selectedPaperId;
 
-  const renderSelectedPapers = () => (
-    <div className={styles.selectedPapersBar}>
-      <div className={styles.selectedPapersContent}>
-        {selectedPaperIds.length > 0 ? (
-          <>
-            {selectedPaperIds.map(pid => (
-              <div key={pid} className={styles.selectedPaperTag}>
-                <span className={styles.selectedPaperTitle} title={getPaperTitle(pid)}>
-                  {getPaperTitle(pid)}
-                </span>
-                <button 
-                  className={styles.selectedPaperRemove} 
-                  onClick={() => removePaperFromCrossDoc(pid)}
-                  title="移除论文"
-                >
-                  ×
-                </button>
-              </div>
-            ))}
-            <button 
-              className={styles.addPaperChip} 
-              onClick={() => setShowPaperSelector(true)}
-              title="选择更多论文"
-            >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M12 5v14M5 12h14" />
-              </svg>
-              选择论文
-            </button>
-          </>
-        ) : (
-          <button 
-            className={styles.selectPaperPrompt} 
-            onClick={() => setShowPaperSelector(true)}
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-              <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" />
-            </svg>
-            <span>选择论文开始对话</span>
-          </button>
-        )}
-      </div>
-    </div>
-  );
-
-  const renderInputBar = (isWelcome) => (
-    <div className={styles.inputWrapper}>
-      <div className={styles.inputBox}>
-        <button
-          className={styles.attachBtn}
-          onClick={() => setShowPaperSelector(true)}
-          title="选择论文"
-        >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-            <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" />
-          </svg>
-        </button>
-        <textarea
-          ref={textareaRef}
-          className={styles.textarea}
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder={hasPapers ? '输入你的问题...' : '请先选择论文...'}
-          rows={1}
-          disabled={isChatting || (isWelcome && !hasPapers)}
-        />
-        {isChatting ? (
-          <button className={`${styles.sendBtn} ${styles.stopBtn}`} onClick={handleStop} title="停止生成">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-              <rect x="6" y="6" width="12" height="12" rx="2" />
-            </svg>
-          </button>
-        ) : (
-          <button
-            className={`${styles.sendBtn} ${input.trim() ? styles.sendBtnActive : ''}`}
-            onClick={() => handleSend()}
-            disabled={!input.trim() || (isWelcome && !hasPapers)}
-          >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" />
-            </svg>
-          </button>
-        )}
-      </div>
-      <div className={styles.inputActions}>
-        <label className={styles.searchToggle}>
-          <input type="checkbox" checked={enableSearch} onChange={toggleSearch} disabled={isChatting} />
-          <span className={styles.toggleDot}></span>
-          <span>联网搜索</span>
-        </label>
-        {searchStatus === 'searching' && (
-          <span className={styles.searchingHint}><span className={styles.dot}></span>搜索中...</span>
-        )}
-        {searchStatus === 'completed' && (
-          <span className={styles.searchDoneHint}>✓ 已获取网络信息</span>
-        )}
-        {wsStatus !== 'connected' && (
-          <span className={styles.wsHint}>⚠ 连接中...</span>
-        )}
-      </div>
-    </div>
-  );
-
   return (
     <div className={styles.layout}>
-      <aside className={styles.sidebar}>
-        <button className={styles.newChatBtn} onClick={handleNewSession}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M12 5v14M5 12h14" />
-          </svg>
-          新对话
-        </button>
-
-        <div className={styles.historySection}>
-          <div className={styles.sectionHeader}>
-            <span>历史对话</span>
-          </div>
-          <div className={styles.historyList}>
-            {sessions.map(session => (
-              <div
-                key={session.id}
-                className={`${styles.historyItem} ${session.id === currentSessionId ? styles.historyItemActive : ''}`}
-                onClick={() => handleSwitchSession(session.id)}
-              >
-                {editingSessionId === session.id ? (
-                  <input
-                    type="text"
-                    className={styles.titleEditInput}
-                    value={editingTitle}
-                    onChange={(e) => setEditingTitle(e.target.value)}
-                    onKeyDown={handleEditKeyDown}
-                    onBlur={handleSaveTitle}
-                    autoFocus
-                    onClick={(e) => e.stopPropagation()}
-                  />
-                ) : (
-                  <div 
-                    className={styles.historyTitle}
-                    onDoubleClick={(e) => handleStartEditing(e, session)}
-                    title="双击重命名"
-                  >
-                    {session.is_cross_doc && <span className={styles.crossBadge}>跨</span>}
-                    {session.title}
-                  </div>
-                )}
-                <div className={styles.historyMeta}>{formatTime(session.updated_at)}</div>
-                <button
-                  className={styles.historyDelete}
-                  onClick={(e) => handleDeleteSession(e, session.id)}
-                >×</button>
-              </div>
-            ))}
-            {sessions.length === 0 && (
-              <div className={styles.emptyHint}>暂无对话记录</div>
-            )}
-          </div>
-        </div>
-      </aside>
+      <SessionSidebar
+        sessions={sessions}
+        currentSessionId={currentSessionId}
+        editingSessionId={editingSessionId}
+        editingTitle={editingTitle}
+        setEditingTitle={setEditingTitle}
+        handleNewSession={handleNewSession}
+        handleSwitchSession={handleSwitchSession}
+        handleDeleteSession={handleDeleteSession}
+        handleStartEditing={handleStartEditing}
+        handleSaveTitle={handleSaveTitle}
+        handleEditKeyDown={handleEditKeyDown}
+        formatTime={formatTime}
+        styles={styles}
+      />
 
       <main className={styles.main}>
         {!hasConversation ? (
           <div className={styles.welcomeArea}>
-            {renderSelectedPapers()}
+            <SelectedPapersBar
+              selectedPaperIds={selectedPaperIds}
+              getPaperTitle={getPaperTitle}
+              removePaperFromCrossDoc={removePaperFromCrossDoc}
+              onOpenSelector={() => setShowPaperSelector(true)}
+              styles={styles}
+            />
             <div className={styles.welcomeCenter}>
               <h1 className={styles.welcomeTitle}>有什么我能帮你的吗？</h1>
               {!hasPapers && (
@@ -545,11 +325,33 @@ function ChatPage() {
                 ))}
               </div>
             </div>
-            {renderInputBar(true)}
+            <InputBar
+              input={input}
+              setInput={setInput}
+              textareaRef={textareaRef}
+              handleKeyDown={handleKeyDown}
+              handleSend={handleSend}
+              handleStop={handleStop}
+              isChatting={isChatting}
+              hasPapers={hasPapers}
+              isWelcome={true}
+              enableSearch={enableSearch}
+              toggleSearch={toggleSearch}
+              searchStatus={searchStatus}
+              wsStatus={wsStatus}
+              onOpenSelector={() => setShowPaperSelector(true)}
+              styles={styles}
+            />
           </div>
         ) : (
           <div className={styles.chatArea}>
-            {renderSelectedPapers()}
+            <SelectedPapersBar
+              selectedPaperIds={selectedPaperIds}
+              getPaperTitle={getPaperTitle}
+              removePaperFromCrossDoc={removePaperFromCrossDoc}
+              onOpenSelector={() => setShowPaperSelector(true)}
+              styles={styles}
+            />
             {currentIntent && currentIntent.matched && (
               <div className={styles.intentBar}>
                 <span className={styles.intentBadge}>
@@ -558,32 +360,43 @@ function ChatPage() {
               </div>
             )}
 
-            <div className={styles.messageList}>
-              {messages.map((msg, index) => (
-                <div
-                  key={msg.id || `msg-${index}`}
-                  className={`${styles.messageRow} ${msg.role === 'user' ? styles.messageUser : styles.messageAssistant}`}
-                >
-                  {msg.role === 'assistant' && (
-                    <div className={styles.avatar}>
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                        <path d="M12 2a7 7 0 017 7v1a7 7 0 01-14 0V9a7 7 0 017-7zM5.5 21a8.38 8.38 0 0113 0" />
-                      </svg>
-                    </div>
-                  )}
-                  <div className={styles.messageBubble}>
-                    {msg.content ? (
-                      msg.role === 'assistant' ? renderMarkdown(msg.content) : msg.content
-                    ) : (
-                      isChatting && index === messages.length - 1 ? (
-                        <div className={styles.thinkingDots}>
-                          <span></span><span></span><span></span>
-                        </div>
-                      ) : ''
-                    )}
-                  </div>
+            <div ref={messageListRef} className={styles.messageList} onScroll={handleScroll}>
+              {/* 加载更多指示器 */}
+              {loadingMore && (
+                <div className={styles.loadingMoreIndicator}>
+                  <span className={styles.loadingSpinner}></span>
+                  加载更多消息...
                 </div>
-              ))}
+              )}
+              <div style={{ height: virtualizer.getTotalSize(), width: '100%', position: 'relative' }}>
+                {virtualizer.getVirtualItems().map((virtualRow) => {
+                  const msg = messages[virtualRow.index];
+                  const isLast = virtualRow.index === messages.length - 1;
+                  return (
+                    <div
+                      key={msg.id || `msg-${virtualRow.index}`}
+                      data-index={virtualRow.index}
+                      ref={virtualizer.measureElement}
+                      style={{
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        width: '100%',
+                        transform: `translateY(${virtualRow.start}px)`,
+                      }}
+                    >
+                      <MessageItem
+                        msg={msg}
+                        index={virtualRow.index}
+                        isLast={isLast}
+                        isChatting={isChatting}
+                        renderMarkdown={renderMarkdown}
+                        styles={styles}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
 
               {!isChatting && messages.length > 0 && messages[messages.length - 1]?.role === 'assistant' && (
                 <>
@@ -615,10 +428,25 @@ function ChatPage() {
                   )}
                 </>
               )}
-              <div ref={messagesEndRef} />
             </div>
 
-            {renderInputBar(false)}
+            <InputBar
+              input={input}
+              setInput={setInput}
+              textareaRef={textareaRef}
+              handleKeyDown={handleKeyDown}
+              handleSend={handleSend}
+              handleStop={handleStop}
+              isChatting={isChatting}
+              hasPapers={hasPapers}
+              isWelcome={false}
+              enableSearch={enableSearch}
+              toggleSearch={toggleSearch}
+              searchStatus={searchStatus}
+              wsStatus={wsStatus}
+              onOpenSelector={() => setShowPaperSelector(true)}
+              styles={styles}
+            />
           </div>
         )}
       </main>

@@ -10,8 +10,9 @@ Agent 多步推理每多一步需要额外一次 LLM 调用：
 - 简单请求增加约 1s（只做意图识别后直接走 RAG 问答）
 - 复杂请求增加 3-8s
 """
-from typing import AsyncGenerator, Optional
+from typing import AsyncGenerator, Optional, List
 from abc import ABC, abstractmethod
+from dataclasses import dataclass, field
 import json
 
 from langchain_core.messages import SystemMessage, HumanMessage
@@ -20,17 +21,34 @@ from app.services.llm_service import llm_service
 from app.config import settings
 
 
+# ============ 工具上下文和结果定义 ============
+
+@dataclass
+class ToolContext:
+    """统一的工具执行上下文"""
+    db: Optional[object] = None  # AsyncSession
+    paper_id: Optional[int] = None
+    paper_ids: List[int] = field(default_factory=list)
+    user_id: Optional[int] = None
+    session_id: Optional[int] = None
+
+@dataclass
+class ToolResult:
+    """统一的工具返回值"""
+    success: bool = True
+    data: dict = field(default_factory=dict)
+    error: Optional[str] = None
+
+
 # ============ 工具基类 ============
 
 class Tool(ABC):
-    """工具基类"""
     name: str
     description: str
     
     @abstractmethod
-    async def execute(self, **kwargs) -> dict:
-        """执行工具，返回结果字典"""
-        raise NotImplementedError
+    async def execute(self, ctx: ToolContext, **kwargs) -> ToolResult:
+        pass
 
 
 # ============ 具体工具实现 ============
@@ -40,13 +58,17 @@ class SearchTextTool(Tool):
     name = "search_text"
     description = "在论文中搜索与查询相关的文本段落，返回最相关的文本块及其页码"
     
-    async def execute(self, paper_id: int, query: str, top_k: int = 5) -> dict:
+    async def execute(self, ctx: ToolContext, query: str, top_k: int = 5, paper_id: int = None) -> ToolResult:
         from app.services.rag_service import rag_service
-        results = await rag_service.search(paper_id, query, top_k)
-        return {
+        # 优先使用传入的paper_id，否则从ctx获取
+        pid = paper_id if paper_id is not None else ctx.paper_id
+        if pid is None:
+            return ToolResult(success=False, error="需要提供paper_id")
+        results = await rag_service.search(pid, query, top_k)
+        return ToolResult(data={
             "results": results,
             "count": len(results)
-        }
+        })
 
 
 class ExtractKeyPointsTool(Tool):
@@ -54,7 +76,7 @@ class ExtractKeyPointsTool(Tool):
     name = "extract_key_points"
     description = "从论文文本中提取核心知识点、关键概念和重要发现"
     
-    async def execute(self, text: str, max_points: int = 5) -> dict:
+    async def execute(self, ctx: ToolContext, text: str, max_points: int = 5) -> ToolResult:
         """使用 LLM 提取关键知识点"""
         prompt = f"""请从以下学术文本中提取 {max_points} 个核心知识点或关键概念。
 
@@ -87,13 +109,13 @@ class ExtractKeyPointsTool(Tool):
                 content = content.split("```")[1].split("```")[0]
             
             points = json.loads(content.strip())
-            return {"points": points, "count": len(points)}
+            return ToolResult(data={"points": points, "count": len(points)})
         except Exception as e:
-            return {
+            return ToolResult(success=False, error=str(e), data={
                 "points": [{"concept": "提取失败", "explanation": str(e), "importance": "N/A"}],
                 "count": 0,
                 "raw_response": response.content
-            }
+            })
 
 
 class SummarizeTool(Tool):
@@ -101,17 +123,17 @@ class SummarizeTool(Tool):
     name = "summarize"
     description = "对指定文本进行摘要，保留核心论点和关键数据"
     
-    async def execute(self, text: str, max_length: int = 500) -> dict:
+    async def execute(self, ctx: ToolContext, text: str, max_length: int = 500) -> ToolResult:
         """调用 llm_service 的 summarize_text 方法（非流式版本）"""
         # 收集流式结果
         full_summary = ""
         async for chunk in llm_service.summarize_text(text):
             full_summary += chunk
         
-        return {
+        return ToolResult(data={
             "summary": full_summary[:max_length] if max_length else full_summary,
             "full_summary": full_summary
-        }
+        })
 
 
 class TranslateTool(Tool):
@@ -119,17 +141,17 @@ class TranslateTool(Tool):
     name = "translate"
     description = "翻译学术文本，保留专业术语准确性"
     
-    async def execute(self, text: str, target_lang: str = "zh") -> dict:
+    async def execute(self, ctx: ToolContext, text: str, target_lang: str = "zh") -> ToolResult:
         """调用 llm_service 的 translate_text 方法"""
         full_translation = ""
         async for chunk in llm_service.translate_text(text, target_lang):
             full_translation += chunk
         
-        return {
+        return ToolResult(data={
             "translation": full_translation,
             "source_lang": "auto",
             "target_lang": target_lang
-        }
+        })
 
 
 class ExplainTermTool(Tool):
@@ -137,16 +159,16 @@ class ExplainTermTool(Tool):
     name = "explain_term"
     description = "解释学术术语，结合上下文提供准确解释"
     
-    async def execute(self, term: str, context: str = "") -> dict:
+    async def execute(self, ctx: ToolContext, term: str, context: str = "") -> ToolResult:
         """调用 llm_service 的 explain_term 方法"""
         full_explanation = ""
         async for chunk in llm_service.explain_term(term, context):
             full_explanation += chunk
         
-        return {
+        return ToolResult(data={
             "term": term,
             "explanation": full_explanation
-        }
+        })
 
 
 class GetPaperInfoTool(Tool):
@@ -154,21 +176,27 @@ class GetPaperInfoTool(Tool):
     name = "get_paper_info"
     description = "获取论文的元数据信息（标题、作者、摘要等）"
     
-    async def execute(self, paper_id: int, db=None) -> dict:
+    async def execute(self, ctx: ToolContext, paper_id: int = None) -> ToolResult:
         """从数据库查询论文信息"""
+        db = ctx.db
         if db is None:
-            return {"error": "需要提供数据库会话"}
+            return ToolResult(success=False, error="需要提供数据库会话")
+        
+        # 优先使用传入的paper_id，否则从ctx获取
+        pid = paper_id if paper_id is not None else ctx.paper_id
+        if pid is None:
+            return ToolResult(success=False, error="需要提供paper_id")
         
         from sqlalchemy import select
         from app.models.paper import Paper
         
-        result = await db.execute(select(Paper).where(Paper.id == paper_id))
+        result = await db.execute(select(Paper).where(Paper.id == pid))
         paper = result.scalar_one_or_none()
         
         if not paper:
-            return {"error": f"未找到论文 ID: {paper_id}"}
+            return ToolResult(success=False, error=f"未找到论文 ID: {pid}")
         
-        return {
+        return ToolResult(data={
             "id": paper.id,
             "title": paper.title,
             "authors": paper.authors,
@@ -177,7 +205,7 @@ class GetPaperInfoTool(Tool):
             "page_count": paper.page_count,
             "category": paper.category,
             "reading_status": paper.reading_status
-        }
+        })
 
 
 class CompareContentTool(Tool):
@@ -185,7 +213,7 @@ class CompareContentTool(Tool):
     name = "compare_content"
     description = "对比多篇论文的特定内容维度"
     
-    async def execute(self, paper_contents: list[dict], dimension: str = "general") -> dict:
+    async def execute(self, ctx: ToolContext, paper_contents: list[dict], dimension: str = "general") -> ToolResult:
         """
         paper_contents: [{"title": "论文1", "text": "内容"}, ...]
         dimension: 对比维度 (methodology/results/contributions/general)
@@ -203,11 +231,11 @@ class CompareContentTool(Tool):
         async for chunk in llm_service.compare_papers(papers_text):
             full_comparison += chunk
         
-        return {
+        return ToolResult(data={
             "dimension": dimension,
             "comparison": full_comparison,
             "paper_count": len(paper_contents)
-        }
+        })
 
 
 class GenerateOutlineTool(Tool):
@@ -215,8 +243,11 @@ class GenerateOutlineTool(Tool):
     name = "generate_outline"
     description = "基于论文内容生成研究报告或文献综述的提纲"
     
-    async def execute(self, topic: str, paper_ids: list[int] = None, context: str = "") -> dict:
+    async def execute(self, ctx: ToolContext, topic: str, context: str = "", paper_ids: list[int] = None) -> ToolResult:
         """使用 LLM 生成提纲"""
+        # 优先使用传入的paper_ids，否则从ctx获取
+        pids = paper_ids if paper_ids is not None else ctx.paper_ids
+        
         prompt = f"""请为以下主题生成一份详细的研究报告提纲：
 
 主题：{topic}
@@ -238,11 +269,11 @@ class GenerateOutlineTool(Tool):
         
         response = await llm_service.llm.ainvoke(messages)
         
-        return {
+        return ToolResult(data={
             "topic": topic,
             "outline": response.content,
-            "paper_count": len(paper_ids) if paper_ids else 0
-        }
+            "paper_count": len(pids) if pids else 0
+        })
 
 
 class AssessQualityTool(Tool):
@@ -250,7 +281,7 @@ class AssessQualityTool(Tool):
     name = "assess_quality"
     description = "评估论文的研究质量和方法论严谨性"
     
-    async def execute(self, paper_text: str, paper_title: str = "") -> dict:
+    async def execute(self, ctx: ToolContext, paper_text: str, paper_title: str = "") -> ToolResult:
         """使用 LLM 评估论文质量"""
         prompt = f"""请对以下学术论文进行质量评估：
 
@@ -300,14 +331,13 @@ class AssessQualityTool(Tool):
                 content = content.split("```")[1].split("```")[0]
             
             assessment = json.loads(content.strip())
-            return assessment
+            return ToolResult(data=assessment)
         except Exception as e:
-            return {
-                "error": str(e),
+            return ToolResult(success=False, error=str(e), data={
                 "raw_response": response.content,
                 "scores": {},
                 "assessment": "评估解析失败"
-            }
+            })
 
 
 # ============ Agent 核心服务 ============
@@ -629,6 +659,19 @@ class AgentService:
         """
         step_results = {}
         db = context.get("db")
+        paper_id = context.get("paper_id")
+        paper_ids = context.get("paper_ids", [])
+        user_id = context.get("user_id")
+        session_id = context.get("session_id")
+        
+        # 创建统一的工具执行上下文
+        ctx = ToolContext(
+            db=db,
+            paper_id=paper_id,
+            paper_ids=paper_ids,
+            user_id=user_id,
+            session_id=session_id
+        )
         
         for step in plan:
             step_num = step.get("step", 1)
@@ -650,11 +693,14 @@ class AgentService:
                 if not tool:
                     result = {"error": f"未知工具: {tool_name}"}
                 else:
-                    # 注入数据库会话
-                    if tool_name == "get_paper_info" and db:
-                        params["db"] = db
-                    
-                    result = await tool.execute(**params)
+                    tool_result = await tool.execute(ctx, **params)
+                    # 将 ToolResult 转换为 dict 以保持兼容性
+                    result = {
+                        "success": tool_result.success,
+                        **tool_result.data
+                    }
+                    if tool_result.error:
+                        result["error"] = tool_result.error
                 
                 step_results[step_num] = result
                 
@@ -663,11 +709,11 @@ class AgentService:
                     "type": "step_result",
                     "step": step_num,
                     "result": result,
-                    "status": "success"
+                    "status": "success" if result.get("success", True) and not result.get("error") else "error"
                 }
                 
             except Exception as e:
-                error_result = {"error": str(e)}
+                error_result = {"error": str(e), "success": False}
                 step_results[step_num] = error_result
                 yield {
                     "type": "step_result",

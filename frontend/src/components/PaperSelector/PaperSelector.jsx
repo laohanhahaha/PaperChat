@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import usePaperStore from '../../stores/paperStore';
 import styles from './PaperSelector.module.css';
 
@@ -31,9 +31,24 @@ function PaperSelector({ isOpen, onClose, onConfirm, initialSelectedIds = [], ma
     }
   }, [isOpen, papers.length, fetchPapers]);
 
-  // 同步初始选中状态
+  // 使用 ref 来追踪之前的 isOpen 和 initialSelectedIds 状态
+  const prevIsOpenRef = useRef(isOpen);
+  const prevSelectedIdsRef = useRef(initialSelectedIds);
+  
   useEffect(() => {
-    setSelectedIds(initialSelectedIds);
+    // 只在从关闭到打开时同步初始选中状态，且只在 initialSelectedIds 真正变化时
+    const isOpening = isOpen && !prevIsOpenRef.current;
+    const selectedIdsChanged = JSON.stringify(prevSelectedIdsRef.current) !== JSON.stringify(initialSelectedIds);
+    
+    if (isOpening && selectedIdsChanged) {
+      prevSelectedIdsRef.current = initialSelectedIds;
+      // 使用 setTimeout 将 setState 移出渲染阶段
+      const timer = setTimeout(() => {
+        setSelectedIds(initialSelectedIds);
+      }, 0);
+      return () => clearTimeout(timer);
+    }
+    prevIsOpenRef.current = isOpen;
   }, [initialSelectedIds, isOpen]);
 
   // 过滤论文
