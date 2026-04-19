@@ -6,7 +6,7 @@
     python run.py
 
 或直接使用 uvicorn:
-    uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+    uvicorn app.main:app --reload --host 0.0.0.0 --port 8000 --ws-per-message-deflate
 """
 import os
 
@@ -26,5 +26,6 @@ if __name__ == "__main__":
         host="0.0.0.0",
         port=8000,
         reload=True,
-        log_level="info"
+        log_level="info",
+        ws_per_message_deflate=True
     )
