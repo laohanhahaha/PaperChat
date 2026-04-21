@@ -30,6 +30,7 @@ class User(Base):
     memories: Mapped[List["UserMemory"]] = relationship("UserMemory", back_populates="user", cascade="all, delete-orphan")
     message_feedbacks: Mapped[List["MessageFeedback"]] = relationship("MessageFeedback", back_populates="user", cascade="all, delete-orphan")
     knowledge_cards: Mapped[List["KnowledgeCard"]] = relationship("KnowledgeCard", back_populates="user", cascade="all, delete-orphan")
+    agent_metrics: Mapped[List["AgentMetric"]] = relationship("AgentMetric", back_populates="user", cascade="all, delete-orphan")
     
     def __repr__(self) -> str:
         return f"<User(id={self.id}, username={self.username}, email={self.email})>"

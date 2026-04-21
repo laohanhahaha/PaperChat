@@ -5,8 +5,8 @@
 import json
 import asyncio
 
-from app.services.agent_service import agent_service
-from app.routers.ws import ChunkBuffer
+from app.services.agent.agent_service import agent_service
+from app.handlers.ws_utils import ChunkBuffer
 
 
 async def handle_agent_chat(websocket, db, state, message, paper_id, paper_ids, task_key="agent_chat"):

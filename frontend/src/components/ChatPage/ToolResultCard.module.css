@@ -1,0 +1,209 @@
+/* ===== ToolResultCard 学术精致风样式 ===== */
+
+.card {
+  margin-top: 10px;
+  border: 1px solid var(--color-border-strong, rgba(92, 64, 51, 0.12));
+  border-radius: 0.5rem;
+  background: var(--color-card-bg, #FFFFFF);
+  box-shadow: var(--shadow-sm, 0 1px 3px rgba(92, 64, 51, 0.06));
+  overflow: hidden;
+  font-family: var(--sans, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif);
+}
+
+.cardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 14px;
+  background: var(--color-accent-bg, rgba(184, 134, 11, 0.08));
+  border-bottom: 1px solid var(--color-border, rgba(92, 64, 51, 0.08));
+}
+
+.cardTitle {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-accent, #B8860B);
+  letter-spacing: 0.3px;
+}
+
+.cardCount {
+  font-size: 11px;
+  color: var(--color-text-muted, #A89F94);
+}
+
+/* ===== 复制按钮 ===== */
+.copyBtn {
+  padding: 3px 10px;
+  border: 1px solid var(--color-border-strong, rgba(92, 64, 51, 0.2));
+  border-radius: 0.25rem;
+  background: var(--color-bg-primary, #FAFAF6);
+  color: var(--color-text-secondary, #7A6E62);
+  font-size: 11px;
+  font-family: var(--sans, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  line-height: 1.4;
+}
+
+.copyBtn:hover {
+  border-color: var(--color-accent, #B8860B);
+  color: var(--color-accent, #B8860B);
+  background: rgba(184, 134, 11, 0.06);
+}
+
+/* ===== Writing 类型正文 ===== */
+.writingBody {
+  padding: 12px 14px;
+  font-size: 13px;
+  line-height: 1.75;
+  color: var(--color-text-primary, #2C2C2C);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.writingBody::-webkit-scrollbar {
+  width: 4px;
+}
+
+.writingBody::-webkit-scrollbar-thumb {
+  background: var(--color-border, rgba(92, 64, 51, 0.15));
+  border-radius: 4px;
+}
+
+/* ===== Citation 引用样式 ===== */
+.citationBody {
+  padding: 12px 14px;
+  font-size: 13px;
+  line-height: 1.75;
+  color: var(--color-text-primary, #2C2C2C);
+  border-left: 3px solid var(--color-accent, #B8860B);
+  background: rgba(184, 134, 11, 0.04);
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-style: italic;
+}
+
+/* ===== 确认样式 (save_card) ===== */
+.confirmBody {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px;
+}
+
+.checkIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--color-success, #4A7C59);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.confirmText {
+  font-size: 13px;
+  color: var(--color-text-primary, #2C2C2C);
+  line-height: 1.5;
+}
+
+/* ===== 列表容器 ===== */
+.cardList {
+  padding: 6px 0;
+}
+
+/* ===== Knowledge 知识卡片 ===== */
+.knowledgeItem {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--color-border, rgba(92, 64, 51, 0.06));
+  transition: background 0.15s;
+}
+
+.knowledgeItem:last-child {
+  border-bottom: none;
+}
+
+.knowledgeItem:hover {
+  background: var(--color-card-hover-bg, rgba(184, 134, 11, 0.03));
+}
+
+.knowledgeTitle {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-primary, #2C2C2C);
+  line-height: 1.5;
+}
+
+.knowledgeSummary {
+  font-size: 12px;
+  color: var(--color-text-secondary, #7A6E62);
+  line-height: 1.6;
+  margin-top: 4px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.tagList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.tag {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 0.25rem;
+  background: var(--color-tag-bg, rgba(74, 124, 89, 0.08));
+  color: var(--color-tag-text, #4A7C59);
+  border: 1px solid var(--color-tag-border, rgba(74, 124, 89, 0.2));
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+/* ===== Papers 论文列表 ===== */
+.paperItem {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--color-border, rgba(92, 64, 51, 0.06));
+  transition: background 0.15s;
+}
+
+.paperItem:last-child {
+  border-bottom: none;
+}
+
+.paperItem:hover {
+  background: var(--color-card-hover-bg, rgba(184, 134, 11, 0.03));
+}
+
+.paperTitle {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-primary, #2C2C2C);
+  line-height: 1.5;
+}
+
+.paperMeta {
+  font-size: 12px;
+  color: var(--color-text-secondary, #7A6E62);
+  margin-top: 2px;
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.paperTime {
+  font-size: 11px;
+  color: var(--color-text-muted, #A89F94);
+  margin-top: 2px;
+}

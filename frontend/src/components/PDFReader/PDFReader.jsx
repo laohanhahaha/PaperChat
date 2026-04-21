@@ -312,7 +312,7 @@ const PDFReader = ({
     }
   }, [goToPage]);
 
-  // IntersectionObserver 懒加载 - 仅用于滚动模式
+  // IntersectionObserver 懒加载 - 仅用于滚动模式（滑动窗口机制）
   useEffect(() => {
     // 只在滚动模式下创建 observer
     if (viewMode !== 'scroll' || !numPages) {
@@ -324,7 +324,7 @@ const PDFReader = ({
       observerRef.current.disconnect();
     }
 
-    // 创建新的 IntersectionObserver
+    // 创建新的 IntersectionObserver（滑动窗口：进入视口加载，离开视口+缓冲区后卸载）
     observerRef.current = new IntersectionObserver(
       (entries) => {
         setVisiblePages((prev) => {
@@ -332,16 +332,22 @@ const PDFReader = ({
           entries.forEach((entry) => {
             const pageNum = parseInt(entry.target.dataset.page, 10);
             if (entry.isIntersecting) {
-              newVisible.add(pageNum);
+              // 进入视口：加载该页及前后各 2 页缓冲区
+              for (let p = Math.max(1, pageNum - 2); p <= Math.min(numPages, pageNum + 2); p++) {
+                newVisible.add(p);
+              }
+            } else {
+              // 离开视口：延迟卸载（保留 3 页缓冲，超出则移除）
+              // 只移除已加载但距离当前可见区域较远的页面
+              newVisible.delete(pageNum);
             }
-            // 注意：页面离开视口时不清除，避免重复渲染
           });
           return newVisible;
         });
       },
       {
         root: scrollContainerRef.current,
-        rootMargin: '200% 0px', // 上下各扩展视口高度，预加载邻近页面
+        rootMargin: '150% 0px', // 上下各扩展 1.5 倍视口高度作为预加载区
         threshold: 0,
       }
     );

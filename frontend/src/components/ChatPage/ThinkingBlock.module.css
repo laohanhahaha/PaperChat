@@ -1,0 +1,89 @@
+.thinkingBlock {
+  margin-bottom: 8px;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.thinkingHeader {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  width: 100%;
+  border: none;
+  background: var(--color-bg-secondary, #F5F3EE);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--color-text-tertiary, #999);
+  transition: all 0.15s ease;
+  font-family: inherit;
+}
+
+.thinkingHeader:hover {
+  background: rgba(92, 64, 51, 0.08);
+}
+
+.thinkingIcon {
+  display: flex;
+  align-items: center;
+  color: var(--color-accent, #B8860B);
+}
+
+.thinkingLabel {
+  flex: 1;
+  text-align: left;
+}
+
+.arrow {
+  transition: transform 0.2s ease;
+  opacity: 0.5;
+}
+
+.arrowExpanded {
+  transform: rotate(180deg);
+}
+
+/* 思考中脉冲动画 */
+.pulseIcon {
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+/* 展开内容 */
+.thinkingContent {
+  padding: 8px 12px 8px 16px;
+  border-left: 2px solid var(--color-accent, rgba(184, 134, 11, 0.3));
+  margin-left: 10px;
+  margin-top: 4px;
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; max-height: 0; }
+  to { opacity: 1; max-height: 1000px; }
+}
+
+.thinkingText {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--color-text-tertiary, #888);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* 打字光标 */
+.cursor {
+  animation: blink 0.8s step-end infinite;
+  color: var(--color-accent, #B8860B);
+  font-weight: bold;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}

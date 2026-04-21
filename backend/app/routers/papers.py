@@ -252,13 +252,10 @@ async def upload_paper(
         await db.commit()
         await db.refresh(paper)
         
-        # 异步建立向量索引（不阻塞上传响应）
-        asyncio.create_task(rag_service.index_paper(paper.id, text_blocks))
-
-        # 发布论文上传事件（fire-and-forget）
+        # 发布论文上传事件（携带 text_blocks）——事件订阅者将异步执行索引构建 + 知识图谱构建
         asyncio.create_task(event_bus.publish(Event(
             type=EventTypes.PAPER_UPLOADED,
-            data={"paper_id": paper.id, "user_id": current_user.id}
+            data={"paper_id": paper.id, "user_id": current_user.id, "text_blocks": text_blocks}
         )))
 
         return PaperResponse.model_validate(paper)
@@ -639,13 +636,10 @@ async def batch_upload_papers(
                 await db.commit()
                 await db.refresh(paper)
                 
-                # 异步建立向量索引
-                asyncio.create_task(rag_service.index_paper(paper.id, text_blocks))
-
-                # 发布论文上传事件（fire-and-forget）
+                # 发布论文上传事件（携带 text_blocks）——事件订阅者将异步执行索引构建 + 知识图谱构建
                 asyncio.create_task(event_bus.publish(Event(
                     type=EventTypes.PAPER_UPLOADED,
-                    data={"paper_id": paper.id, "user_id": current_user.id}
+                    data={"paper_id": paper.id, "user_id": current_user.id, "text_blocks": text_blocks}
                 )))
 
                 results.append({
@@ -805,13 +799,10 @@ async def batch_upload_zip(
                         await db.commit()
                         await db.refresh(paper)
                         
-                        # 异步建立向量索引
-                        asyncio.create_task(rag_service.index_paper(paper.id, text_blocks))
-
-                        # 发布论文上传事件（fire-and-forget）
+                        # 发布论文上传事件（携带 text_blocks）——事件订阅者将异步执行索引构建 + 知识图谱构建
                         asyncio.create_task(event_bus.publish(Event(
                             type=EventTypes.PAPER_UPLOADED,
-                            data={"paper_id": paper.id, "user_id": current_user.id}
+                            data={"paper_id": paper.id, "user_id": current_user.id, "text_blocks": text_blocks}
                         )))
 
                         results.append({

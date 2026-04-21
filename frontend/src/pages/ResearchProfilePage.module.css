@@ -1,0 +1,468 @@
+/* 研究画像页面样式 - 学术精致风 */
+
+.container {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background: #f8fafc;
+  color: var(--color-text-primary);
+}
+
+/* ===== 页面标题 ===== */
+.header {
+  padding: 24px 32px;
+  background: var(--color-bg-secondary);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.title {
+  margin: 0 0 8px;
+  font-size: 1.75rem;
+  font-weight: 600;
+  color: var(--color-accent);
+  font-family: var(--heading, Georgia, serif);
+}
+
+.subtitle {
+  font-size: 0.9rem;
+  color: var(--color-text-secondary);
+}
+
+/* ===== 两栏布局 ===== */
+.content {
+  display: flex;
+  flex: 1;
+  padding: 24px 32px;
+  gap: 24px;
+}
+
+.leftColumn {
+  flex: 0 0 60%;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.rightColumn {
+  flex: 0 0 40%;
+}
+
+/* ===== 卡片样式 ===== */
+.card {
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 20px 24px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.04);
+  border: 1px solid var(--color-border);
+}
+
+.cardTitle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 16px;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  font-family: var(--heading, Georgia, serif);
+}
+
+.cardIcon {
+  font-size: 1.2rem;
+}
+
+/* ===== 研究领域标签云 ===== */
+.tagCloud {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 8px 0;
+}
+
+.domainTag {
+  padding: 6px 14px;
+  background: var(--color-bg-tertiary);
+  border-radius: 999px;
+  transition: all 0.2s ease;
+  cursor: default;
+}
+
+.domainTag:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+/* ===== 阅读偏好图表 ===== */
+.preferenceChart {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.preferenceItem {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.preferenceLabel {
+  width: 60px;
+  font-size: 0.85rem;
+  color: var(--color-text-secondary);
+  flex-shrink: 0;
+}
+
+.preferenceBar {
+  flex: 1;
+  height: 12px;
+  background: var(--color-bg-tertiary);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.preferenceFill {
+  height: 100%;
+  border-radius: 6px;
+  transition: width 0.5s ease;
+}
+
+.preferenceCount {
+  width: 40px;
+  text-align: right;
+  font-size: 0.85rem;
+  color: var(--color-text-secondary);
+  font-weight: 500;
+}
+
+/* ===== 知识盲区列表 ===== */
+.blindspotList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.blindspotItem {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 16px;
+  background: var(--color-bg-tertiary);
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+}
+
+.blindspotInfo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.blindspotConcept {
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: var(--color-text-primary);
+}
+
+.blindspotBadge {
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  flex-shrink: 0;
+}
+
+.blindspotMeta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.queryCount {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+}
+
+.markMasteredBtn {
+  padding: 4px 12px;
+  background: transparent;
+  border: 1px solid var(--color-accent);
+  border-radius: 4px;
+  color: var(--color-accent);
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.markMasteredBtn:hover {
+  background: var(--color-accent);
+  color: white;
+}
+
+/* ===== 研究阶段指示器 ===== */
+.stageIndicator {
+  padding: 16px 0;
+}
+
+.stageSteps {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: relative;
+  margin-bottom: 16px;
+}
+
+.stageStep {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  position: relative;
+  flex: 1;
+}
+
+.stageDot {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 3px solid transparent;
+  transition: all 0.3s ease;
+  z-index: 1;
+}
+
+.stageDot.active {
+  box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.15);
+}
+
+.stageDot.current {
+  box-shadow: 0 0 0 6px rgba(59, 130, 246, 0.2);
+  transform: scale(1.2);
+}
+
+.stageLabel {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  font-weight: 500;
+  transition: all 0.3s ease;
+}
+
+.stageLabel.active {
+  color: var(--color-text-secondary);
+}
+
+.stageLabel.current {
+  font-weight: 600;
+}
+
+.stageLine {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  right: -50%;
+  height: 2px;
+  background: var(--color-border);
+  z-index: 0;
+}
+
+.stageLine.active {
+  background: linear-gradient(90deg, #3B82F6, #10B981);
+}
+
+.stageConfidence {
+  text-align: center;
+  font-size: 0.85rem;
+  color: var(--color-text-secondary);
+}
+
+.stageConfidence strong {
+  color: var(--color-accent);
+  font-weight: 600;
+}
+
+/* ===== 推荐论文列表 ===== */
+.recommendationList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.recommendationCard {
+  padding: 16px;
+  background: var(--color-bg-tertiary);
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.recommendationCard:hover {
+  border-color: var(--color-accent);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  transform: translateY(-1px);
+}
+
+.recommendationHeader {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 8px;
+}
+
+.sourceTag {
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  font-weight: 500;
+}
+
+.recommendationTitle {
+  margin: 0 0 8px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  line-height: 1.4;
+  font-family: var(--heading, Georgia, serif);
+}
+
+.recommendationReason {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--color-text-secondary);
+  line-height: 1.5;
+}
+
+/* ===== 空状态 ===== */
+.emptyText {
+  padding: 24px;
+  text-align: center;
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+}
+
+.emptyRecommendations {
+  padding: 40px 24px;
+  text-align: center;
+}
+
+.emptyRecommendations p {
+  margin: 0 0 8px;
+  color: var(--color-text-secondary);
+  font-size: 0.95rem;
+}
+
+.emptyHint {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+}
+
+/* ===== 加载状态 ===== */
+.loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+  color: var(--color-text-secondary);
+}
+
+.spinner {
+  width: 48px;
+  height: 48px;
+  border: 3px solid var(--color-border);
+  border-top-color: var(--color-accent);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 16px;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ===== 错误状态 ===== */
+.error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+  color: var(--color-danger);
+  text-align: center;
+  padding: 24px;
+}
+
+.error button {
+  margin-top: 16px;
+  padding: 8px 20px;
+  background: var(--color-danger-bg);
+  border: 1px solid var(--color-danger-border, rgba(179, 58, 58, 0.2));
+  border-radius: 6px;
+  color: var(--color-danger);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.error button:hover {
+  background: rgba(179, 58, 58, 0.15);
+}
+
+/* ===== 响应式 ===== */
+@media (max-width: 1024px) {
+  .content {
+    flex-direction: column;
+  }
+
+  .leftColumn,
+  .rightColumn {
+    flex: 1;
+    width: 100%;
+  }
+}
+
+@media (max-width: 768px) {
+  .header {
+    padding: 16px 20px;
+  }
+
+  .title {
+    font-size: 1.5rem;
+  }
+
+  .content {
+    padding: 16px 20px;
+  }
+
+  .card {
+    padding: 16px 20px;
+  }
+
+  .stageSteps {
+    gap: 8px;
+  }
+
+  .stageLabel {
+    font-size: 0.7rem;
+  }
+}
+
+/* ===== 滚动条 ===== */
+.recommendationList::-webkit-scrollbar,
+.blindspotList::-webkit-scrollbar {
+  width: 6px;
+}
+
+.recommendationList::-webkit-scrollbar-track,
+.blindspotList::-webkit-scrollbar-track {
+  background: var(--color-bg-tertiary);
+}
+
+.recommendationList::-webkit-scrollbar-thumb,
+.blindspotList::-webkit-scrollbar-thumb {
+  background: var(--color-border-strong);
+  border-radius: 3px;
+}
+
+.recommendationList::-webkit-scrollbar-thumb:hover,
+.blindspotList::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-muted);
+}

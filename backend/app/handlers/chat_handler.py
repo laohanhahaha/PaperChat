@@ -6,7 +6,7 @@ import json
 import asyncio
 
 from app.services.llm_service import llm_service
-from app.routers.ws import ChunkBuffer
+from app.handlers.ws_utils import ChunkBuffer
 
 
 async def handle_chat(websocket, state, message, task_key="chat"):

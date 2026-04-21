@@ -6,9 +6,9 @@ import json
 import asyncio
 
 from app.services.llm_service import llm_service
-from app.services.session_service import save_paper_section_analysis, save_paper_deep_analysis
+from app.services.chat.session_service import save_paper_section_analysis, save_paper_deep_analysis
 from app.handlers.rag_handler import extract_keywords_async
-from app.routers.ws import ChunkBuffer
+from app.handlers.ws_utils import ChunkBuffer
 
 
 async def handle_analyze(websocket, state, text, paper_id=None, task_key="analyze"):

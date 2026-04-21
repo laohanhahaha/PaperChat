@@ -1,22 +1,30 @@
 """RAG 问答处理器
 
-处理基于检索增强生成的问答请求
+处理基于检索增强生成的问答请求。
+
+继承 ChatHandlerBase，遵循 Template Method 模式：
+- handle() 负责会话管理、消息持久化（基类实现）
+- _process() 实现 RAG 检索 + LLM 问答业务逻辑
 """
 import json
 import asyncio
+import logging
+from typing import Any
 
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from app.services.llm_service import llm_service, RAG_CHAT_SYSTEM_PROMPT, RAG_CHAT_WITH_SEARCH_SYSTEM_PROMPT
-from app.services.search_service import search_service
-from app.services.rag_service import rag_service
-from app.services.session_service import get_or_create_session, auto_title
-from app.services.event_bus import event_bus, Event, EventTypes
-from app.services.message_service import (
+from app.services.search.search_service import search_service
+from app.services.rag.rag_service import rag_service
+from app.services.core.event_bus import event_bus, Event, EventTypes
+from app.services.chat.message_service import (
     save_message, load_chat_history,
     has_paper_text_blocks, get_paper_text_blocks
 )
-from app.routers.ws import ChunkBuffer
+from app.handlers.base import ChatHandlerBase
+from app.handlers.ws_utils import ChunkBuffer
+
+logger = logging.getLogger(__name__)
 
 
 async def extract_keywords_async(paper_id, text, ws):
@@ -28,21 +36,32 @@ async def extract_keywords_async(paper_id, text, ws):
     await extract_and_save_keywords(paper_id, text, ws)
 
 
-async def handle_rag_chat(websocket, db, state, message, paper_id, session_id, user_id, enable_search=False, task_key="rag_chat"):
-    """异步处理RAG问答（使用检索上下文，支持会话持久化和联网搜索）"""
-    state.current_paper_id = paper_id
-    state.current_user_id = user_id
+class RagChatHandler(ChatHandlerBase):
+    """RAG 问答处理器
 
-    try:
-        # 1. 获取或创建会话
-        session = await get_or_create_session(db, session_id, user_id, paper_id)
-        state.current_session_id = session.id
+    基于检索增强生成，支持会话持久化和联网搜索。
+    """
 
-        # 2. 保存用户消息
-        await save_message(db, session.id, "user", message)
+    channel: str = "rag_chat"
+    chunk_type: str = "rag_chat_chunk"
 
-        # 3. 加载会话历史（最近10条）
-        history = await load_chat_history(db, session.id, limit=10)
+    async def _process(
+        self,
+        websocket,
+        db,
+        message: str,
+        history,
+        session,
+        paper_id: Any,
+        user_id: int,
+        **kwargs
+    ):
+        """RAG 检索 + LLM 问答
+
+        Returns:
+            Tuple[str, list]: (full_response, sources)
+        """
+        enable_search: bool = kwargs.get("enable_search", False)
 
         # 4. RAG 检索
         relevant_chunks = await rag_service.search(paper_id, message, top_k=5)
@@ -84,8 +103,7 @@ async def handle_rag_chat(websocket, db, state, message, paper_id, session_id, u
                                 "message": "论文索引构建完成"
                             }))
                         except Exception as e:
-                            import logging
-                            logging.getLogger(__name__).error(f"索引重建失败: {e}")
+                            logger.error(f"索引重建失败: {e}")
                         finally:
                             rag_service.finish_indexing(paper_id)
 
@@ -98,7 +116,6 @@ async def handle_rag_chat(websocket, db, state, message, paper_id, session_id, u
                 # 降级方案：使用论文文本预览作为上下文
                 from app.services.message_service import get_paper_text_preview
                 paper_preview = await get_paper_text_preview(db, paper_id)
-                # 将预览文本作为伪检索结果
                 if paper_preview:
                     relevant_chunks = [{
                         "text": paper_preview,
@@ -113,25 +130,16 @@ async def handle_rag_chat(websocket, db, state, message, paper_id, session_id, u
                     "type": "rag_chat_chunk",
                     "content": error_msg
                 }))
-                await save_message(db, session.id, "assistant", error_msg, [])
-                await websocket.send_text(json.dumps({
-                    "type": "done",
-                    "channel": "rag_chat",
-                    "session_id": session.id
-                }))
-                return
+                return error_msg, []
 
         # 5. 网络搜索（如果启用）
         web_results = []
         if enable_search:
-            # 推送搜索状态
             await websocket.send_text(json.dumps({
                 "type": "search_status",
                 "status": "searching"
             }))
-            # 执行搜索
             web_results = await search_service.search(message, max_results=5)
-            # 推送搜索完成
             await websocket.send_text(json.dumps({
                 "type": "search_status",
                 "status": "completed",
@@ -139,19 +147,12 @@ async def handle_rag_chat(websocket, db, state, message, paper_id, session_id, u
             }))
 
         if not relevant_chunks and not web_results:
-            # 如果没有检索到内容也没有搜索结果
             no_content_msg = "抱歉，未能从论文中检索到相关内容，网络搜索也未返回结果。请尝试重新表述问题。"
             await websocket.send_text(json.dumps({
                 "type": "rag_chat_chunk",
                 "content": no_content_msg
             }))
-            await save_message(db, session.id, "assistant", no_content_msg, [])
-            await websocket.send_text(json.dumps({
-                "type": "done",
-                "channel": "rag_chat",
-                "session_id": session.id
-            }))
-            return
+            return no_content_msg, []
 
         # 6. 组装引用来源
         sources = [
@@ -163,8 +164,6 @@ async def handle_rag_chat(websocket, db, state, message, paper_id, session_id, u
             }
             for chunk in relevant_chunks
         ]
-
-        # 添加网络来源
         for wr in web_results:
             sources.append({
                 "type": "web",
@@ -175,33 +174,27 @@ async def handle_rag_chat(websocket, db, state, message, paper_id, session_id, u
 
         # 7. 组装上下文
         if enable_search and web_results:
-            # 有网络搜索结果，使用合并提示词
-            # 组装论文上下文
             paper_context_parts = []
             for chunk in relevant_chunks:
                 pages_str = ",".join(map(str, chunk['pages'])) if chunk['pages'] else "未知"
                 paper_context_parts.append(f"[来源: 第{pages_str}页]\n{chunk['text']}")
             paper_context = "\n\n---\n\n".join(paper_context_parts) if paper_context_parts else "无相关论文内容"
 
-            # 组装网络上下文
             web_context_parts = []
             for i, wr in enumerate(web_results, 1):
                 web_context_parts.append(f"[{i}] {wr.get('title', '未知标题')}\n{wr.get('body', '')}\n来源: {wr.get('href', '')}")
             web_context = "\n\n---\n\n".join(web_context_parts)
 
-            # 使用带搜索的系统提示词
             system_content = RAG_CHAT_WITH_SEARCH_SYSTEM_PROMPT.format(
                 paper_context=paper_context,
                 web_context=web_context
             )
         else:
-            # 仅使用论文内容
             context_parts = []
             for chunk in relevant_chunks:
                 pages_str = ",".join(map(str, chunk['pages'])) if chunk['pages'] else "未知"
                 context_parts.append(f"[来源: 第{pages_str}页]\n{chunk['text']}")
             context = "\n\n---\n\n".join(context_parts)
-
             system_content = RAG_CHAT_SYSTEM_PROMPT.format(context=context)
 
         # 8. 构建消息
@@ -217,7 +210,6 @@ async def handle_rag_chat(websocket, db, state, message, paper_id, session_id, u
                 if chunk.content:
                     full_response += chunk.content
                     await chunk_buffer.add(chunk.content, "rag_chat_chunk")
-            # 确保发送所有剩余的 chunk
             await chunk_buffer.flush("rag_chat_chunk")
         finally:
             chunk_buffer.close()
@@ -228,25 +220,23 @@ async def handle_rag_chat(websocket, db, state, message, paper_id, session_id, u
             "sources": sources
         }))
 
-        # 11. 保存 assistant 消息到数据库
-        await save_message(db, session.id, "assistant", full_response, sources)
+        return full_response, sources
 
-        # 12. 更新会话标题
-        await auto_title(db, session, message)
 
-        # 13. 发送完成信号
-        await websocket.send_text(json.dumps({
-            "type": "done",
-            "channel": "rag_chat",
-            "session_id": session.id
-        }))
+# 向后兼容：保留函数接口
+_rag_handler = RagChatHandler()
 
-    except asyncio.CancelledError:
-        pass
-    except Exception as e:
-        await websocket.send_text(json.dumps({
-            "type": "error",
-            "message": f"RAG问答失败: {str(e)}"
-        }))
-    finally:
-        state.running_tasks.pop(task_key, None)
+
+async def handle_rag_chat(websocket, db, state, message, paper_id, session_id, user_id, enable_search=False, task_key="rag_chat"):
+    """异步处理RAG问答（向后兼容函数接口）"""
+    await _rag_handler.handle(
+        websocket=websocket,
+        db=db,
+        state=state,
+        message=message,
+        user_id=user_id,
+        session_id=session_id,
+        paper_id=paper_id,
+        task_key=task_key,
+        enable_search=enable_search,
+    )

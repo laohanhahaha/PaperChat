@@ -1,0 +1,579 @@
+/* Agent 监控仪表盘页面样式 - 学术精致风 */
+
+.container {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background: #f8fafc;
+  color: var(--color-text-primary);
+}
+
+/* ===== 页面标题 ===== */
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 24px 32px;
+  background: var(--color-bg-secondary);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.headerLeft {
+  display: flex;
+  flex-direction: column;
+}
+
+.title {
+  margin: 0 0 8px;
+  font-size: 1.75rem;
+  font-weight: 600;
+  color: var(--color-accent);
+  font-family: var(--heading, Georgia, serif);
+}
+
+.subtitle {
+  font-size: 0.9rem;
+  color: var(--color-text-secondary);
+}
+
+.refreshIndicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  background: var(--color-bg-tertiary);
+  border-radius: 999px;
+  font-size: 0.8rem;
+  color: var(--color-text-secondary);
+}
+
+.refreshDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #10B981;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+/* ===== 主体内容 ===== */
+.content {
+  flex: 1;
+  padding: 24px 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+/* ===== 统计卡片行 ===== */
+.statsRow {
+  display: flex;
+  gap: 20px;
+}
+
+.statCard {
+  flex: 1;
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 20px 24px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.04);
+  border: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.statCard:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.statLabel {
+  font-size: 0.85rem;
+  color: var(--color-text-secondary);
+  font-weight: 500;
+}
+
+.statValue {
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  font-family: var(--heading, Georgia, serif);
+  line-height: 1.2;
+  transition: color 0.3s ease;
+}
+
+.statUnit {
+  font-size: 0.9rem;
+  font-weight: 400;
+  color: var(--color-text-secondary);
+  margin-left: 4px;
+}
+
+/* 成功率颜色编码 */
+.rateGreen {
+  color: #10B981;
+}
+
+.rateYellow {
+  color: #F59E0B;
+}
+
+.rateRed {
+  color: #EF4444;
+}
+
+/* ===== 第二行：两栏布局 ===== */
+.middleRow {
+  display: flex;
+  gap: 24px;
+}
+
+.chartColumn {
+  flex: 0 0 60%;
+}
+
+.tableColumn {
+  flex: 0 0 40%;
+}
+
+/* ===== 卡片通用 ===== */
+.card {
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 20px 24px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.04);
+  border: 1px solid var(--color-border);
+}
+
+.cardTitle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 16px;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  font-family: var(--heading, Georgia, serif);
+}
+
+.cardIcon {
+  font-size: 1.2rem;
+}
+
+/* ===== 工具使用排行榜（横向柱状图） ===== */
+.barChart {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.barItem {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.barLabel {
+  width: 120px;
+  font-size: 0.85rem;
+  color: var(--color-text-primary);
+  font-weight: 500;
+  flex-shrink: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.barTrack {
+  flex: 1;
+  height: 24px;
+  background: var(--color-bg-tertiary);
+  border-radius: 6px;
+  overflow: hidden;
+  position: relative;
+}
+
+.barFill {
+  height: 100%;
+  border-radius: 6px;
+  background: linear-gradient(90deg, #3B82F6, #8B5CF6);
+  transition: width 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  min-width: 4px;
+}
+
+.barCount {
+  width: 50px;
+  text-align: right;
+  font-size: 0.85rem;
+  color: var(--color-text-secondary);
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+/* ===== 工具详细统计表格 ===== */
+.toolTableWrapper {
+  max-height: 360px;
+  overflow-y: auto;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+}
+
+.toolTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.toolTable thead {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.toolTable th {
+  background: var(--color-bg-tertiary);
+  padding: 10px 12px;
+  text-align: left;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  border-bottom: 2px solid var(--color-border);
+  white-space: nowrap;
+}
+
+.toolTable td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-text-primary);
+}
+
+.toolTable tbody tr:hover {
+  background: var(--color-bg-tertiary);
+}
+
+.toolTable tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.toolName {
+  font-weight: 500;
+  max-width: 100px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ===== 最近运行记录 ===== */
+.runsSection {
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 20px 24px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.04);
+  border: 1px solid var(--color-border);
+}
+
+.runsTableWrapper {
+  overflow-x: auto;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+}
+
+.runsTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.runsTable th {
+  background: var(--color-bg-tertiary);
+  padding: 12px 16px;
+  text-align: left;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  border-bottom: 2px solid var(--color-border);
+  white-space: nowrap;
+}
+
+.runsTable td {
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-text-primary);
+}
+
+.runsTable tbody tr:hover {
+  background: var(--color-bg-tertiary);
+}
+
+.runsTable tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* 失败行高亮 */
+.runFailed {
+  background: #FEF2F2;
+}
+
+.runFailed:hover {
+  background: #FEE2E2 !important;
+}
+
+/* 状态 badge */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.badgeSuccess {
+  background: #D1FAE5;
+  color: #065F46;
+}
+
+.badgeFail {
+  background: #FEE2E2;
+  color: #991B1B;
+}
+
+/* ===== 分页 ===== */
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--color-border);
+}
+
+.pageInfo {
+  font-size: 0.85rem;
+  color: var(--color-text-secondary);
+}
+
+.pageBtn {
+  padding: 6px 16px;
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  color: var(--color-text-primary);
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.pageBtn:hover:not(:disabled) {
+  background: var(--color-accent);
+  color: white;
+  border-color: var(--color-accent);
+}
+
+.pageBtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ===== 空状态 ===== */
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 24px;
+  text-align: center;
+}
+
+.emptyIcon {
+  font-size: 3rem;
+  margin-bottom: 16px;
+  opacity: 0.6;
+}
+
+.emptyText {
+  font-size: 0.95rem;
+  color: var(--color-text-secondary);
+  margin: 0 0 4px;
+}
+
+.emptyHint {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+}
+
+/* ===== 加载状态 ===== */
+.loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+  color: var(--color-text-secondary);
+}
+
+.spinner {
+  width: 48px;
+  height: 48px;
+  border: 3px solid var(--color-border);
+  border-top-color: var(--color-accent);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 16px;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ===== 错误状态 ===== */
+.error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+  color: var(--color-danger);
+  text-align: center;
+  padding: 24px;
+}
+
+.error button {
+  margin-top: 16px;
+  padding: 8px 20px;
+  background: var(--color-danger-bg);
+  border: 1px solid var(--color-danger-border, rgba(179, 58, 58, 0.2));
+  border-radius: 6px;
+  color: var(--color-danger);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.error button:hover {
+  background: rgba(179, 58, 58, 0.15);
+}
+
+/* ===== 滚动条 ===== */
+.toolTableWrapper::-webkit-scrollbar,
+.runsTableWrapper::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.toolTableWrapper::-webkit-scrollbar-track,
+.runsTableWrapper::-webkit-scrollbar-track {
+  background: var(--color-bg-tertiary);
+}
+
+.toolTableWrapper::-webkit-scrollbar-thumb,
+.runsTableWrapper::-webkit-scrollbar-thumb {
+  background: var(--color-border-strong);
+  border-radius: 3px;
+}
+
+.toolTableWrapper::-webkit-scrollbar-thumb:hover,
+.runsTableWrapper::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-muted);
+}
+
+/* ===== 骨架屏 ===== */
+.skeletonRow {
+  display: flex;
+  gap: 20px;
+}
+
+.skeletonCard {
+  flex: 1;
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 20px 24px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  border: 1px solid var(--color-border);
+}
+
+.skeletonLine {
+  height: 14px;
+  background: linear-gradient(90deg, var(--color-bg-tertiary) 25%, #e2e8f0 50%, var(--color-bg-tertiary) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+  border-radius: 4px;
+  margin-bottom: 12px;
+}
+
+.skeletonLine:last-child {
+  margin-bottom: 0;
+}
+
+.skeletonLine.w60 {
+  width: 60%;
+}
+
+.skeletonLine.w40 {
+  width: 40%;
+}
+
+.skeletonLine.w80 {
+  width: 80%;
+}
+
+.skeletonBig {
+  height: 32px;
+  width: 50%;
+  background: linear-gradient(90deg, var(--color-bg-tertiary) 25%, #e2e8f0 50%, var(--color-bg-tertiary) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+  border-radius: 6px;
+  margin-top: 8px;
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ===== 响应式 ===== */
+@media (max-width: 1024px) {
+  .middleRow {
+    flex-direction: column;
+  }
+
+  .chartColumn,
+  .tableColumn {
+    flex: 1;
+    width: 100%;
+  }
+}
+
+@media (max-width: 768px) {
+  .header {
+    padding: 16px 20px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .title {
+    font-size: 1.5rem;
+  }
+
+  .content {
+    padding: 16px 20px;
+  }
+
+  .statsRow {
+    flex-wrap: wrap;
+  }
+
+  .statCard {
+    flex: 1 1 45%;
+  }
+
+  .card {
+    padding: 16px 20px;
+  }
+}

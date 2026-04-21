@@ -77,6 +77,19 @@ async def lifespan(app: FastAPI):
     app.state.event_bus = event_bus
     logger.info("Services registered to app.state (DI)")
 
+    # 初始化三大 Registry（工具、MCP、Skill）
+    from app.tools import ToolRegistry, ToolExecutor
+    from app.mcp_services import MCPManager
+    from app.skills import SkillRegistry, LiteratureReviewSkill, PaperAnalysisSkill
+
+    app.state.tool_registry = ToolRegistry()
+    app.state.tool_executor = ToolExecutor(app.state.tool_registry)
+    app.state.mcp_manager = MCPManager()
+    app.state.skill_registry = SkillRegistry()
+    app.state.skill_registry.register(LiteratureReviewSkill())
+    app.state.skill_registry.register(PaperAnalysisSkill())
+    logger.info("ToolRegistry, MCPManager, SkillRegistry initialized")
+
     # 注册事件订阅者（日志记录）
     async def log_event_handler(event: Event):
         logger.info(f"Event: {event.type}", extra={"event_data": event.data})
