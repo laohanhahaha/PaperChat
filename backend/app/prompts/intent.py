@@ -24,6 +24,8 @@ _LLM_TOOL_DESCRIPTIONS = """- analyze_paper: 章节概述、文章结构分析
 - verify_consistency: 验证多篇论文结论一致性
 - find_research_gaps: 发现研究空白、未解决问题
 - cross_paper_reason: 跨论文假设推理、假设验证
+- analyze_chart: 图片/图表分析、数据提取、视觉对比、图文推理
+- multimodal_search: 基于图片的搜索、以图搜文、视觉搜索
 - rag_chat: 论文问答（默认，无法匹配其他工具时使用）"""
 
 LLM_CLASSIFY_PROMPT = """你是意图识别专家。根据用户消息判断应调用哪个工具。
@@ -83,4 +85,13 @@ INTENT_CLASSIFICATION_PROMPT = """你是用户意图识别专家。请分析用�
 - trace_evolution: 追踪方法演进时间线
 - verify_consistency: 验证多篇论文结论一致性
 - find_research_gaps: 发现研究空白
-- cross_paper_reason: 跨论文假设生成与推理"""
+- cross_paper_reason: 跨论文假设生成与推理
+- analyze_chart: 图片/图表分析、数据提取、视觉对比、图文推理
+- multimodal_search: 基于图片的搜索、以图搜文、视觉搜索
+
+多模态意图类型说明：
+- image_analysis: 用户请求分析、描述图片或图表
+- chart_extraction: 用户请求提取图表中的数据
+- visual_comparison: 用户请求对比图表或图像
+- multimodal_search: 用户请求基于图片进行搜索
+- cross_modal_reasoning: 用户请求跨模态推理（结合图文）"""

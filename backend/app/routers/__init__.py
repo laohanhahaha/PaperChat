@@ -17,6 +17,7 @@ from app.routers.cost import router as cost_router
 from app.routers.health import router as health_router
 from app.routers.citations import router as citations_router
 from app.routers.config import router as config_router
+from app.routers.upload import router as upload_router
 
 __all__ = [
     "papers_router",
@@ -37,4 +38,5 @@ __all__ = [
     "health_router",
     "citations_router",
     "config_router",
+    "upload_router",
 ]

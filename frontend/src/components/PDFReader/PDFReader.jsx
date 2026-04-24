@@ -6,6 +6,8 @@ import styles from './PDFReader.module.css';
 import HighlightLayer from '../HighlightLayer/HighlightLayer';
 import HighlightToolbar from '../HighlightToolbar/HighlightToolbar';
 import ReadingAssist from '../ReadingAssist/ReadingAssist';
+import FigureOverlay from './FigureOverlay/FigureOverlay';
+import FigureAnalysisPanel from './FigureAnalysisPanel/FigureAnalysisPanel';
 
 // 设置 PDF.js worker - 使用 unpkg CDN
 pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
@@ -35,14 +37,21 @@ const PDFReader = ({
   const [selectionPage, setSelectionPage] = useState(null);
   const [pageDimensions, setPageDimensions] = useState({}); // 存储每页的原始尺寸
   const [visiblePages, setVisiblePages] = useState(new Set([1, 2, 3])); // 滚动模式下可见的页面
-  
+
   // 阅读辅助面板状态
   const [readingAssistVisible, setReadingAssistVisible] = useState(false);
   const [readingAssistType, setReadingAssistType] = useState(null); // 'explain' | 'summarize' | 'translate'
   const [readingAssistContent, setReadingAssistContent] = useState('');
   const [readingAssistTerm, setReadingAssistTerm] = useState('');
   const [readingAssistPosition, setReadingAssistPosition] = useState({ x: 0, y: 0 });
-  
+
+  // 图表检测状态
+  const [figureDetectionEnabled, setFigureDetectionEnabled] = useState(false);
+  const [figures, setFigures] = useState({}); // {pageNum: [figure]}
+  const [selectedFigure, setSelectedFigure] = useState(null);
+  const [analysisResult, setAnalysisResult] = useState(null);
+  const [analysisLoading, setAnalysisLoading] = useState(false);
+
   const containerRef = useRef(null);
   const pageRefs = useRef({});
   const scrollContainerRef = useRef(null); // 滚动模式的容器引用
@@ -82,7 +91,7 @@ const PDFReader = ({
     const newPage = Math.max(1, Math.min(page, numPages || 1));
     setPageNumber(newPage);
     onPageChange?.(newPage);
-    
+
     // 滚动到对应页面
     if (viewMode === 'scroll' && pageRefs.current[newPage]) {
       pageRefs.current[newPage].scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -168,14 +177,14 @@ const PDFReader = ({
   const getSelectionRectsInPDF = useCallback((pageElement, pageNum) => {
     const selection = window.getSelection();
     if (!selection || selection.isCollapsed) return null;
-    
+
     const range = selection.getRangeAt(0);
     const rects = range.getClientRects();
     const pageRect = pageElement.getBoundingClientRect();
     const dims = pageDimensions[pageNum];
-    
+
     if (!dims) return null;
-    
+
     // 将页面像素坐标转换回 PDF 坐标
     // PDF 坐标系：左下角为原点，y 轴向上
     // 页面坐标系：左上角为原点，y 轴向下
@@ -185,7 +194,7 @@ const PDFReader = ({
       x1: (rect.right - pageRect.left) / scale,
       y1: dims.height - (rect.top - pageRect.top) / scale,     // 翻转 y 轴
     }));
-    
+
     return pdfRects;
   }, [scale, pageDimensions]);
 
@@ -193,12 +202,12 @@ const PDFReader = ({
   const handleMouseUp = useCallback((e, pageNum) => {
     const selection = window.getSelection();
     const text = selection.toString().trim();
-    
+
     if (!text) {
       setToolbarVisible(false);
       return;
     }
-    
+
     // 获取选区位置以显示工具栏
     const range = selection.getRangeAt(0);
     const rects = range.getClientRects();
@@ -210,17 +219,17 @@ const PDFReader = ({
       });
       setToolbarVisible(true);
     }
-    
+
     setSelectedText(text);
     setSelectionPage(pageNum);
-    
+
     // 计算 PDF 坐标
     const pageElement = pageRefs.current[pageNum];
     if (pageElement) {
       const pdfRects = getSelectionRectsInPDF(pageElement, pageNum);
       setSelectionRects(pdfRects || []);
     }
-    
+
     // 回调通知父组件
     if (onTextSelected) {
       const clientRects = Array.from(rects).map(rect => ({
@@ -240,7 +249,7 @@ const PDFReader = ({
     if (!selectedText || !selectionPage || selectionRects.length === 0 || !paperId) {
       return;
     }
-    
+
     const highlightData = {
       paper_id: paperId,
       page: selectionPage,
@@ -249,9 +258,9 @@ const PDFReader = ({
       highlight_type: type,
       selected_text: selectedText
     };
-    
+
     onCreateHighlight?.(highlightData);
-    
+
     // 清除选区
     window.getSelection().removeAllRanges();
     setToolbarVisible(false);
@@ -303,6 +312,131 @@ const PDFReader = ({
     setReadingAssistContent('');
     setReadingAssistTerm('');
   }, []);
+
+  // 关闭图表分析面板
+  const handleCloseFigureAnalysis = useCallback(() => {
+    setSelectedFigure(null);
+    setAnalysisResult(null);
+    setAnalysisLoading(false);
+  }, []);
+
+  // 图表点击处理
+  const handleFigureClick = useCallback(async (figure) => {
+    setSelectedFigure(figure);
+    setAnalysisResult(null);
+    setAnalysisLoading(true);
+
+    try {
+      const response = await fetch(`/api/v1/papers/${paperId}/figures/analyze`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        },
+        body: JSON.stringify({
+          page: figure.page,
+          bbox: figure.bbox,
+          type: figure.type,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('分析请求失败');
+      }
+
+      const result = await response.json();
+      setAnalysisResult(result);
+    } catch (err) {
+      console.error('图表分析失败:', err);
+      // 分析失败时显示占位信息，不阻塞用户
+      setAnalysisResult({
+        chart_type: '未知',
+        data_summary: '分析服务暂不可用，请稍后重试。',
+        key_findings: [],
+        raw_description: '',
+      });
+    } finally {
+      setAnalysisLoading(false);
+    }
+  }, [paperId]);
+
+  // 追问处理
+  const handleAskQuestion = useCallback(async (question) => {
+    if (!selectedFigure || !paperId) return;
+    setAnalysisLoading(true);
+
+    try {
+      const response = await fetch(`/api/v1/papers/${paperId}/figures/ask`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        },
+        body: JSON.stringify({
+          page: selectedFigure.page,
+          bbox: selectedFigure.bbox,
+          type: selectedFigure.type,
+          question,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('追问请求失败');
+      }
+
+      const result = await response.json();
+      setAnalysisResult(prev => ({
+        ...prev,
+        raw_description: result.answer || result.raw_description || '',
+      }));
+    } catch (err) {
+      console.error('图表追问失败:', err);
+    } finally {
+      setAnalysisLoading(false);
+    }
+  }, [paperId, selectedFigure]);
+
+  // 图表检测数据加载
+  useEffect(() => {
+    if (!figureDetectionEnabled || !paperId) return;
+
+    const pagesToLoad = viewMode === 'single' ? [pageNumber] : Array.from(visiblePages);
+
+    const loadFigures = async () => {
+      for (const pageNum of pagesToLoad) {
+        if (figures[pageNum]) continue; // 已缓存
+
+        try {
+          const response = await fetch(
+            `/api/v1/papers/${paperId}/images?page=${pageNum}`,
+            {
+              headers: {
+                'Authorization': `Bearer ${localStorage.getItem('token')}`,
+              },
+            }
+          );
+
+          if (!response.ok) continue;
+
+          const data = await response.json();
+          if (data.figures) {
+            setFigures(prev => ({
+              ...prev,
+              [pageNum]: data.figures.map((fig, idx) => ({
+                ...fig,
+                page: pageNum,
+                label: fig.label || `${fig.type === 'table' ? 'Table' : 'Figure'} ${idx + 1}`,
+              })),
+            }));
+          }
+        } catch (err) {
+          console.warn(`加载第 ${pageNum} 页图表数据失败:`, err);
+        }
+      }
+    };
+
+    loadFigures();
+  }, [figureDetectionEnabled, visiblePages, pageNumber, paperId, viewMode, figures]);
 
   // 页码输入处理
   const handlePageInputChange = useCallback((e) => {
@@ -388,11 +522,11 @@ const PDFReader = ({
     if (viewMode === 'single') {
       const pageHighlights = getHighlightsForPage(pageNumber);
       const dims = pageDimensions[pageNumber];
-      
+
       return (
-        <div 
+        <div
           ref={(el) => { pageRefs.current[pageNumber] = el; }}
-          className={styles.pageWrapper} 
+          className={styles.pageWrapper}
           data-page-number={pageNumber}
           onMouseUp={(e) => handleMouseUp(e, pageNumber)}
         >
@@ -406,15 +540,27 @@ const PDFReader = ({
             error={<div className={styles.pageError}>页面加载失败</div>}
           />
           {dims && (
-            <HighlightLayer
-              highlights={pageHighlights}
-              pageNumber={pageNumber}
-              scale={scale}
-              pageWidth={dims.width}
-              pageHeight={dims.height}
-              activeHighlight={activeHighlight}
-              onHighlightClick={onHighlightClick}
-            />
+            <>
+              <HighlightLayer
+                highlights={pageHighlights}
+                pageNumber={pageNumber}
+                scale={scale}
+                pageWidth={dims.width}
+                pageHeight={dims.height}
+                activeHighlight={activeHighlight}
+                onHighlightClick={onHighlightClick}
+              />
+              {figureDetectionEnabled && figures[pageNumber] && (
+                <FigureOverlay
+                  figures={figures[pageNumber]}
+                  pageWidth={dims.width * scale}
+                  pageHeight={dims.height * scale}
+                  originalWidth={dims.width}
+                  originalHeight={dims.height}
+                  onFigureClick={handleFigureClick}
+                />
+              )}
+            </>
           )}
         </div>
       );
@@ -451,15 +597,27 @@ const PDFReader = ({
                     error={<div className={styles.pageError}>页面加载失败</div>}
                   />
                   {dims && (
-                    <HighlightLayer
-                      highlights={pageHighlights}
-                      pageNumber={pageNum}
-                      scale={scale}
-                      pageWidth={dims.width}
-                      pageHeight={dims.height}
-                      activeHighlight={activeHighlight}
-                      onHighlightClick={onHighlightClick}
-                    />
+                    <>
+                      <HighlightLayer
+                        highlights={pageHighlights}
+                        pageNumber={pageNum}
+                        scale={scale}
+                        pageWidth={dims.width}
+                        pageHeight={dims.height}
+                        activeHighlight={activeHighlight}
+                        onHighlightClick={onHighlightClick}
+                      />
+                      {figureDetectionEnabled && figures[pageNum] && (
+                        <FigureOverlay
+                          figures={figures[pageNum]}
+                          pageWidth={dims.width * scale}
+                          pageHeight={dims.height * scale}
+                          originalWidth={dims.width}
+                          originalHeight={dims.height}
+                          onFigureClick={handleFigureClick}
+                        />
+                      )}
+                    </>
                   )}
                 </>
               ) : (
@@ -520,7 +678,17 @@ const PDFReader = ({
         visible={readingAssistVisible}
         onClose={handleCloseReadingAssist}
       />
-      
+
+      {/* 图表分析面板 */}
+      <FigureAnalysisPanel
+        visible={!!selectedFigure}
+        figure={selectedFigure}
+        analysisResult={analysisResult}
+        loading={analysisLoading}
+        onClose={handleCloseFigureAnalysis}
+        onAskQuestion={handleAskQuestion}
+      />
+
       {/* 工具栏 */}
       <div className={styles.toolbar}>
         <div className={styles.toolbarGroup}>
@@ -535,7 +703,7 @@ const PDFReader = ({
               <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z" />
             </svg>
           </button>
-          
+
           <div className={styles.pageInfo}>
             <input
               type="number"
@@ -547,7 +715,7 @@ const PDFReader = ({
             />
             <span className={styles.pageTotal}> / {numPages || '-'}</span>
           </div>
-          
+
           <button
             className={styles.toolbarBtn}
             onClick={goToNextPage}
@@ -574,9 +742,9 @@ const PDFReader = ({
               <path d="M19 13H5v-2h14v2z" />
             </svg>
           </button>
-          
+
           <span className={styles.scaleInfo}>{Math.round(scale * 100)}%</span>
-          
+
           <button
             className={styles.toolbarBtn}
             onClick={zoomIn}
@@ -587,7 +755,7 @@ const PDFReader = ({
               <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" />
             </svg>
           </button>
-          
+
           <button
             className={styles.toolbarBtn}
             onClick={fitToWidth}
@@ -624,6 +792,21 @@ const PDFReader = ({
             </svg>
           </button>
         </div>
+
+        <div className={styles.toolbarDivider} />
+
+        <div className={styles.toolbarGroup}>
+          {/* 图表检测开关 */}
+          <button
+            className={`${styles.toolbarBtn} ${figureDetectionEnabled ? styles.active : ''}`}
+            onClick={() => setFigureDetectionEnabled(!figureDetectionEnabled)}
+            title="图表检测"
+          >
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+              <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z" />
+            </svg>
+          </button>
+        </div>
       </div>
 
       {/* PDF 内容区域 */}
@@ -634,7 +817,7 @@ const PDFReader = ({
             <span>正在加载 PDF...</span>
           </div>
         )}
-        
+
         {error && (
           <div className={styles.error}>
             <svg viewBox="0 0 24 24" width="48" height="48" fill="currentColor">

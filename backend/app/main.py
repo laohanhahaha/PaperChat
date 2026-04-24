@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 from app.routers.feedback import router as feedback_router
 from app.routers.backup import router as backup_router
 from app.routers.feature_flags import router as feature_flags_router
-from app.routers import papers_router, highlights_router, notes_router, ws_router, reading_router, analysis_router, chat_router, knowledge_router, writing_router, recommendations_router, settings_router, batch_analysis_router, cost_router, health_router, citations_router, config_router
+from app.routers import papers_router, highlights_router, notes_router, ws_router, reading_router, analysis_router, chat_router, knowledge_router, writing_router, recommendations_router, settings_router, batch_analysis_router, cost_router, health_router, citations_router, config_router, upload_router
 
 
 
@@ -339,6 +339,7 @@ def create_app() -> FastAPI:
     app.include_router(health_router)
     app.include_router(citations_router)
     app.include_router(config_router)
+    app.include_router(upload_router)
 
     # 旧路径向后兼容重定向：/api/xxx → /api/v1/xxx
     _LEGACY_PREFIXES = [

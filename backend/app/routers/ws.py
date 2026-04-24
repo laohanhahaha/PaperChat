@@ -8,6 +8,8 @@
 import json
 import asyncio
 import logging
+import os
+import base64
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
 
@@ -24,6 +26,31 @@ from app.handlers.unified_handler import handle_unified_chat
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["WebSocket"])
+
+
+def _load_uploaded_images(images_meta: list) -> list[dict]:
+    """从 uploads 目录加载图片数据
+    
+    性能: 单张 < 10ms（本地文件读取）
+    """
+    loaded = []
+    base_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+    for img in images_meta:
+        image_id = img.get("image_id", "")
+        # 优先读取压缩版，其次原图
+        for suffix in [".jpg", "_original.jpg", "_original.png"]:
+            path = os.path.join(base_dir, "uploads", "images", f"{image_id}{suffix}")
+            if os.path.exists(path):
+                with open(path, "rb") as f:
+                    data = base64.b64encode(f.read()).decode()
+                loaded.append({
+                    "image_id": image_id,
+                    "data": data,
+                    "type": img.get("type", "image/jpeg"),
+                    "name": img.get("name", ""),
+                })
+                break
+    return loaded
 
 
 @router.websocket("/ws")
@@ -225,6 +252,10 @@ async def websocket_endpoint(websocket: WebSocket, token: str = Query(default=No
                 forced_tool = data.get("forced_tool")        # 可选：强制指定工具
                 thinking_mode = data.get("thinking_mode", "quick")  # "quick" 或 "deep"
 
+                # 加载用户上传的图片
+                images_meta = data.get("images", [])
+                loaded_images = _load_uploaded_images(images_meta)
+
                 if "unified" in state.running_tasks:
                     state.running_tasks["unified"].cancel()
                     del state.running_tasks["unified"]
@@ -251,6 +282,7 @@ async def websocket_endpoint(websocket: WebSocket, token: str = Query(default=No
                         thinking_mode=thinking_mode,
                         task_key="unified",
                         message_data=data,
+                        images=loaded_images,
                     )
                 )
 

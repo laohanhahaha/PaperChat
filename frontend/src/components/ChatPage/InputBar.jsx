@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useRef, useCallback } from 'react';
+import ImagePreview from './ImagePreview';
 
 export default function InputBar({
   input,
@@ -17,9 +18,71 @@ export default function InputBar({
   onOpenSelector,
   styles,
   costSlot,
+  images = [],
+  onAddImage,
+  onRemoveImage,
 }) {
+  const fileInputRef = useRef(null);
+  const hasUploading = images.some((img) => img.status === 'uploading');
+
+  const handleImageSelect = useCallback(() => {
+    fileInputRef.current?.click();
+  }, []);
+
+  const handleFileChange = useCallback((e) => {
+    const file = e.target.files?.[0];
+    if (file && onAddImage) {
+      onAddImage(file);
+    }
+    e.target.value = '';
+  }, [onAddImage]);
+
+  const handleDragOver = useCallback((e) => {
+    e.preventDefault();
+    e.stopPropagation();
+  }, []);
+
+  const handleDrop = useCallback((e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const files = e.dataTransfer?.files;
+    if (!files || !onAddImage) return;
+    for (const file of files) {
+      if (file.type.startsWith('image/')) {
+        onAddImage(file);
+        break;
+      }
+    }
+  }, [onAddImage]);
+
+  const handlePaste = useCallback((e) => {
+    if (!onAddImage) return;
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (const item of items) {
+      if (item.type.startsWith('image/')) {
+        const file = item.getAsFile();
+        if (file) {
+          onAddImage(file);
+          break;
+        }
+      }
+    }
+  }, [onAddImage]);
+
+  const isSendDisabled =
+    !input.trim() || (isWelcome && !hasPapers) || hasUploading;
+
   return (
-    <div className={styles.inputWrapper}>
+    <div
+      className={styles.inputWrapper}
+      onDragOver={handleDragOver}
+      onDrop={handleDrop}
+      onPaste={handlePaste}
+    >
+      {images.length > 0 && (
+        <ImagePreview images={images} onRemove={onRemoveImage} />
+      )}
       <div className={styles.inputBox}>
         <button
           className={styles.attachBtn}
@@ -30,6 +93,25 @@ export default function InputBar({
             <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" />
           </svg>
         </button>
+        <button
+          className={styles.attachBtn}
+          onClick={handleImageSelect}
+          title="上传图片"
+          disabled={isChatting || (isWelcome && !hasPapers)}
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+            <circle cx="8.5" cy="8.5" r="1.5" />
+            <polyline points="21 15 16 10 5 21" />
+          </svg>
+        </button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          style={{ display: 'none' }}
+          onChange={handleFileChange}
+        />
         <textarea
           ref={textareaRef}
           className={styles.textarea}
@@ -48,9 +130,9 @@ export default function InputBar({
           </button>
         ) : (
           <button
-            className={`${styles.sendBtn} ${input.trim() ? styles.sendBtnActive : ''}`}
+            className={`${styles.sendBtn} ${input.trim() && !hasUploading ? styles.sendBtnActive : ''}`}
             onClick={() => handleSend()}
-            disabled={!input.trim() || (isWelcome && !hasPapers)}
+            disabled={isSendDisabled}
           >
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" />

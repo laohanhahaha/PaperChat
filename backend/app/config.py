@@ -47,6 +47,16 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
     JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440
     
+    # Qwen 多模态 API
+    QWEN_API_KEY: str = ""
+    QWEN_API_BASE_URL: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    QWEN_MODEL_CLOUD: str = "qwen2.5-vl-plus"
+    QWEN_MODEL_LOCAL: str = "qwen2.5-vl:7b"
+    QWEN_MULTIMODAL_MAX_TOKENS: int = 2048
+    QWEN_MULTIMODAL_TEMPERATURE: float = 0.7
+    MAX_IMAGE_SIZE_MB: int = 10
+    IMAGE_CACHE_ENABLED: bool = True
+
     # CORS
     CORS_ORIGINS: list[str] = ["http://localhost:5173", "http://localhost:5174"]
     

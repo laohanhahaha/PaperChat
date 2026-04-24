@@ -10,6 +10,7 @@ const GROUP_CONFIG = {
     rag: { title: 'RAG 检索设置', icon: '🔍' },
     search: { title: '联网搜索设置', icon: '🌐' },
     mcp: { title: 'MCP 学术服务', icon: '🔌' },
+    multimodal: { title: '多模态设置', icon: '🖼️' },
     recommendation: { title: '推荐设置', icon: '📊' },
     general: { title: '通用设置', icon: '⚙️' }
 };

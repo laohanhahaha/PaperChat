@@ -1,10 +1,12 @@
 """LLM 服务 - 基于 LangChain 的 DeepSeek 大模型交互"""
 import asyncio
 import asyncio
+import base64
 import logging
 import time
 from typing import AsyncGenerator, Optional, Optional
 
+import httpx
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage
 from langchain_community.chat_message_histories import ChatMessageHistory
@@ -687,6 +689,265 @@ class LLMService:
             response = await self.llm.ainvoke(messages)
             return response.content.strip()
 
+
+    async def chat_with_image(
+        self,
+        image_data: str,
+        prompt: str = "请详细描述这张图片的内容",
+        image_type: str = "base64",
+        use_cloud: bool = True,
+    ) -> str:
+        """多模态图片理解（支持云端 Qwen-3.6-Plus 和本地 Ollama）
+
+        Args:
+            image_data: 图片数据（base64 编码字符串或 URL）
+            prompt: 对图片的提问
+            image_type: "base64" | "url"
+            use_cloud: True=云端 Qwen-3.6-Plus API, False=本地 Ollama
+
+        Returns:
+            模型返回的文本描述
+
+        性能：云端 2-5s，本地 10-30s；大图自动压缩到 2MB 以下
+        """
+        # 大尺寸图片自动压缩到 2MB 以下
+        if image_type == "base64" and len(image_data) > 2 * 1024 * 1024 * 4 / 3:  # base64 膨胀系数
+            image_data = self._compress_image(image_data, max_size_mb=2)
+
+        try:
+            if use_cloud:
+                return await self._chat_with_image_qwen_cloud(image_data, prompt, image_type)
+            else:
+                return await self._chat_with_image_ollama(image_data, prompt, image_type)
+        except Exception as e:
+            logger.error(f"多模态图片理解失败: {e}")
+            # 云端失败时自动降级到本地
+            if use_cloud:
+                logger.info("云端多模态失败，降级到本地 Ollama...")
+                try:
+                    return await self._chat_with_image_ollama(image_data, prompt, image_type)
+                except Exception as e2:
+                    return f"[多模态分析失败: 云端和本地均不可用。{str(e2)}]"
+            return f"[多模态分析失败: {str(e)}]"
+
+    async def _chat_with_image_qwen_cloud(
+        self, image_data: str, prompt: str, image_type: str
+    ) -> str:
+        """通过阿里云 DashScope API 调用 Qwen-3.6-Plus 多模态"""
+        api_key = settings.QWEN_API_KEY
+        if not api_key:
+            raise ValueError("QWEN_API_KEY 未配置，请在 .env 中设置")
+
+        url = f"{settings.QWEN_API_BASE_URL}/chat/completions"
+
+        # 构建消息内容
+        if image_type == "base64":
+            image_url_content = {"image": f"data:image/png;base64,{image_data}"}
+        else:
+            image_url_content = {"image": image_data}
+
+        messages = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": prompt},
+                    {"type": "image_url", "image_url": image_url_content},
+                ],
+            }
+        ]
+
+        payload = {
+            "model": settings.QWEN_MODEL_CLOUD,
+            "messages": messages,
+            "max_tokens": settings.QWEN_MULTIMODAL_MAX_TOKENS,
+            "temperature": settings.QWEN_MULTIMODAL_TEMPERATURE,
+        }
+
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        }
+
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(url, json=payload, headers=headers)
+            response.raise_for_status()
+            result = response.json()
+            return result["choices"][0]["message"]["content"]
+
+    async def _chat_with_image_ollama(
+        self, image_data: str, prompt: str, image_type: str
+    ) -> str:
+        """通过 Ollama API 调用本地 Qwen-VL 多模态
+
+        Ollama 支持 base64 图片输入，需先拉取模型:
+          ollama pull qwen-vl:7b  # 或 qwen2.5-vl:7b
+        """
+        if image_type != "base64":
+            # 本地模式只支持 base64
+            raise ValueError("本地 Ollama 多模态仅支持 base64 编码图片")
+
+        ollama_url = "http://localhost:11434/api/generate"
+        payload = {
+            "model": settings.QWEN_MODEL_LOCAL,
+            "prompt": prompt,
+            "images": [image_data],
+            "stream": False,
+            "options": {"num_predict": settings.QWEN_MULTIMODAL_MAX_TOKENS},
+        }
+
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            response = await client.post(ollama_url, json=payload)
+            response.raise_for_status()
+            result = response.json()
+            return result.get("response", "")
+
+    def _compress_image(self, image_data: str, max_size_mb: float = 2.0) -> str:
+        """压缩 base64 编码图片到指定大小以下（使用 PIL）
+
+        Args:
+            image_data: base64 编码的图片字符串
+            max_size_mb: 目标最大大小（MB）
+
+        Returns:
+            压缩后的 base64 编码字符串
+
+        性能：纯 CPU 操作，单次压缩 < 100ms
+        """
+        from io import BytesIO
+        from PIL import Image
+
+        max_bytes = int(max_size_mb * 1024 * 1024)
+        img_bytes = base64.b64decode(image_data)
+        img = Image.open(BytesIO(img_bytes))
+
+        # 如果有透明通道，转为 RGB
+        if img.mode in ("RGBA", "LA", "P"):
+            background = Image.new("RGB", img.size, (255, 255, 255))
+            if img.mode == "P":
+                img = img.convert("RGBA")
+            background.paste(img, mask=img.split()[-1] if "A" in img.mode else None)
+            img = background
+        elif img.mode != "RGB":
+            img = img.convert("RGB")
+
+        quality = 85
+        while quality >= 20:
+            buffer = BytesIO()
+            img.save(buffer, format="JPEG", quality=quality, optimize=True)
+            if buffer.tell() <= max_bytes:
+                return base64.b64encode(buffer.getvalue()).decode("utf-8")
+            quality -= 10
+
+        # 降低质量仍不够，缩小尺寸
+        scale = 0.9
+        while scale >= 0.3:
+            new_w = int(img.width * scale)
+            new_h = int(img.height * scale)
+            resized = img.resize((new_w, new_h), Image.LANCZOS)
+            buffer = BytesIO()
+            resized.save(buffer, format="JPEG", quality=quality, optimize=True)
+            if buffer.tell() <= max_bytes:
+                return base64.b64encode(buffer.getvalue()).decode("utf-8")
+            scale -= 0.1
+
+        # 最终回退：返回当前压缩结果
+        buffer = BytesIO()
+        img.resize((int(img.width * 0.3), int(img.height * 0.3)), Image.LANCZOS).save(
+            buffer, format="JPEG", quality=20, optimize=True
+        )
+        return base64.b64encode(buffer.getvalue()).decode("utf-8")
+
+    async def analyze_chart(
+        self, image_data: str, chart_type_hint: str = "", question: str = ""
+    ) -> dict:
+        """专用图表分析，返回结构化结果
+
+        Args:
+            image_data: base64 编码的图片数据
+            chart_type_hint: 图表类型提示（如 "bar", "line", "pie"）
+            question: 用户的具体问题
+
+        Returns:
+            结构化分析结果 dict，包含 chart_type / data_summary / key_findings / raw_description
+
+        性能：云端 2-5s，本地 10-30s
+        """
+        prompt = f"""请分析这张图表并返回 JSON 格式结果：
+"chart_type": "图表类型", "data_summary": "数据摘要", "key_findings": ["关键发现1", "关键发现2"], "raw_description": "详细描述"
+{f"图表类型提示: {chart_type_hint}" if chart_type_hint else ""}
+{f"用户问题: {question}" if question else ""}"""
+        result = await self.chat_with_image(image_data, prompt)
+        # 尝试解析 JSON，失败则包装为 raw_description
+        import json as _json
+        try:
+            return _json.loads(result)
+        except Exception:
+            return {"chart_type": "unknown", "data_summary": "", "key_findings": [], "raw_description": result}
+
+    async def batch_analyze_images(
+        self, images: list, prompt: str = "请描述图片内容"
+    ) -> list:
+        """并行分析多张图片
+
+        Args:
+            images: 图片列表，每项为 {"data": "base64编码", ...} 格式的 dict
+            prompt: 对每张图片的提问
+
+        Returns:
+            与输入等长的结果列表；若某张图片分析失败，对应位置为异常对象
+
+        性能：N张图片耗时 ≈ max(单张) 而非 sum(单张)，云端并行有效
+        """
+        tasks = [self.chat_with_image(img.get("data", ""), prompt) for img in images]
+        return await asyncio.gather(*tasks, return_exceptions=True)
+
+    async def extract_formula(
+        self, image_data: str, context: str = "", question: str = ""
+    ) -> dict:
+        """公式识别与 LaTeX 提取
+
+        Args:
+            image_data: base64 编码的图片数据
+            context: 可选的上下文信息（如论文标题、章节）
+            question: 可选的用户追问
+
+        Returns:
+            结构化结果 dict：
+            {
+                "latex": "LaTeX 公式文本",
+                "formula_type": "equation|inequality|integral|derivative|matrix|system|other",
+                "description": "公式含义的自然语言解释",
+                "variables": {"x": "描述", "y": "描述"},
+                "raw_text": "原始识别文本"
+            }
+
+        性能：云端 2-5s，本地 10-30s（与 analyze_chart 相同）
+        """
+        prompt = """请识别图片中的数学公式并返回 JSON 格式结果：
+{"latex": "完整的 LaTeX 表达式", "formula_type": "公式类型(equation|inequality|integral|derivative|matrix|system|other)", "description": "公式含义的自然语言解释", "variables": {"变量名": "含义"}, "raw_text": "原始文本形式"}
+要求：
+1. LaTeX 使用标准数学符号（\\frac, \\int, \\sum 等）
+2. 多行公式用 \\\\  分隔
+3. 矩阵使用 \\begin{bmatrix} 环境"""
+
+        if context:
+            prompt += f"\n上下文: {context}"
+        if question:
+            prompt += f"\n用户问题: {question}"
+
+        result = await self.chat_with_image(image_data, prompt)
+
+        import json as _json
+        try:
+            return _json.loads(result)
+        except Exception:
+            return {
+                "latex": "",
+                "formula_type": "unknown",
+                "description": result,
+                "variables": {},
+                "raw_text": result
+            }
 
     async def extract_keywords(self, text: str, title: str = "", max_keywords: int = 5) -> list:
         """从论文文本中提取关键词

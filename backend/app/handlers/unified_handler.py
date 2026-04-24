@@ -5,8 +5,12 @@
 import json
 import asyncio
 import logging
+import re
 
 from langchain_core.messages import SystemMessage, HumanMessage
+
+from app.tools.multimodal_tools import MultimodalSearchTool
+from app.services.pdf_service import pdf_service
 
 from app.database import AsyncSessionLocal
 from app.services.llm_service import llm_service
@@ -117,6 +121,58 @@ def _is_deep_research_request(message: str, intent_result: dict) -> bool:
     return False
 
 
+# === 多模态路由关键词 ===
+MULTIMODAL_KEYWORDS = [
+    "图片", "图表", "图像", "截图", "照片", "figure", "chart", "diagram",
+    "image", "visual", "图中", "图上", "这张图", "这个图表"
+]
+
+MULTIMODAL_TOOLS = {"analyze_chart", "multimodal_search"}
+
+
+def _is_multimodal_request(message: str, has_image: bool = False) -> bool:
+    """检测是否为多模态请求
+
+    三层短路：
+    1. has_image=True → 直接多模态（跳过意图识别，零延迟）
+    2. 文本含图表关键词 → 需要进一步意图识别确认
+    3. 其余 → 走现有路由
+    """
+    if has_image:
+        return True
+    msg_lower = message.lower()
+    return any(kw in msg_lower for kw in MULTIMODAL_KEYWORDS)
+
+
+def _extract_page_number(message: str) -> int | None:
+    """从消息中提取页码数字（转换为 0-based 索引）
+    
+    支持格式："第3页", "page 3", "第 3 页", "p.3", "p3", "第3张图"
+    
+    Args:
+        message: 用户消息
+        
+    Returns:
+        0-based 页码，未找到则返回 None
+    """
+    patterns = [
+        r'第\s*(\d+)\s*页',
+        r'page\s*(\d+)',
+        r'p\.?\s*(\d+)',
+        r'第\s*(\d+)\s*[张幅个]',
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, message.lower())
+        if match:
+            page = int(match.group(1))
+            return max(0, page - 1)  # 1-based → 0-based
+    # 简单数字匹配（如果包含"页"或"page"附近）
+    loose_match = re.search(r'(\d+)\s*[页p]', message.lower())
+    if loose_match:
+        return max(0, int(loose_match.group(1)) - 1)
+    return None
+
+
 # 工具单例（避免每次请求重复创建）
 _literature_review_tool = LiteratureReviewTool()
 _cite_paper_tool = CitePaperTool()
@@ -188,6 +244,177 @@ def _sync_mcp_tools_to_agent(state):
                 agent_service.tool_registry.register(tool)
     except Exception as e:
         logger.warning(f"[unified_handler] MCP 工具同步失败（非阻断）: {e}")
+
+
+async def _handle_multimodal(websocket, db, state, message, message_data, paper_id, paper_ids, session_id, user_id, thinking_mode="quick", images=None):
+    """多模态请求完整处理
+    
+    四条路径:
+    1. 有图片 + 有论文 → AnalyzeChartTool（图表分析）
+    2. 有图片 + 无论文 → chat_with_image 直接分析
+    3. 有图片 + 搜索意图 → MultimodalSearchTool
+    4. 纯文本多模态意图 → 从当前论文提取图片后分析
+    
+    性能: 云端 2-5s，本地 10-30s
+    """
+    await websocket.send_text(json.dumps({"type": "thinking", "content": "正在分析多模态内容..."}))
+    
+    has_image = bool(images)
+    has_paper = bool(paper_ids or paper_id)
+    is_search = any(kw in message.lower() for kw in ["搜索", "search", "查找", "find"])
+    
+    full_response = ""
+    
+    try:
+        if has_image and is_search:
+            # 路径3: 多模态搜索
+            await websocket.send_text(json.dumps({"type": "tool_start", "tool": "multimodal_search"}))
+            tool = MultimodalSearchTool()
+            ctx = ToolContext(
+                db=db,
+                paper_id=paper_id,
+                paper_ids=paper_ids or [],
+                user_id=user_id,
+                session_id=session_id,
+            )
+            result = await tool.execute(ctx, query=message, image_data=images[0]["data"], search_mode="text_with_visual")
+            await websocket.send_text(json.dumps({
+                "type": "tool_result",
+                "tool": "multimodal_search",
+                "data": result.data if result.success else {"error": result.error}
+            }))
+            if result.success:
+                # 用 LLM 生成自然语言总结
+                search_results = result.data.get("results", [])
+                summary_lines = [f"基于图片和文本「{message}」的搜索结果：\n"]
+                for i, r in enumerate(search_results[:5], 1):
+                    title = r.get("title", "无标题")
+                    snippet = r.get("snippet", "")
+                    source = r.get("source", "")
+                    summary_lines.append(f"{i}. **{title}** ({source})\n   {snippet}")
+                full_response = "\n".join(summary_lines)
+            else:
+                full_response = f"多模态搜索失败：{result.error}"
+                
+        elif has_image and has_paper:
+            # 路径1: 图表分析（结合论文上下文）
+            await websocket.send_text(json.dumps({"type": "tool_start", "tool": "analyze_chart"}))
+            result = await llm_service.analyze_chart(images[0]["data"], question=message)
+            await websocket.send_text(json.dumps({
+                "type": "tool_result",
+                "tool": "analyze_chart",
+                "data": result
+            }))
+            # 构建自然语言回复
+            if isinstance(result, dict):
+                chart_type = result.get("chart_type", "unknown")
+                data_summary = result.get("data_summary", "")
+                key_findings = result.get("key_findings", [])
+                raw_description = result.get("raw_description", "")
+                parts = [f"**图表类型**: {chart_type}\n"]
+                if data_summary:
+                    parts.append(f"\n**数据摘要**: {data_summary}")
+                if key_findings:
+                    parts.append("\n**关键发现**:\n" + "\n".join(f"- {kf}" for kf in key_findings))
+                if raw_description:
+                    parts.append(f"\n**详细描述**: {raw_description}")
+                full_response = "\n".join(parts)
+            else:
+                full_response = str(result)
+                
+        elif has_image and not has_paper:
+            # 路径2: 直接图片分析
+            await websocket.send_text(json.dumps({"type": "thinking", "content": "正在分析图片..."}))
+            result = await llm_service.chat_with_image(
+                images[0]["data"],
+                prompt=message or "请详细描述这张图片的内容"
+            )
+            full_response = result
+            
+        else:
+            # 路径4: 纯文本多模态意图（如"分析第3页的图表"）
+            if has_paper:
+                await websocket.send_text(json.dumps({"type": "thinking", "content": "正在从论文中提取图表..."}))
+                page_num = _extract_page_number(message)
+                if page_num is None:
+                    page_num = 0  # 默认第一页
+                try:
+                    from app.models.paper import Paper
+                    from sqlalchemy import select
+                    _pid = paper_id or (paper_ids[0] if paper_ids else None)
+                    if _pid:
+                        result = await db.execute(select(Paper).where(Paper.id == _pid))
+                        paper = result.scalar_one_or_none()
+                        if paper and paper.file_path:
+                            extracted_images = await pdf_service.extract_page_images(paper.file_path, page_num)
+                            if extracted_images:
+                                analysis = await llm_service.analyze_chart(extracted_images[0]["base64"], question=message)
+                                await websocket.send_text(json.dumps({
+                                    "type": "tool_result",
+                                    "tool": "analyze_chart",
+                                    "data": analysis
+                                }))
+                                if isinstance(analysis, dict):
+                                    chart_type = analysis.get("chart_type", "unknown")
+                                    data_summary = analysis.get("data_summary", "")
+                                    key_findings = analysis.get("key_findings", [])
+                                    raw_description = analysis.get("raw_description", "")
+                                    parts = [f"**图表类型**: {chart_type}\n"]
+                                    if data_summary:
+                                        parts.append(f"\n**数据摘要**: {data_summary}")
+                                    if key_findings:
+                                        parts.append("\n**关键发现**:\n" + "\n".join(f"- {kf}" for kf in key_findings))
+                                    if raw_description:
+                                        parts.append(f"\n**详细描述**: {raw_description}")
+                                    full_response = "\n".join(parts)
+                                else:
+                                    full_response = str(analysis)
+                            else:
+                                full_response = f"第 {page_num + 1} 页未找到图片，请检查页码或上传图片。"
+                        else:
+                            full_response = "未找到论文文件，无法提取图表。"
+                    else:
+                        full_response = "未指定论文，无法提取图表。"
+                except Exception as e:
+                    logger.error(f"路径4图表提取失败: {e}")
+                    full_response = f"图表提取失败: {str(e)}"
+            else:
+                full_response = "请上传图片或选择包含图表的论文进行多模态分析。"
+        
+        # 流式发送最终回答
+        if full_response:
+            chunk_buffer = ChunkBuffer(websocket, interval_ms=50)
+            try:
+                chunk_size = 20
+                for i in range(0, len(full_response), chunk_size):
+                    chunk = full_response[i:i + chunk_size]
+                    await chunk_buffer.add(chunk, "rag_chat_chunk")
+                await chunk_buffer.flush("rag_chat_chunk")
+            finally:
+                chunk_buffer.close()
+        
+    except Exception as e:
+        logger.error(f"多模态处理失败: {e}")
+        await websocket.send_text(json.dumps({
+            "type": "error",
+            "message": f"多模态分析失败: {str(e)}"
+        }))
+        full_response = f"多模态分析失败: {str(e)}"
+    
+    # 保存消息
+    try:
+        session = await get_or_create_session(db, session_id, user_id, paper_id=paper_id)
+        await save_message(db, session.id, "user", message)
+        await save_message(db, session.id, "assistant", full_response or "多模态分析完成")
+        await auto_title(db, session, message)
+    except Exception as e:
+        logger.warning(f"多模态消息保存失败: {e}")
+    
+    await websocket.send_text(json.dumps({
+        "type": "done",
+        "channel": "rag_chat",
+        "session_id": session.id if 'session' in dir() else session_id
+    }))
 
 
 async def _handle_config_agent(websocket, db, state, message, session_id, user_id, chat_history="", thinking_mode="quick"):
@@ -1028,7 +1255,7 @@ async def _handle_multi_agent_research(
     }))
 
 
-async def handle_unified_chat(websocket, state, message, paper_id, paper_ids, session_id, user_id, enable_search, forced_tool=None, thinking_mode="quick", task_key="unified", message_data=None):
+async def handle_unified_chat(websocket, state, message, paper_id, paper_ids, session_id, user_id, enable_search, forced_tool=None, thinking_mode="quick", task_key="unified", message_data=None, images=None):
     """统一聊天入口 - 根据意图自动路由到不同功能
 
     流程：
@@ -1078,6 +1305,18 @@ async def handle_unified_chat(websocket, state, message, paper_id, paper_ids, se
                 chat_history = context_service.format_history_for_prompt(history)
         except Exception as e:
             logger.warning(f"获取对话历史失败: {e}")
+
+        # === 多模态第一层短路：有图片直接跳过意图识别 ===
+        has_image = bool(images)
+        if has_image:
+            logger.info(f"多模态短路触发（有图片）: message='{message[:50]}'")
+            async with AsyncSessionLocal() as db:
+                await _handle_multimodal(
+                    websocket, db, state, message, message_data,
+                    paper_id, paper_ids, session_id, user_id, thinking_mode,
+                    images=images
+                )
+            return
 
         # 1. 意图识别
         if forced_tool:
@@ -1165,6 +1404,17 @@ async def handle_unified_chat(websocket, state, message, paper_id, paper_ids, se
         # 3. 根据意图路由
         if intent_result.get("matched"):
             tool = intent_result.get("tool")
+
+            # === 多模态第三层：纯文本多模态意图 ===
+            if tool in MULTIMODAL_TOOLS:
+                logger.info(f"多模态意图触发: tool={tool}, message='{message[:50]}'")
+                async with AsyncSessionLocal() as db:
+                    await _handle_multimodal(
+                        websocket, db, state, message, message_data,
+                        paper_id, paper_ids, session_id, user_id, thinking_mode,
+                        images=images
+                    )
+                return
 
             # === 分析类 ===
             if tool == "analyze_paper":

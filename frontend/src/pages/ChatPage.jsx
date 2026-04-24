@@ -29,7 +29,7 @@ function genMsgId() {
 
 function ChatPage() {
   const { papers, fetchPapers } = usePaperStore();
-  
+
   // Session Store
   const {
     sessions,
@@ -42,7 +42,7 @@ function ChatPage() {
     autoNameSession,
     createCrossDocSession,
   } = useSessionStore();
-  
+
   // Message Store
   const {
     messages,
@@ -61,7 +61,7 @@ function ChatPage() {
     loadingMore,
     loadMoreMessages,
   } = useMessageStore();
-  
+
   // Chat Config Store
   const {
     selectedPaperIds,
@@ -79,6 +79,7 @@ function ChatPage() {
   const [selectedPaperId, setSelectedPaperId] = useState(null);
   const [showPaperSelector, setShowPaperSelector] = useState(false);
   const [isChatting, setIsChatting] = useState(false);
+  const [images, setImages] = useState([]);
 
   // WebView 状态
   const [webViewUrl, setWebViewUrl] = useState(null);
@@ -213,7 +214,7 @@ function ChatPage() {
       virtualizer.scrollToIndex(messages.length - 1, { align: 'end', behavior: 'smooth' });
     }
   }, [messages.length, lastMessageContent, virtualizer, loadingMore]);
-  
+
   // ---- 滚动加载更多 ----
   const handleScroll = useCallback((e) => {
     const { scrollTop } = e.target;
@@ -251,7 +252,16 @@ function ChatPage() {
     typewriter.reset();
     typewriter.start();
 
-    sendUnifiedChatMessage(trimmed, selectedPaperId, selectedPaperIds, sessionId, enableSearch);
+    const readyImages = images
+      .filter((i) => i.status === 'ready')
+      .map((i) => ({
+        image_id: i.image_id,
+        type: i.file?.type,
+        name: i.file?.name,
+      }));
+
+    sendUnifiedChatMessage(trimmed, selectedPaperId, selectedPaperIds, sessionId, enableSearch, readyImages);
+    setImages([]);
   };
 
   const handleKeyDown = (e) => {
@@ -259,6 +269,56 @@ function ChatPage() {
       e.preventDefault();
       handleSend();
     }
+  };
+
+  const handleAddImage = async (file) => {
+    if (file.size > 10 * 1024 * 1024) {
+      alert('图片不能超过10MB');
+      return;
+    }
+    if (images.length >= 4) {
+      alert('最多上传4张图片');
+      return;
+    }
+
+    const idx = images.length;
+    setImages((prev) => [...prev, { file, status: 'uploading', progress: 0 }]);
+
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await fetch('/api/v1/upload/image', {
+        method: 'POST',
+        body: formData,
+      });
+      if (!res.ok) {
+        throw new Error(`上传失败: ${res.status}`);
+      }
+      const data = await res.json();
+
+      setImages((prev) =>
+        prev.map((img, i) =>
+          i === idx
+            ? {
+                ...img,
+                status: 'ready',
+                image_id: data.image_id,
+                thumbnailUrl: data.thumbnail_url,
+              }
+            : img
+        )
+      );
+    } catch (err) {
+      setImages((prev) =>
+        prev.map((img, i) =>
+          i === idx ? { ...img, status: 'error', error: err.message } : img
+        )
+      );
+    }
+  };
+
+  const handleRemoveImage = (idx) => {
+    setImages((prev) => prev.filter((_, i) => i !== idx));
   };
 
   const handlePaperSelect = (selectedIds) => {
@@ -387,6 +447,9 @@ function ChatPage() {
               onOpenSelector={() => setShowPaperSelector(true)}
               styles={styles}
               costSlot={<><ModelSelector /><CostIndicator sessionId={currentSessionId} /></>}
+              images={images}
+              onAddImage={handleAddImage}
+              onRemoveImage={handleRemoveImage}
             />
           </div>
         ) : (
@@ -509,6 +572,9 @@ function ChatPage() {
               onOpenSelector={() => setShowPaperSelector(true)}
               styles={styles}
               costSlot={<><ModelSelector /><CostIndicator sessionId={currentSessionId} /></>}
+              images={images}
+              onAddImage={handleAddImage}
+              onRemoveImage={handleRemoveImage}
             />
           </div>
         )}

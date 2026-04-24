@@ -137,6 +137,32 @@ INTENT_KEYWORDS: dict[str, dict] = {
         "keywords": ["跨论文推理", "假设验证", "假设推理", "cross-paper reason", "hypothesis"],
         "intent": "cross_paper_reason",
         "tool": "cross_paper_reason"
+    },
+    # 多模态类
+    "image_analysis": {
+        "keywords": ["图片分析", "分析图片", "描述图片", "图像识别", "image analysis", "analyze image", "describe image"],
+        "intent": "image_analysis",
+        "tool": "analyze_chart"
+    },
+    "chart_extraction": {
+        "keywords": ["提取图表", "图表数据", "读取图表", "表格提取", "chart data", "extract chart", "read table"],
+        "intent": "chart_extraction",
+        "tool": "analyze_chart"
+    },
+    "visual_comparison": {
+        "keywords": ["图表对比", "视觉对比", "比较图表", "图像比较", "visual comparison", "compare charts", "compare figures"],
+        "intent": "visual_comparison",
+        "tool": "analyze_chart"
+    },
+    "multimodal_search": {
+        "keywords": ["图片搜索", "以图搜文", "图文搜索", "视觉搜索", "image search", "visual search", "search by image"],
+        "intent": "multimodal_search",
+        "tool": "multimodal_search"
+    },
+    "cross_modal_reasoning": {
+        "keywords": ["图文推理", "跨模态", "图表推理", "图像推理", "cross modal", "visual reasoning", "multimodal reasoning"],
+        "intent": "cross_modal_reasoning",
+        "tool": "analyze_chart"
     }
 }
 

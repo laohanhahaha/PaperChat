@@ -109,6 +109,9 @@ class AgentService:
             VerifyConsistencyTool,
             FindResearchGapsTool,
             CrossPaperReasonTool,
+            # multimodal_tools
+            AnalyzeChartTool,
+            MultimodalSearchTool,
         )
         tools = [
             SearchTextTool(),
@@ -136,6 +139,9 @@ class AgentService:
             VerifyConsistencyTool(),
             FindResearchGapsTool(),
             CrossPaperReasonTool(),
+            # 多模态工具
+            AnalyzeChartTool(),
+            MultimodalSearchTool(),
         ]
         self.tool_registry.register_many(tools)
 

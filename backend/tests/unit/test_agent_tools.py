@@ -37,6 +37,9 @@ from app.services.agent.tools import (
     VerifyConsistencyTool,
     FindResearchGapsTool,
     CrossPaperReasonTool,
+    # multimodal_tools
+    AnalyzeChartTool,
+    MultimodalSearchTool,
 )
 
 ALL_TOOL_CLASSES = [
@@ -61,6 +64,8 @@ ALL_TOOL_CLASSES = [
     VerifyConsistencyTool,
     FindResearchGapsTool,
     CrossPaperReasonTool,
+    AnalyzeChartTool,
+    MultimodalSearchTool,
 ]
 
 
@@ -158,4 +163,9 @@ def test_tool_result_with_data():
 
 
 def test_all_tools_count():
-    assert len(ALL_TOOL_CLASSES) == 21
+    assert len(ALL_TOOL_CLASSES) == 23
+    assert result.data["count"] == 5
+
+
+def test_all_tools_count():
+    assert len(ALL_TOOL_CLASSES) == 23

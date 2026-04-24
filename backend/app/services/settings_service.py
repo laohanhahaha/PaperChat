@@ -193,6 +193,52 @@ DEFAULT_SETTINGS: Dict[str, Dict[str, Dict[str, Any]]] = {
             "label": "服务状态",
             "description": "MCP 学术服务配置状态（此分组由 ConfigAgentPanel 组件渲染）"
         }
+    },
+    "multimodal": {
+        "qwen_model_cloud": {
+            "value": "qwen2.5-vl-plus",
+            "type": "select",
+            "options": ["qwen2.5-vl-plus", "qwen-vl-plus", "qwen-vl-max"],
+            "label": "云端多模态模型",
+            "description": "用于图片理解的云端模型"
+        },
+        "qwen_model_local": {
+            "value": "qwen2.5-vl:7b",
+            "type": "text",
+            "label": "本地多模态模型",
+            "description": "Ollama 本地多模态模型名称"
+        },
+        "qwen_multimodal_max_tokens": {
+            "value": 2048,
+            "type": "number",
+            "min": 256,
+            "max": 8192,
+            "label": "多模态最大Token数",
+            "description": "多模态模型回答长度上限"
+        },
+        "qwen_multimodal_temperature": {
+            "value": 0.7,
+            "type": "slider",
+            "min": 0.0,
+            "max": 2.0,
+            "step": 0.1,
+            "label": "多模态温度",
+            "description": "多模态模型回答温度，越高越有创意"
+        },
+        "max_image_size_mb": {
+            "value": 10,
+            "type": "number",
+            "min": 1,
+            "max": 50,
+            "label": "最大图片大小(MB)",
+            "description": "上传图片的最大文件大小"
+        },
+        "image_cache_enabled": {
+            "value": True,
+            "type": "toggle",
+            "label": "图片缓存",
+            "description": "启用图片分析结果缓存"
+        }
     }
 }
 

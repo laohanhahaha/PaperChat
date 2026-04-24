@@ -1,0 +1,1286 @@
+{
+  "version": "1.0",
+  "total_samples": 100,
+  "samples": [
+    {
+      "id": "chart_type_000",
+      "category": "chart_type",
+      "image_path": "chart_type/sample_000.png",
+      "ground_truth": {
+        "chart_type": "line_chart"
+      },
+      "metadata": {
+        "source": "arxiv",
+        "difficulty": "medium"
+      }
+    },
+    {
+      "id": "chart_type_001",
+      "category": "chart_type",
+      "image_path": "chart_type/sample_001.png",
+      "ground_truth": {
+        "chart_type": "bar_chart"
+      },
+      "metadata": {
+        "source": "arxiv",
+        "difficulty": "medium"
+      }
+    },
+    {
+      "id": "chart_type_002",
+      "category": "chart_type",
+      "image_path": "chart_type/sample_002.png",
+      "ground_truth": {
+        "chart_type": "pie_chart"
+      },
+      "metadata": {
+        "source": "arxiv",
+        "difficulty": "medium"
+      }
+    },
+    {
+      "id": "chart_type_003",
+      "category": "chart_type",
+      "image_path": "chart_type/sample_003.png",
+      "ground_truth": {
+        "chart_type": "table"
+      },
+      "metadata": {
+        "source": "arxiv",
+        "difficulty": "medium"
+      }
+    },
+    {
+      "id": "chart_type_004",
+      "category": "chart_type",
+      "image_path": "chart_type/sample_004.png",
+      "ground_truth": {
+        "chart_type": "flowchart"
+      },
+      "metadata": {
+        "source": "arxiv",
+        "difficulty": "medium"
+      }
+    },
+    {
+      "id": "chart_type_005",
+      "category": "chart_type",
+      "image_path": "chart_type/sample_005.png",
+      "ground_truth": {
+        "chart_type": "scatter_plot"
+      },
+      "metadata": {
+        "source": "arxiv",
+        "difficulty": "medium"
+      }
+    },
+    {
+      "id": "chart_type_006",
+      "category": "chart_type",
+      "image_path": "chart_type/sample_006.png",
+      "ground_truth": {
+        "chart_type": "heatmap"
+      },
+      "metadata": {
+        "source": "arxiv",
+        "difficulty": "medium"
+      }
+    },
+    {
+      "id": "chart_type_007",
+      "category": "chart_type",
+      "image_path": "chart_type/sample_007.png",
+      "ground_truth": {
+        "chart_type": "box_plot"
+      },
+      "metadata": {
+        "source": "arxiv",
+        "difficulty": "medium"
+      }
+    },
+    {
+      "id": "chart_type_008",
+      "category": "chart_type",
+      "image_path": "chart_type/sample_008.png",
+      "ground_truth": {
+        "chart_type": "area_chart"
+      },
+      "metadata": {
+        "source": "arxiv",
+        "difficulty": "medium"
+      }
+    },
+    {
+      "id": "chart_type_009",
+      "category": "chart_type",
+      "image_path": "chart_type/sample_009.png",
+      "ground_truth": {
+        "chart_type": "histogram"
+      },
+      "metadata": {
+        "source": "arxiv",
+        "difficulty": "medium"
+      }
+    },
+    {
+      "id": "chart_type_010",
+      "category": "chart_type",
+      "image_path": "chart_type/sample_010.png",
+      "ground_truth": {
+        "chart_type": "line_chart"
+      },
+      "metadata": {
+        "source": "arxiv",
+        "difficulty": "medium"
+      }
+    },
+    {
+      "id": "chart_type_011",
+      "category": "chart_type",
+      "image_path": "chart_type/sample_011.png",
+      "ground_truth": {
+        "chart_type": "bar_chart"
+      },
+      "metadata": {
+        "source": "arxiv",
+        "difficulty": "medium"
+      }
+    },
+    {
+      "id": "chart_type_012",
+      "category": "chart_type",
+      "image_path": "chart_type/sample_012.png",
+      "ground_truth": {
+        "chart_type": "pie_chart"
+      },
+      "metadata": {
+        "source": "arxiv",
+        "difficulty": "medium"
+      }
+    },
+    {
+      "id": "chart_type_013",
+      "category": "chart_type",
+      "image_path": "chart_type/sample_013.png",
+      "ground_truth": {
+        "chart_type": "table"
+      },
+      "metadata": {
+        "source": "arxiv",
+        "difficulty": "medium"
+      }
+    },
+    {
+      "id": "chart_type_014",
+      "category": "chart_type",
+      "image_path": "chart_type/sample_014.png",
+      "ground_truth": {
+        "chart_type": "flowchart"
+      },
+      "metadata": {
+        "source": "arxiv",
+        "difficulty": "medium"
+      }
+    },
+    {
+      "id": "chart_type_015",
+      "category": "chart_type",
+      "image_path": "chart_type/sample_015.png",
+      "ground_truth": {
+        "chart_type": "scatter_plot"
+      },
+      "metadata": {
+        "source": "arxiv",
+        "difficulty": "medium"
+      }
+    },
+    {
+      "id": "chart_type_016",
+      "category": "chart_type",
+      "image_path": "chart_type/sample_016.png",
+      "ground_truth": {
+        "chart_type": "heatmap"
+      },
+      "metadata": {
+        "source": "arxiv",
+        "difficulty": "medium"
+      }
+    },
+    {
+      "id": "chart_type_017",
+      "category": "chart_type",
+      "image_path": "chart_type/sample_017.png",
+      "ground_truth": {
+        "chart_type": "box_plot"
+      },
+      "metadata": {
+        "source": "arxiv",
+        "difficulty": "medium"
+      }
+    },
+    {
+      "id": "chart_type_018",
+      "category": "chart_type",
+      "image_path": "chart_type/sample_018.png",
+      "ground_truth": {
+        "chart_type": "area_chart"
+      },
+      "metadata": {
+        "source": "arxiv",
+        "difficulty": "medium"
+      }
+    },
+    {
+      "id": "chart_type_019",
+      "category": "chart_type",
+      "image_path": "chart_type/sample_019.png",
+      "ground_truth": {
+        "chart_type": "histogram"
+      },
+      "metadata": {
+        "source": "arxiv",
+        "difficulty": "medium"
+      }
+    },
+    {
+      "id": "chart_type_020",
+      "category": "chart_type",
+      "image_path": "chart_type/sample_020.png",
+      "ground_truth": {
+        "chart_type": "line_chart"
+      },
+      "metadata": {
+        "source": "arxiv",
+        "difficulty": "medium"
+      }
+    },
+    {
+      "id": "chart_type_021",
+      "category": "chart_type",
+      "image_path": "chart_type/sample_021.png",
+      "ground_truth": {
+        "chart_type": "bar_chart"
+      },
+      "metadata": {
+        "source": "arxiv",
+        "difficulty": "medium"
+      }
+    },
+    {
+      "id": "chart_type_022",
+      "category": "chart_type",
+      "image_path": "chart_type/sample_022.png",
+      "ground_truth": {
+        "chart_type": "pie_chart"
+      },
+      "metadata": {
+        "source": "arxiv",
+        "difficulty": "medium"
+      }
+    },
+    {
+      "id": "chart_type_023",
+      "category": "chart_type",
+      "image_path": "chart_type/sample_023.png",
+      "ground_truth": {
+        "chart_type": "table"
+      },
+      "metadata": {
+        "source": "arxiv",
+        "difficulty": "medium"
+      }
+    },
+    {
+      "id": "chart_type_024",
+      "category": "chart_type",
+      "image_path": "chart_type/sample_024.png",
+      "ground_truth": {
+        "chart_type": "flowchart"
+      },
+      "metadata": {
+        "source": "arxiv",
+        "difficulty": "medium"
+      }
+    },
+    {
+      "id": "chart_type_025",
+      "category": "chart_type",
+      "image_path": "chart_type/sample_025.png",
+      "ground_truth": {
+        "chart_type": "scatter_plot"
+      },
+      "metadata": {
+        "source": "arxiv",
+        "difficulty": "medium"
+      }
+    },
+    {
+      "id": "chart_type_026",
+      "category": "chart_type",
+      "image_path": "chart_type/sample_026.png",
+      "ground_truth": {
+        "chart_type": "heatmap"
+      },
+      "metadata": {
+        "source": "arxiv",
+        "difficulty": "medium"
+      }
+    },
+    {
+      "id": "chart_type_027",
+      "category": "chart_type",
+      "image_path": "chart_type/sample_027.png",
+      "ground_truth": {
+        "chart_type": "box_plot"
+      },
+      "metadata": {
+        "source": "arxiv",
+        "difficulty": "medium"
+      }
+    },
+    {
+      "id": "chart_type_028",
+      "category": "chart_type",
+      "image_path": "chart_type/sample_028.png",
+      "ground_truth": {
+        "chart_type": "area_chart"
+      },
+      "metadata": {
+        "source": "arxiv",
+        "difficulty": "medium"
+      }
+    },
+    {
+      "id": "chart_type_029",
+      "category": "chart_type",
+      "image_path": "chart_type/sample_029.png",
+      "ground_truth": {
+        "chart_type": "histogram"
+      },
+      "metadata": {
+        "source": "arxiv",
+        "difficulty": "medium"
+      }
+    },
+    {
+      "id": "chart_type_030",
+      "category": "chart_type",
+      "image_path": "chart_type/sample_030.png",
+      "ground_truth": {
+        "chart_type": "line_chart"
+      },
+      "metadata": {
+        "source": "arxiv",
+        "difficulty": "medium"
+      }
+    },
+    {
+      "id": "chart_type_031",
+      "category": "chart_type",
+      "image_path": "chart_type/sample_031.png",
+      "ground_truth": {
+        "chart_type": "bar_chart"
+      },
+      "metadata": {
+        "source": "arxiv",
+        "difficulty": "medium"
+      }
+    },
+    {
+      "id": "chart_type_032",
+      "category": "chart_type",
+      "image_path": "chart_type/sample_032.png",
+      "ground_truth": {
+        "chart_type": "pie_chart"
+      },
+      "metadata": {
+        "source": "arxiv",
+        "difficulty": "medium"
+      }
+    },
+    {
+      "id": "chart_type_033",
+      "category": "chart_type",
+      "image_path": "chart_type/sample_033.png",
+      "ground_truth": {
+        "chart_type": "table"
+      },
+      "metadata": {
+        "source": "arxiv",
+        "difficulty": "medium"
+      }
+    },
+    {
+      "id": "chart_type_034",
+      "category": "chart_type",
+      "image_path": "chart_type/sample_034.png",
+      "ground_truth": {
+        "chart_type": "flowchart"
+      },
+      "metadata": {
+        "source": "arxiv",
+        "difficulty": "medium"
+      }
+    },
+    {
+      "id": "chart_type_035",
+      "category": "chart_type",
+      "image_path": "chart_type/sample_035.png",
+      "ground_truth": {
+        "chart_type": "scatter_plot"
+      },
+      "metadata": {
+        "source": "arxiv",
+        "difficulty": "medium"
+      }
+    },
+    {
+      "id": "chart_type_036",
+      "category": "chart_type",
+      "image_path": "chart_type/sample_036.png",
+      "ground_truth": {
+        "chart_type": "heatmap"
+      },
+      "metadata": {
+        "source": "arxiv",
+        "difficulty": "medium"
+      }
+    },
+    {
+      "id": "chart_type_037",
+      "category": "chart_type",
+      "image_path": "chart_type/sample_037.png",
+      "ground_truth": {
+        "chart_type": "box_plot"
+      },
+      "metadata": {
+        "source": "arxiv",
+        "difficulty": "medium"
+      }
+    },
+    {
+      "id": "chart_type_038",
+      "category": "chart_type",
+      "image_path": "chart_type/sample_038.png",
+      "ground_truth": {
+        "chart_type": "area_chart"
+      },
+      "metadata": {
+        "source": "arxiv",
+        "difficulty": "medium"
+      }
+    },
+    {
+      "id": "chart_type_039",
+      "category": "chart_type",
+      "image_path": "chart_type/sample_039.png",
+      "ground_truth": {
+        "chart_type": "histogram"
+      },
+      "metadata": {
+        "source": "arxiv",
+        "difficulty": "medium"
+      }
+    },
+    {
+      "id": "chart_type_040",
+      "category": "chart_type",
+      "image_path": "chart_type/sample_040.png",
+      "ground_truth": {
+        "chart_type": "line_chart"
+      },
+      "metadata": {
+        "source": "arxiv",
+        "difficulty": "medium"
+      }
+    },
+    {
+      "id": "chart_type_041",
+      "category": "chart_type",
+      "image_path": "chart_type/sample_041.png",
+      "ground_truth": {
+        "chart_type": "bar_chart"
+      },
+      "metadata": {
+        "source": "arxiv",
+        "difficulty": "medium"
+      }
+    },
+    {
+      "id": "chart_type_042",
+      "category": "chart_type",
+      "image_path": "chart_type/sample_042.png",
+      "ground_truth": {
+        "chart_type": "pie_chart"
+      },
+      "metadata": {
+        "source": "arxiv",
+        "difficulty": "medium"
+      }
+    },
+    {
+      "id": "chart_type_043",
+      "category": "chart_type",
+      "image_path": "chart_type/sample_043.png",
+      "ground_truth": {
+        "chart_type": "table"
+      },
+      "metadata": {
+        "source": "arxiv",
+        "difficulty": "medium"
+      }
+    },
+    {
+      "id": "chart_type_044",
+      "category": "chart_type",
+      "image_path": "chart_type/sample_044.png",
+      "ground_truth": {
+        "chart_type": "flowchart"
+      },
+      "metadata": {
+        "source": "arxiv",
+        "difficulty": "medium"
+      }
+    },
+    {
+      "id": "chart_type_045",
+      "category": "chart_type",
+      "image_path": "chart_type/sample_045.png",
+      "ground_truth": {
+        "chart_type": "scatter_plot"
+      },
+      "metadata": {
+        "source": "arxiv",
+        "difficulty": "medium"
+      }
+    },
+    {
+      "id": "chart_type_046",
+      "category": "chart_type",
+      "image_path": "chart_type/sample_046.png",
+      "ground_truth": {
+        "chart_type": "heatmap"
+      },
+      "metadata": {
+        "source": "arxiv",
+        "difficulty": "medium"
+      }
+    },
+    {
+      "id": "chart_type_047",
+      "category": "chart_type",
+      "image_path": "chart_type/sample_047.png",
+      "ground_truth": {
+        "chart_type": "box_plot"
+      },
+      "metadata": {
+        "source": "arxiv",
+        "difficulty": "medium"
+      }
+    },
+    {
+      "id": "chart_type_048",
+      "category": "chart_type",
+      "image_path": "chart_type/sample_048.png",
+      "ground_truth": {
+        "chart_type": "area_chart"
+      },
+      "metadata": {
+        "source": "arxiv",
+        "difficulty": "medium"
+      }
+    },
+    {
+      "id": "chart_type_049",
+      "category": "chart_type",
+      "image_path": "chart_type/sample_049.png",
+      "ground_truth": {
+        "chart_type": "histogram"
+      },
+      "metadata": {
+        "source": "arxiv",
+        "difficulty": "medium"
+      }
+    },
+    {
+      "id": "data_extract_000",
+      "category": "data_extraction",
+      "image_path": "data_extraction/sample_000.png",
+      "ground_truth": {
+        "values": [],
+        "labels": [],
+        "title": ""
+      },
+      "metadata": {
+        "source": "arxiv",
+        "has_numbers": true
+      }
+    },
+    {
+      "id": "data_extract_001",
+      "category": "data_extraction",
+      "image_path": "data_extraction/sample_001.png",
+      "ground_truth": {
+        "values": [],
+        "labels": [],
+        "title": ""
+      },
+      "metadata": {
+        "source": "arxiv",
+        "has_numbers": true
+      }
+    },
+    {
+      "id": "data_extract_002",
+      "category": "data_extraction",
+      "image_path": "data_extraction/sample_002.png",
+      "ground_truth": {
+        "values": [],
+        "labels": [],
+        "title": ""
+      },
+      "metadata": {
+        "source": "arxiv",
+        "has_numbers": true
+      }
+    },
+    {
+      "id": "data_extract_003",
+      "category": "data_extraction",
+      "image_path": "data_extraction/sample_003.png",
+      "ground_truth": {
+        "values": [],
+        "labels": [],
+        "title": ""
+      },
+      "metadata": {
+        "source": "arxiv",
+        "has_numbers": true
+      }
+    },
+    {
+      "id": "data_extract_004",
+      "category": "data_extraction",
+      "image_path": "data_extraction/sample_004.png",
+      "ground_truth": {
+        "values": [],
+        "labels": [],
+        "title": ""
+      },
+      "metadata": {
+        "source": "arxiv",
+        "has_numbers": true
+      }
+    },
+    {
+      "id": "data_extract_005",
+      "category": "data_extraction",
+      "image_path": "data_extraction/sample_005.png",
+      "ground_truth": {
+        "values": [],
+        "labels": [],
+        "title": ""
+      },
+      "metadata": {
+        "source": "arxiv",
+        "has_numbers": true
+      }
+    },
+    {
+      "id": "data_extract_006",
+      "category": "data_extraction",
+      "image_path": "data_extraction/sample_006.png",
+      "ground_truth": {
+        "values": [],
+        "labels": [],
+        "title": ""
+      },
+      "metadata": {
+        "source": "arxiv",
+        "has_numbers": true
+      }
+    },
+    {
+      "id": "data_extract_007",
+      "category": "data_extraction",
+      "image_path": "data_extraction/sample_007.png",
+      "ground_truth": {
+        "values": [],
+        "labels": [],
+        "title": ""
+      },
+      "metadata": {
+        "source": "arxiv",
+        "has_numbers": true
+      }
+    },
+    {
+      "id": "data_extract_008",
+      "category": "data_extraction",
+      "image_path": "data_extraction/sample_008.png",
+      "ground_truth": {
+        "values": [],
+        "labels": [],
+        "title": ""
+      },
+      "metadata": {
+        "source": "arxiv",
+        "has_numbers": true
+      }
+    },
+    {
+      "id": "data_extract_009",
+      "category": "data_extraction",
+      "image_path": "data_extraction/sample_009.png",
+      "ground_truth": {
+        "values": [],
+        "labels": [],
+        "title": ""
+      },
+      "metadata": {
+        "source": "arxiv",
+        "has_numbers": true
+      }
+    },
+    {
+      "id": "data_extract_010",
+      "category": "data_extraction",
+      "image_path": "data_extraction/sample_010.png",
+      "ground_truth": {
+        "values": [],
+        "labels": [],
+        "title": ""
+      },
+      "metadata": {
+        "source": "arxiv",
+        "has_numbers": true
+      }
+    },
+    {
+      "id": "data_extract_011",
+      "category": "data_extraction",
+      "image_path": "data_extraction/sample_011.png",
+      "ground_truth": {
+        "values": [],
+        "labels": [],
+        "title": ""
+      },
+      "metadata": {
+        "source": "arxiv",
+        "has_numbers": true
+      }
+    },
+    {
+      "id": "data_extract_012",
+      "category": "data_extraction",
+      "image_path": "data_extraction/sample_012.png",
+      "ground_truth": {
+        "values": [],
+        "labels": [],
+        "title": ""
+      },
+      "metadata": {
+        "source": "arxiv",
+        "has_numbers": true
+      }
+    },
+    {
+      "id": "data_extract_013",
+      "category": "data_extraction",
+      "image_path": "data_extraction/sample_013.png",
+      "ground_truth": {
+        "values": [],
+        "labels": [],
+        "title": ""
+      },
+      "metadata": {
+        "source": "arxiv",
+        "has_numbers": true
+      }
+    },
+    {
+      "id": "data_extract_014",
+      "category": "data_extraction",
+      "image_path": "data_extraction/sample_014.png",
+      "ground_truth": {
+        "values": [],
+        "labels": [],
+        "title": ""
+      },
+      "metadata": {
+        "source": "arxiv",
+        "has_numbers": true
+      }
+    },
+    {
+      "id": "data_extract_015",
+      "category": "data_extraction",
+      "image_path": "data_extraction/sample_015.png",
+      "ground_truth": {
+        "values": [],
+        "labels": [],
+        "title": ""
+      },
+      "metadata": {
+        "source": "arxiv",
+        "has_numbers": true
+      }
+    },
+    {
+      "id": "data_extract_016",
+      "category": "data_extraction",
+      "image_path": "data_extraction/sample_016.png",
+      "ground_truth": {
+        "values": [],
+        "labels": [],
+        "title": ""
+      },
+      "metadata": {
+        "source": "arxiv",
+        "has_numbers": true
+      }
+    },
+    {
+      "id": "data_extract_017",
+      "category": "data_extraction",
+      "image_path": "data_extraction/sample_017.png",
+      "ground_truth": {
+        "values": [],
+        "labels": [],
+        "title": ""
+      },
+      "metadata": {
+        "source": "arxiv",
+        "has_numbers": true
+      }
+    },
+    {
+      "id": "data_extract_018",
+      "category": "data_extraction",
+      "image_path": "data_extraction/sample_018.png",
+      "ground_truth": {
+        "values": [],
+        "labels": [],
+        "title": ""
+      },
+      "metadata": {
+        "source": "arxiv",
+        "has_numbers": true
+      }
+    },
+    {
+      "id": "data_extract_019",
+      "category": "data_extraction",
+      "image_path": "data_extraction/sample_019.png",
+      "ground_truth": {
+        "values": [],
+        "labels": [],
+        "title": ""
+      },
+      "metadata": {
+        "source": "arxiv",
+        "has_numbers": true
+      }
+    },
+    {
+      "id": "data_extract_020",
+      "category": "data_extraction",
+      "image_path": "data_extraction/sample_020.png",
+      "ground_truth": {
+        "values": [],
+        "labels": [],
+        "title": ""
+      },
+      "metadata": {
+        "source": "arxiv",
+        "has_numbers": true
+      }
+    },
+    {
+      "id": "data_extract_021",
+      "category": "data_extraction",
+      "image_path": "data_extraction/sample_021.png",
+      "ground_truth": {
+        "values": [],
+        "labels": [],
+        "title": ""
+      },
+      "metadata": {
+        "source": "arxiv",
+        "has_numbers": true
+      }
+    },
+    {
+      "id": "data_extract_022",
+      "category": "data_extraction",
+      "image_path": "data_extraction/sample_022.png",
+      "ground_truth": {
+        "values": [],
+        "labels": [],
+        "title": ""
+      },
+      "metadata": {
+        "source": "arxiv",
+        "has_numbers": true
+      }
+    },
+    {
+      "id": "data_extract_023",
+      "category": "data_extraction",
+      "image_path": "data_extraction/sample_023.png",
+      "ground_truth": {
+        "values": [],
+        "labels": [],
+        "title": ""
+      },
+      "metadata": {
+        "source": "arxiv",
+        "has_numbers": true
+      }
+    },
+    {
+      "id": "data_extract_024",
+      "category": "data_extraction",
+      "image_path": "data_extraction/sample_024.png",
+      "ground_truth": {
+        "values": [],
+        "labels": [],
+        "title": ""
+      },
+      "metadata": {
+        "source": "arxiv",
+        "has_numbers": true
+      }
+    },
+    {
+      "id": "data_extract_025",
+      "category": "data_extraction",
+      "image_path": "data_extraction/sample_025.png",
+      "ground_truth": {
+        "values": [],
+        "labels": [],
+        "title": ""
+      },
+      "metadata": {
+        "source": "arxiv",
+        "has_numbers": true
+      }
+    },
+    {
+      "id": "data_extract_026",
+      "category": "data_extraction",
+      "image_path": "data_extraction/sample_026.png",
+      "ground_truth": {
+        "values": [],
+        "labels": [],
+        "title": ""
+      },
+      "metadata": {
+        "source": "arxiv",
+        "has_numbers": true
+      }
+    },
+    {
+      "id": "data_extract_027",
+      "category": "data_extraction",
+      "image_path": "data_extraction/sample_027.png",
+      "ground_truth": {
+        "values": [],
+        "labels": [],
+        "title": ""
+      },
+      "metadata": {
+        "source": "arxiv",
+        "has_numbers": true
+      }
+    },
+    {
+      "id": "data_extract_028",
+      "category": "data_extraction",
+      "image_path": "data_extraction/sample_028.png",
+      "ground_truth": {
+        "values": [],
+        "labels": [],
+        "title": ""
+      },
+      "metadata": {
+        "source": "arxiv",
+        "has_numbers": true
+      }
+    },
+    {
+      "id": "data_extract_029",
+      "category": "data_extraction",
+      "image_path": "data_extraction/sample_029.png",
+      "ground_truth": {
+        "values": [],
+        "labels": [],
+        "title": ""
+      },
+      "metadata": {
+        "source": "arxiv",
+        "has_numbers": true
+      }
+    },
+    {
+      "id": "img_text_000",
+      "category": "image_text_matching",
+      "image_path": "image_text/sample_000.png",
+      "ground_truth": {
+        "matching_text": "",
+        "relevance_score": 0.0
+      },
+      "metadata": {
+        "source": "arxiv",
+        "domain": "cs"
+      }
+    },
+    {
+      "id": "img_text_001",
+      "category": "image_text_matching",
+      "image_path": "image_text/sample_001.png",
+      "ground_truth": {
+        "matching_text": "",
+        "relevance_score": 0.0
+      },
+      "metadata": {
+        "source": "arxiv",
+        "domain": "cs"
+      }
+    },
+    {
+      "id": "img_text_002",
+      "category": "image_text_matching",
+      "image_path": "image_text/sample_002.png",
+      "ground_truth": {
+        "matching_text": "",
+        "relevance_score": 0.0
+      },
+      "metadata": {
+        "source": "arxiv",
+        "domain": "cs"
+      }
+    },
+    {
+      "id": "img_text_003",
+      "category": "image_text_matching",
+      "image_path": "image_text/sample_003.png",
+      "ground_truth": {
+        "matching_text": "",
+        "relevance_score": 0.0
+      },
+      "metadata": {
+        "source": "arxiv",
+        "domain": "cs"
+      }
+    },
+    {
+      "id": "img_text_004",
+      "category": "image_text_matching",
+      "image_path": "image_text/sample_004.png",
+      "ground_truth": {
+        "matching_text": "",
+        "relevance_score": 0.0
+      },
+      "metadata": {
+        "source": "arxiv",
+        "domain": "cs"
+      }
+    },
+    {
+      "id": "img_text_005",
+      "category": "image_text_matching",
+      "image_path": "image_text/sample_005.png",
+      "ground_truth": {
+        "matching_text": "",
+        "relevance_score": 0.0
+      },
+      "metadata": {
+        "source": "arxiv",
+        "domain": "cs"
+      }
+    },
+    {
+      "id": "img_text_006",
+      "category": "image_text_matching",
+      "image_path": "image_text/sample_006.png",
+      "ground_truth": {
+        "matching_text": "",
+        "relevance_score": 0.0
+      },
+      "metadata": {
+        "source": "arxiv",
+        "domain": "cs"
+      }
+    },
+    {
+      "id": "img_text_007",
+      "category": "image_text_matching",
+      "image_path": "image_text/sample_007.png",
+      "ground_truth": {
+        "matching_text": "",
+        "relevance_score": 0.0
+      },
+      "metadata": {
+        "source": "arxiv",
+        "domain": "cs"
+      }
+    },
+    {
+      "id": "img_text_008",
+      "category": "image_text_matching",
+      "image_path": "image_text/sample_008.png",
+      "ground_truth": {
+        "matching_text": "",
+        "relevance_score": 0.0
+      },
+      "metadata": {
+        "source": "arxiv",
+        "domain": "cs"
+      }
+    },
+    {
+      "id": "img_text_009",
+      "category": "image_text_matching",
+      "image_path": "image_text/sample_009.png",
+      "ground_truth": {
+        "matching_text": "",
+        "relevance_score": 0.0
+      },
+      "metadata": {
+        "source": "arxiv",
+        "domain": "cs"
+      }
+    },
+    {
+      "id": "img_text_010",
+      "category": "image_text_matching",
+      "image_path": "image_text/sample_010.png",
+      "ground_truth": {
+        "matching_text": "",
+        "relevance_score": 0.0
+      },
+      "metadata": {
+        "source": "arxiv",
+        "domain": "cs"
+      }
+    },
+    {
+      "id": "img_text_011",
+      "category": "image_text_matching",
+      "image_path": "image_text/sample_011.png",
+      "ground_truth": {
+        "matching_text": "",
+        "relevance_score": 0.0
+      },
+      "metadata": {
+        "source": "arxiv",
+        "domain": "cs"
+      }
+    },
+    {
+      "id": "img_text_012",
+      "category": "image_text_matching",
+      "image_path": "image_text/sample_012.png",
+      "ground_truth": {
+        "matching_text": "",
+        "relevance_score": 0.0
+      },
+      "metadata": {
+        "source": "arxiv",
+        "domain": "cs"
+      }
+    },
+    {
+      "id": "img_text_013",
+      "category": "image_text_matching",
+      "image_path": "image_text/sample_013.png",
+      "ground_truth": {
+        "matching_text": "",
+        "relevance_score": 0.0
+      },
+      "metadata": {
+        "source": "arxiv",
+        "domain": "cs"
+      }
+    },
+    {
+      "id": "img_text_014",
+      "category": "image_text_matching",
+      "image_path": "image_text/sample_014.png",
+      "ground_truth": {
+        "matching_text": "",
+        "relevance_score": 0.0
+      },
+      "metadata": {
+        "source": "arxiv",
+        "domain": "cs"
+      }
+    },
+    {
+      "id": "img_text_015",
+      "category": "image_text_matching",
+      "image_path": "image_text/sample_015.png",
+      "ground_truth": {
+        "matching_text": "",
+        "relevance_score": 0.0
+      },
+      "metadata": {
+        "source": "arxiv",
+        "domain": "cs"
+      }
+    },
+    {
+      "id": "img_text_016",
+      "category": "image_text_matching",
+      "image_path": "image_text/sample_016.png",
+      "ground_truth": {
+        "matching_text": "",
+        "relevance_score": 0.0
+      },
+      "metadata": {
+        "source": "arxiv",
+        "domain": "cs"
+      }
+    },
+    {
+      "id": "img_text_017",
+      "category": "image_text_matching",
+      "image_path": "image_text/sample_017.png",
+      "ground_truth": {
+        "matching_text": "",
+        "relevance_score": 0.0
+      },
+      "metadata": {
+        "source": "arxiv",
+        "domain": "cs"
+      }
+    },
+    {
+      "id": "img_text_018",
+      "category": "image_text_matching",
+      "image_path": "image_text/sample_018.png",
+      "ground_truth": {
+        "matching_text": "",
+        "relevance_score": 0.0
+      },
+      "metadata": {
+        "source": "arxiv",
+        "domain": "cs"
+      }
+    },
+    {
+      "id": "img_text_019",
+      "category": "image_text_matching",
+      "image_path": "image_text/sample_019.png",
+      "ground_truth": {
+        "matching_text": "",
+        "relevance_score": 0.0
+      },
+      "metadata": {
+        "source": "arxiv",
+        "domain": "cs"
+      }
+    }
+  ]
+}

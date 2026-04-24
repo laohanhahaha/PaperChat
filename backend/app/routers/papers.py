@@ -6,6 +6,7 @@ import os
 import uuid
 import json
 import asyncio
+import base64
 from pathlib import Path
 from typing import Optional, List
 from datetime import datetime
@@ -16,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, or_
 from sqlalchemy.orm import selectinload
 from pydantic import BaseModel
+import fitz  # PyMuPDF - for rendering bbox regions
 
 from app.database import get_db, AsyncSessionLocal
 from app.config import settings
@@ -429,6 +431,54 @@ async def get_paper_file(
         filename=f"{paper.title}.pdf",
         media_type="application/pdf"
     )
+
+
+@router.get("/{paper_id}/images")
+async def get_paper_images(
+    paper_id: int,
+    page: Optional[int] = Query(None, description="指定页码（可选，默认全部）"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    提取论文图片
+
+    路径参数:
+        - paper_id: 论文 ID
+
+    查询参数:
+        - page: 指定页码（可选，默认提取全部页）
+
+    返回:
+        - 图片列表（base64、位置、类型等）
+    """
+    result = await db.execute(
+        select(Paper).where(and_(Paper.id == paper_id, Paper.user_id == current_user.id))
+    )
+    paper = result.scalar_one_or_none()
+
+    if not paper:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="论文不存在"
+        )
+
+    file_path = paper.file_path
+    if not file_path or not Path(file_path).exists():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="PDF 文件不存在"
+        )
+
+    if page is not None:
+        # 页码从 0 开始内部处理，前端传入页码从 0 开始
+        images = await pdf_service.extract_page_images(file_path, page)
+        for img in images:
+            img["page"] = page
+        return {"paper_id": paper_id, "page": page, "images": images}
+    else:
+        all_images = await pdf_service.extract_all_images(file_path)
+        return {"paper_id": paper_id, "images": all_images}
 
 
 @router.get("/{paper_id}/text")
@@ -1076,3 +1126,267 @@ async def extract_paper_keywords(
         await db.refresh(paper)
     
     return {"paper_id": paper_id, "keywords": keywords}
+
+
+# ──────────────────────────────────────────────
+# 图表分析请求模型
+# ──────────────────────────────────────────────
+
+class FigureAnalyzeRequest(BaseModel):
+    """图表分析请求模型"""
+    page: int
+    bbox: List[float]  # [x0, y0, x1, y1]
+    type: str  # "figure" 或 "table"
+
+
+class FigureAskRequest(BaseModel):
+    """图表提问请求模型"""
+    page: int
+    bbox: List[float]  # [x0, y0, x1, y1]
+    type: str  # "figure" 或 "table"
+    question: str
+
+
+def _find_best_image(images: list, target_bbox: List[float]) -> dict | None:
+    """根据 bbox IoU 找到最匹配的嵌入图片"""
+    if not images:
+        return None
+
+    tx0, ty0, tx1, ty1 = target_bbox
+    target_area = max((tx1 - tx0) * (ty1 - ty0), 1e-6)
+
+    best_img = None
+    best_iou = 0.0
+
+    for img in images:
+        ibbox = img.get("bbox", [0, 0, 0, 0])
+        if len(ibbox) < 4:
+            continue
+        ix0, iy0, ix1, iy1 = ibbox
+
+        # 计算交集
+        ox0 = max(tx0, ix0)
+        oy0 = max(ty0, iy0)
+        ox1 = min(tx1, ix1)
+        oy1 = min(ty1, iy1)
+
+        if ox0 < ox1 and oy0 < oy1:
+            intersection = (ox1 - ox0) * (oy1 - oy0)
+            img_area = max((ix1 - ix0) * (iy1 - iy0), 1e-6)
+            union = target_area + img_area - intersection
+            iou = intersection / max(union, 1e-6)
+            if iou > best_iou:
+                best_iou = iou
+                best_img = img
+
+    # IoU 阈值：至少 30% 重叠才算匹配
+    return best_img if best_iou > 0.3 else None
+
+
+def _render_bbox_region(file_path: str, page_num: int, bbox: List[float]) -> str:
+    """渲染 PDF 页面指定区域为 base64 PNG 图片
+
+    Args:
+        file_path: PDF 文件路径
+        page_num: 页码（从 0 开始）
+        bbox: 区域坐标 [x0, y0, x1, y1]
+
+    Returns:
+        base64 编码的 PNG 图片字符串
+    """
+    doc = fitz.open(file_path)
+    page = doc[page_num]
+    rect = fitz.Rect(bbox[0], bbox[1], bbox[2], bbox[3])
+    clip = rect & page.rect  # 裁剪到页面范围
+    pix = page.get_pixmap(clip=clip, dpi=150)
+    img_b64 = base64.b64encode(pix.tobytes("png")).decode("utf-8")
+    doc.close()
+    return img_b64
+
+
+async def _get_figure_image_data(paper: Paper, page: int, bbox: List[float]) -> str:
+    """获取图表区域的 base64 图片数据
+
+    优先匹配嵌入图片，匹配失败则渲染 bbox 区域。
+
+    Args:
+        paper: 论文对象
+        page: 页码（从 0 开始）
+        bbox: 区域坐标 [x0, y0, x1, y1]
+
+    Returns:
+        base64 编码的图片字符串
+
+    Raises:
+        HTTPException: 文件不存在或渲染失败时
+    """
+    file_path = paper.file_path
+    if not file_path or not Path(file_path).exists():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="PDF 文件不存在"
+        )
+
+    # 提取页面嵌入图片
+    images = await pdf_service.extract_page_images(file_path, page)
+
+    # 根据 bbox 找到最匹配的图片
+    best_img = _find_best_image(images, bbox)
+
+    if best_img:
+        return best_img["base64"]
+
+    # 无匹配嵌入图片，渲染 bbox 区域
+    try:
+        return _render_bbox_region(file_path, page, bbox)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"渲染图表区域失败: {str(e)}"
+        )
+
+
+@router.post("/{paper_id}/figures/analyze")
+async def analyze_figure(
+    paper_id: int,
+    request: FigureAnalyzeRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    分析论文图表/表格
+
+    路径参数:
+        - paper_id: 论文 ID
+
+    请求体:
+        - page: 页码（从 0 开始）
+        - bbox: 区域坐标 [x0, y0, x1, y1]
+        - type: 图表类型 ("figure" 或 "table")
+
+    返回:
+        - chart_type: 图表类型
+        - data_summary: 数据摘要
+        - key_findings: 关键发现列表
+        - raw_description: 详细描述
+
+    性能：云端 LLM 2-5s，本地 LLM 10-30s
+    """
+    # 验证论文存在且属于当前用户
+    result = await db.execute(
+        select(Paper).where(and_(Paper.id == paper_id, Paper.user_id == current_user.id))
+    )
+    paper = result.scalar_one_or_none()
+
+    if not paper:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="论文不存在"
+        )
+
+    # 验证请求参数
+    if request.type not in ("figure", "table"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="type 必须是 figure 或 table"
+        )
+
+    # 获取图表图片数据
+    image_data = await _get_figure_image_data(paper, request.page, request.bbox)
+
+    # 调用 LLM 分析图表
+    try:
+        analysis = await llm_service.analyze_chart(
+            image_data=image_data,
+            chart_type_hint=request.type
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"图表分析失败: {str(e)}"
+        )
+
+    return {
+        "chart_type": analysis.get("chart_type", "unknown"),
+        "data_summary": analysis.get("data_summary", ""),
+        "key_findings": analysis.get("key_findings", []),
+        "raw_description": analysis.get("raw_description", "")
+    }
+
+
+@router.post("/{paper_id}/figures/ask")
+async def ask_figure(
+    paper_id: int,
+    request: FigureAskRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    对论文图表/表格提问
+
+    路径参数:
+        - paper_id: 论文 ID
+
+    请求体:
+        - page: 页码（从 0 开始）
+        - bbox: 区域坐标 [x0, y0, x1, y1]
+        - type: 图表类型 ("figure" 或 "table")
+        - question: 用户问题
+
+    返回:
+        - answer: 问题回答
+        - chart_type: 图表类型
+        - data_summary: 数据摘要
+        - key_findings: 关键发现列表
+        - raw_description: 详细描述
+
+    性能：云端 LLM 2-5s，本地 LLM 10-30s
+    """
+    # 验证论文存在且属于当前用户
+    result = await db.execute(
+        select(Paper).where(and_(Paper.id == paper_id, Paper.user_id == current_user.id))
+    )
+    paper = result.scalar_one_or_none()
+
+    if not paper:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="论文不存在"
+        )
+
+    # 验证请求参数
+    if request.type not in ("figure", "table"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="type 必须是 figure 或 table"
+        )
+
+    if not request.question.strip():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="问题不能为空"
+        )
+
+    # 获取图表图片数据
+    image_data = await _get_figure_image_data(paper, request.page, request.bbox)
+
+    # 调用 LLM 分析图表并回答问题
+    try:
+        analysis = await llm_service.analyze_chart(
+            image_data=image_data,
+            chart_type_hint=request.type,
+            question=request.question
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"图表分析失败: {str(e)}"
+        )
+
+    return {
+        "answer": analysis.get("answer", analysis.get("raw_description", "")),
+        "chart_type": analysis.get("chart_type", "unknown"),
+        "data_summary": analysis.get("data_summary", ""),
+        "key_findings": analysis.get("key_findings", []),
+        "raw_description": analysis.get("raw_description", "")
+    }

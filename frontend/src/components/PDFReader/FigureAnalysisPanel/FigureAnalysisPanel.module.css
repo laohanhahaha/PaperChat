@@ -1,0 +1,338 @@
+/* FigureAnalysisPanel 样式 - 图表分析侧边面板 */
+.panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: 380px;
+  height: 100vh;
+  background: var(--color-bg-elevated, #fff);
+  border-left: 1px solid var(--color-border, #e0e0e0);
+  box-shadow: -4px 0 16px rgba(0, 0, 0, 0.08);
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  animation: slideInRight 0.25s ease-out;
+}
+
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(40px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* 标题栏 */
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.875rem 1rem;
+  background: var(--color-bg-secondary, #fafafa);
+  border-bottom: 1px solid var(--color-border, #e0e0e0);
+  flex-shrink: 0;
+}
+
+.title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--color-text-primary, #333);
+  font-family: var(--heading, 'Georgia', serif);
+}
+
+.closeBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 0.375rem;
+  background: transparent;
+  color: var(--color-text-secondary, #666);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.closeBtn:hover {
+  background: var(--color-nav-hover-bg, #f0f0f0);
+  color: var(--color-danger, #c0392b);
+}
+
+/* 内容区域 */
+.content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1rem;
+}
+
+.content::-webkit-scrollbar {
+  width: 6px;
+}
+
+.content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.content::-webkit-scrollbar-thumb {
+  background: var(--color-border-strong, #ccc);
+  border-radius: 3px;
+}
+
+.content::-webkit-scrollbar-thumb:hover {
+  background: var(--color-accent, #b8860b);
+}
+
+/* 图表信息 */
+.figureInfo {
+  margin-bottom: 1rem;
+}
+
+.figureMeta {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.typeTag {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.typeTag.figure {
+  color: rgba(66, 133, 244, 0.95);
+  background: rgba(66, 133, 244, 0.1);
+  border: 1px solid rgba(66, 133, 244, 0.25);
+}
+
+.typeTag.table {
+  color: rgba(52, 168, 83, 0.95);
+  background: rgba(52, 168, 83, 0.1);
+  border: 1px solid rgba(52, 168, 83, 0.25);
+}
+
+.labelText {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-text-primary, #333);
+  font-family: var(--heading, 'Georgia', serif);
+}
+
+.pageText {
+  font-size: 0.75rem;
+  color: var(--color-text-muted, #999);
+}
+
+/* 图表图片 */
+.imageWrapper {
+  border-radius: 0.375rem;
+  overflow: hidden;
+  border: 1px solid var(--color-border, #e0e0e0);
+  background: var(--color-bg-secondary, #fafafa);
+}
+
+.figureImage {
+  display: block;
+  width: 100%;
+  height: auto;
+  object-fit: contain;
+}
+
+.imagePlaceholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 2rem;
+  border-radius: 0.375rem;
+  border: 1px dashed var(--color-border, #e0e0e0);
+  background: var(--color-bg-secondary, #fafafa);
+  color: var(--color-text-muted, #999);
+  font-size: 0.8125rem;
+}
+
+/* 加载状态 */
+.loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 2rem 0;
+  color: var(--color-text-muted, #999);
+  font-size: 0.875rem;
+}
+
+.spinner {
+  width: 24px;
+  height: 24px;
+  border: 2.5px solid var(--color-border, #e0e0e0);
+  border-top-color: var(--color-accent, #b8860b);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* 分析结果 */
+.result {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.resultSection {
+  padding: 0.75rem;
+  background: var(--color-bg-secondary, #fafafa);
+  border-radius: 0.375rem;
+  border: 1px solid var(--color-border, #e0e0e0);
+}
+
+.sectionTitle {
+  margin: 0 0 0.5rem 0;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--color-text-primary, #333);
+  font-family: var(--heading, 'Georgia', serif);
+}
+
+.sectionText {
+  margin: 0;
+  font-size: 0.875rem;
+  line-height: 1.7;
+  color: var(--color-text-secondary, #555);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.findingsList {
+  margin: 0;
+  padding-left: 1.25rem;
+  font-size: 0.875rem;
+  line-height: 1.7;
+  color: var(--color-text-secondary, #555);
+}
+
+.findingItem {
+  margin-bottom: 0.375rem;
+}
+
+.findingItem:last-child {
+  margin-bottom: 0;
+}
+
+/* 空状态 */
+.empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 0;
+  color: var(--color-text-muted, #999);
+  font-size: 0.875rem;
+}
+
+/* 底部追问区 */
+.footer {
+  padding: 0.75rem 1rem;
+  border-top: 1px solid var(--color-border, #e0e0e0);
+  background: var(--color-bg-secondary, #fafafa);
+  flex-shrink: 0;
+}
+
+.inputWrapper {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.questionInput {
+  flex: 1;
+  height: 2.25rem;
+  padding: 0 0.75rem;
+  border: 1px solid var(--color-border, #e0e0e0);
+  border-radius: 0.375rem;
+  background: var(--color-input-bg, #fff);
+  color: var(--color-text-primary, #333);
+  font-size: 0.875rem;
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+.questionInput:focus {
+  border-color: var(--color-accent, #b8860b);
+  box-shadow: 0 0 0 2px rgba(184, 134, 11, 0.15);
+}
+
+.questionInput::placeholder {
+  color: var(--color-text-muted, #aaa);
+}
+
+.questionInput:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.sendBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border: none;
+  border-radius: 0.375rem;
+  background: var(--color-accent, #b8860b);
+  color: #fff;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.sendBtn:hover:not(:disabled) {
+  background: var(--color-accent-hover, #9a7009);
+  transform: translateY(-1px);
+}
+
+.sendBtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* 响应式 */
+@media (max-width: 768px) {
+  .panel {
+    width: 100vw;
+    right: auto;
+    left: 0;
+    animation: slideInUp 0.25s ease-out;
+  }
+
+  @keyframes slideInUp {
+    from {
+      opacity: 0;
+      transform: translateY(40px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+}

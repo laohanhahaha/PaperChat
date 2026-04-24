@@ -137,7 +137,7 @@ export default function useWebSocket() {
     return false;
   }, []);
 
-  const sendUnifiedChatMessage = useCallback((message, paperId = null, paperIds = [], sessionId = null, enableSearch = false) => {
+  const sendUnifiedChatMessage = useCallback((message, paperId = null, paperIds = [], sessionId = null, enableSearch = false, images = []) => {
     if (globalWs?.readyState === WebSocket.OPEN) {
       globalWs.send(JSON.stringify({
         type: 'unified_chat',
@@ -145,7 +145,8 @@ export default function useWebSocket() {
         paper_id: paperId,
         paper_ids: paperIds || [],
         session_id: sessionId,
-        enable_search: enableSearch
+        enable_search: enableSearch,
+        images: images || []
       }));
       return true;
     }
