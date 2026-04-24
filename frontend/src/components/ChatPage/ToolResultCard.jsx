@@ -1,4 +1,6 @@
 import React, { useState, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
+import MarkdownContent from '../../utils/MarkdownRenderer';
 import { INTENT_LABELS } from '../../utils/chatConstants';
 import styles from './ToolResultCard.module.css';
 
@@ -44,7 +46,11 @@ function WritingCard({ tool, content }) {
         </button>
       </div>
       <div className={styles.writingBody}>
-        {text || content}
+        {text ? (
+          <MarkdownContent content={text} />
+        ) : (
+          typeof content === 'string' ? <MarkdownContent content={content} /> : JSON.stringify(content)
+        )}
       </div>
     </div>
   );
@@ -86,6 +92,7 @@ function CitationCard({ tool, content }) {
 
 /* ===== Knowledge 类型卡片 (save_card, search_cards) ===== */
 function KnowledgeCard({ tool, content }) {
+  const navigate = useNavigate();
   const parsed = parseContent(content);
 
   // save_card: 保存成功的确认卡片
@@ -99,6 +106,13 @@ function KnowledgeCard({ tool, content }) {
         <div className={styles.confirmBody}>
           <span className={styles.checkIcon}>✓</span>
           <span className={styles.confirmText}>已保存: {title}</span>
+          <button
+            className={styles.actionBtn}
+            onClick={() => navigate('/knowledge')}
+            style={{ marginLeft: 'auto' }}
+          >
+            查看知识库
+          </button>
         </div>
       </div>
     );
@@ -126,7 +140,15 @@ function KnowledgeCard({ tool, content }) {
     <div className={styles.card}>
       <div className={styles.cardHeader}>
         <span className={styles.cardTitle}>{INTENT_LABELS[tool] || tool}</span>
-        <span className={styles.cardCount}>{cards.length} 条结果</span>
+        <div className={styles.cardHeaderRight}>
+          <span className={styles.cardCount}>{cards.length} 条结果</span>
+          <button
+            className={styles.actionBtn}
+            onClick={() => navigate('/knowledge')}
+          >
+            查看知识库
+          </button>
+        </div>
       </div>
       <div className={styles.cardList}>
         {cards.map((item, idx) => (
@@ -134,6 +156,11 @@ function KnowledgeCard({ tool, content }) {
             <div className={styles.knowledgeTitle}>{item.title || '无标题'}</div>
             {item.summary && (
               <div className={styles.knowledgeSummary}>{item.summary}</div>
+            )}
+            {item.content && !item.summary && (
+              <div className={styles.knowledgeSummary}>
+                {item.content.length > 200 ? item.content.slice(0, 200) + '...' : item.content}
+              </div>
             )}
             {item.tags && Array.isArray(item.tags) && item.tags.length > 0 && (
               <div className={styles.tagList}>
@@ -151,6 +178,7 @@ function KnowledgeCard({ tool, content }) {
 
 /* ===== Papers 类型卡片 (recent_papers, search_papers) ===== */
 function PapersCard({ tool, content }) {
+  const navigate = useNavigate();
   const parsed = parseContent(content);
   const papers = Array.isArray(parsed) ? parsed
     : (parsed?.papers ? parsed.papers : null);
@@ -168,6 +196,8 @@ function PapersCard({ tool, content }) {
     );
   }
 
+  const displayPapers = papers.slice(0, 10);
+
   return (
     <div className={styles.card}>
       <div className={styles.cardHeader}>
@@ -175,18 +205,29 @@ function PapersCard({ tool, content }) {
         <span className={styles.cardCount}>{papers.length} 篇论文</span>
       </div>
       <div className={styles.cardList}>
-        {papers.map((paper, idx) => (
+        {displayPapers.map((paper, idx) => (
           <div key={idx} className={styles.paperItem}>
-            <div className={styles.paperTitle}>{paper.title || '无标题'}</div>
-            {(paper.authors || paper.author) && (
-              <div className={styles.paperMeta}>
-                {paper.authors || paper.author}
-              </div>
-            )}
-            {paper.uploaded_at && (
-              <div className={styles.paperTime}>
-                {new Date(paper.uploaded_at).toLocaleDateString('zh-CN')}
-              </div>
+            <div className={styles.paperItemContent}>
+              <div className={styles.paperTitle}>{paper.title || '无标题'}</div>
+              {(paper.authors || paper.author) && (
+                <div className={styles.paperMeta}>
+                  {paper.authors || paper.author}
+                </div>
+              )}
+              {paper.uploaded_at && (
+                <div className={styles.paperTime}>
+                  {new Date(paper.uploaded_at).toLocaleDateString('zh-CN')}
+                </div>
+              )}
+            </div>
+            {paper.id && (
+              <button
+                className={styles.openBtn}
+                onClick={() => navigate(`/reader/${paper.id}`)}
+                title="打开阅读"
+              >
+                阅读
+              </button>
             )}
           </div>
         ))}

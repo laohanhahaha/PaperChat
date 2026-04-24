@@ -17,6 +17,7 @@ from app.services.llm_service import llm_service, RAG_CHAT_SYSTEM_PROMPT, RAG_CH
 from app.services.search.search_service import search_service
 from app.services.rag.rag_service import rag_service
 from app.services.core.event_bus import event_bus, Event, EventTypes
+from app.services.context_compressor import context_compressor
 from app.services.chat.message_service import (
     save_message, load_chat_history,
     has_paper_text_blocks, get_paper_text_blocks
@@ -201,6 +202,9 @@ class RagChatHandler(ChatHandlerBase):
         messages = [SystemMessage(content=system_content)]
         messages.extend(history.messages)
         messages.append(HumanMessage(content=message))
+
+        # 上下文压缩（L1 剩枝 + 必要时 L2 摘要）
+        messages = await context_compressor.process(messages)
 
         # 9. 流式获取回复（使用 ChunkBuffer 合并高频消息）
         chunk_buffer = ChunkBuffer(websocket, interval_ms=50)

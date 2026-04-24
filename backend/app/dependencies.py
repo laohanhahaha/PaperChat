@@ -8,7 +8,7 @@ from fastapi import Request
 
 from app.services.rag_service import RAGService
 from app.services.llm.llm_service import LLMService
-from app.services.agent_service import AgentService
+from app.services.agent import AgentService  # 新版 agent 模块
 from app.tools import ToolRegistry, ToolExecutor
 from app.mcp_services import MCPManager
 from app.skills import SkillRegistry

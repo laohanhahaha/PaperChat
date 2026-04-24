@@ -11,7 +11,10 @@ from langchain_core.messages import SystemMessage, HumanMessage
 from app.database import AsyncSessionLocal
 from app.services.llm_service import llm_service
 from app.services.agent.agent_service import (
-    classify_by_keywords, classify_by_llm, ToolContext, ToolResult,
+    classify_by_keywords, classify_by_llm,
+)
+from app.services.core.tool_base import ToolContext, ToolResult
+from app.services.agent.tools import (
     LiteratureReviewTool, CitePaperTool, PolishTextTool,
     SaveCardTool, SearchCardsTool,
     RecentPapersTool, SearchPapersTool,

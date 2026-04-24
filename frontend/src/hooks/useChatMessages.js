@@ -13,6 +13,10 @@ import { useState, useEffect } from 'react';
  * @param {Function} params.setCrossDocSources - 设置跨文档引用来源
  * @param {Function} params.setSearchStatus - 设置搜索状态
  * @param {Function} params.updateLastMessage - 更新最后一条消息
+ * @param {Function} [params.setLastMessageToolResult] - 可选，设置最后一条消息的工具结果
+ * @param {Function} [params.addAgentStep] - 可选，向最后一条 assistant 消息追加 agent 步骤
+ * @param {Function} [params.appendThinkingContent] - 可选，追加深度思考内容
+ * @param {Function} [params.markAgentComplete] - 可选，标记 Agent 推理完成
  * @param {Function} params.setCurrentSession - 设置当前会话
  * @param {Function} [params.fetchSessions] - 可选，刷新会话列表（会话 ID 变化时调用）
  * @param {Function} [params.onError] - 可选，自定义错误处理
@@ -28,6 +32,10 @@ export function useChatMessages({
   setCrossDocSources,
   setSearchStatus,
   updateLastMessage,
+  setLastMessageToolResult,
+  addAgentStep,
+  appendThinkingContent,
+  markAgentComplete,
   setCurrentSession,
   fetchSessions,
   onError,
@@ -59,9 +67,42 @@ export function useChatMessages({
         if (!shouldAccept()) return;
         typewriter.appendContent(msg.data);
       }),
+      onMessage('tool_result', (msg) => {
+        // 工具结果：将结构化数据附加到最后一条 assistant 消息
+        if (setLastMessageToolResult) {
+          setLastMessageToolResult({
+            tool: msg.tool,
+            resultType: msg.result_type,
+            content: msg.content,
+          });
+        }
+      }),
       onMessage('intent_detected', (msg) => {
         setCurrentIntent({ intent: msg.intent, tool: msg.tool, confidence: msg.confidence, matched: msg.matched });
       }),
+
+      // 深度思考事件
+      onMessage('thinking_chunk', (msg) => {
+        if (appendThinkingContent) appendThinkingContent(msg.content || '');
+      }),
+      onMessage('thinking_done', () => {
+        // 思考结束，可扩展处理
+      }),
+
+      // Agent 推理事件
+      onMessage('agent_thought', (msg) => {
+        if (addAgentStep) addAgentStep({ type: 'agent_thought', step: msg.step || 0, content: msg.content });
+      }),
+      onMessage('agent_action', (msg) => {
+        if (addAgentStep) addAgentStep({ type: 'agent_action', step: msg.step || 0, tool: msg.tool, input: msg.input });
+      }),
+      onMessage('agent_observation', (msg) => {
+        if (addAgentStep) addAgentStep({ type: 'agent_observation', step: msg.step || 0, content: msg.content });
+      }),
+      onMessage('agent_final', () => {
+        if (markAgentComplete) markAgentComplete();
+      }),
+
       onMessage('done', (msg) => {
         if (['rag_chat', 'cross_doc_chat', 'analyze', 'deep_analyze'].includes(msg.channel)) {
           typewriter.markDone();
@@ -94,7 +135,7 @@ export function useChatMessages({
     return () => {
       unsubs.forEach(fn => fn());
     };
-  }, [onMessage, typewriter, isChattingRef, setSources, setCrossDocSources, setSearchStatus, updateLastMessage, setCurrentSession, fetchSessions, onError, onCancelled, resetStreamState, currentSessionIdRef]);
+  }, [onMessage, typewriter, isChattingRef, setSources, setCrossDocSources, setSearchStatus, updateLastMessage, setLastMessageToolResult, addAgentStep, appendThinkingContent, markAgentComplete, setCurrentSession, fetchSessions, onError, onCancelled, resetStreamState, currentSessionIdRef]);
 
   return { currentIntent, setCurrentIntent };
 }

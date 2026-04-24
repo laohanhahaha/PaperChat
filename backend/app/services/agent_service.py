@@ -1,3 +1,8 @@
+"""
+[DEPRECATED] 此文件已被新版模块替代，保留仅为过渡期兼容。
+替代模块: app.services.agent/ (agent_service.py, intent.py, tools/, react_agent.py, planner.py)
+请勿在新代码中导入此文件。
+"""
 """Agent 核心服务 - 意图识别、工具调用、任务规划
 
 Agent 多步推理每多一步需要额外一次 LLM 调用：
@@ -424,6 +429,26 @@ INTENT_KEYWORDS = {
         "keywords": ["提纲", "大纲", "结构", "写报告", "写综述", "outline", "structure", "报告大纲"],
         "intent": "outline",
         "tool": "generate_outline"
+    },
+    "save_card": {
+        "keywords": ["保存", "记下", "收藏知识", "保存知识点", "记住这个"],
+        "intent": "save_card",
+        "tool": "save_card"
+    },
+    "search_cards": {
+        "keywords": ["笔记", "知识卡片", "之前的笔记", "我记过", "知识点"],
+        "intent": "search_cards",
+        "tool": "search_cards"
+    },
+    "recent_papers": {
+        "keywords": ["最近读", "最近论文", "阅读历史", "最近上传"],
+        "intent": "recent_papers",
+        "tool": "recent_papers"
+    },
+    "search_papers": {
+        "keywords": ["找论文", "搜索论文", "推荐论文", "相关论文", "有没有论文"],
+        "intent": "search_papers",
+        "tool": "search_papers"
     }
 }
 
@@ -508,6 +533,8 @@ class AgentService:
     
     def _register_tools(self) -> dict[str, Tool]:
         """注册所有可用工具"""
+        from app.tools.knowledge_tools import SaveCardTool, SearchCardsTool
+        from app.tools.query_tools import RecentPapersTool, SearchPapersTool
         tools = [
             SearchTextTool(),
             ExtractKeyPointsTool(),
@@ -517,7 +544,11 @@ class AgentService:
             GetPaperInfoTool(),
             CompareContentTool(),
             GenerateOutlineTool(),
-            AssessQualityTool()
+            AssessQualityTool(),
+            SaveCardTool(),
+            SearchCardsTool(),
+            RecentPapersTool(),
+            SearchPapersTool(),
         ]
         return {t.name: t for t in tools}
     

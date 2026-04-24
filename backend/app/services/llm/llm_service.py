@@ -161,6 +161,10 @@ class LLMService:
             # 添加当前用户消息
             messages.append(HumanMessage(content=message))
             
+            # 上下文压缩（L1 剩枝 + 必要时 L2 摘要）
+            from app.services.context_compressor import context_compressor
+            messages = await context_compressor.process(messages)
+
             # 流式获取回复
             full_response = ""
             async for chunk in self.llm.astream(messages):
@@ -234,6 +238,10 @@ class LLMService:
             # 添加当前用户消息
             messages.append(HumanMessage(content=message))
             
+            # 上下文压缩（L1 剩枝 + 必要时 L2 摘要）
+            from app.services.context_compressor import context_compressor
+            messages = await context_compressor.process(messages)
+
             # 5. 流式获取回复
             start_time = time.time()
             full_response = ""
@@ -288,6 +296,10 @@ class LLMService:
             # 添加当前用户消息
             messages.append(HumanMessage(content=message))
             
+            # 上下文压缩（L1 剩枝 + 必要时 L2 摘要）
+            from app.services.context_compressor import context_compressor
+            messages = await context_compressor.process(messages)
+
             # 4. 流式获取回复
             full_response = ""
             async for chunk in self.llm.astream(messages):

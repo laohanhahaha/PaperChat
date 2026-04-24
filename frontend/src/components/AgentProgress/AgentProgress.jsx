@@ -1,3 +1,8 @@
+/**
+ * [DEPRECATED] 此组件已被 props 驱动版替代，保留仅为过渡期参考。
+ * 替代组件: frontend/src/components/ChatPage/AgentProgress.jsx（props 驱动版，当前正在使用）
+ * 请勿在新代码中导入此组件。
+ */
 import React from 'react';
 import useAgentStore from '../../stores/agentStore';
 import styles from './AgentProgress.module.css';

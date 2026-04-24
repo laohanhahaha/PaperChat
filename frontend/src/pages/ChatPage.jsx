@@ -12,6 +12,7 @@ import { useTypewriter } from '../hooks/useTypewriter';
 import { useChatMessages } from '../hooks/useChatMessages';
 import { useSessionManager } from '../hooks/useSessionManager';
 import MessageItem from '../components/ChatPage/MessageItem';
+import AgentProgress from '../components/ChatPage/AgentProgress';
 import SelectedPapersBar from '../components/ChatPage/SelectedPapersBar';
 import InputBar from '../components/ChatPage/InputBar';
 import SessionSidebar from '../components/ChatPage/SessionSidebar';
@@ -46,6 +47,10 @@ function ChatPage() {
     fetchMessages,
     addMessage,
     updateLastMessage,
+    setLastMessageToolResult,
+    addAgentStep,
+    appendThinkingContent,
+    markAgentComplete,
     setSources,
     setCrossDocSources,
     hasMore,
@@ -133,6 +138,10 @@ function ChatPage() {
     setCrossDocSources,
     setSearchStatus,
     updateLastMessage,
+    setLastMessageToolResult,
+    addAgentStep,
+    appendThinkingContent,
+    markAgentComplete,
     setCurrentSession,
     fetchSessions,
     onCancelled: useCallback(() => {
@@ -400,6 +409,13 @@ function ChatPage() {
 
               {!isChatting && messages.length > 0 && messages[messages.length - 1]?.role === 'assistant' && (
                 <>
+                  {/* Agent 推理过程展示 */}
+                  {messages[messages.length - 1]?.agentSteps?.length > 0 && (
+                    <AgentProgress
+                      steps={messages[messages.length - 1].agentSteps}
+                      isRunning={false}
+                    />
+                  )}
                   {sources.length > 0 && !isCrossDocMode && (
                     <div className={styles.sourcesBlock}>
                       <div className={styles.sourcesLabel}>📎 引用来源</div>
@@ -427,6 +443,14 @@ function ChatPage() {
                     </div>
                   )}
                 </>
+              )}
+
+              {/* Agent 推理过程展示（运行中）*/}
+              {isChatting && messages[messages.length - 1]?.agentSteps?.length > 0 && (
+                <AgentProgress
+                  steps={messages[messages.length - 1].agentSteps}
+                  isRunning={true}
+                />
               )}
             </div>
 

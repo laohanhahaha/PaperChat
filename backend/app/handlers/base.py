@@ -18,6 +18,7 @@ from typing import Any
 
 from app.services.chat.session_service import get_or_create_session, auto_title
 from app.services.chat.message_service import save_message, load_chat_history
+from app.services.core.event_bus import event_bus, Event, EventTypes
 
 logger = logging.getLogger(__name__)
 
@@ -95,6 +96,12 @@ class ChatHandlerBase(ABC):
 
             # 更新会话标题
             await auto_title(db, session, message)
+
+            # 发布会话更新事件，触发 L3 后台预压缩
+            asyncio.create_task(event_bus.publish(Event(
+                type=EventTypes.SESSION_UPDATED,
+                data={"session_id": session.id, "user_id": user_id}
+            )))
 
             # Step 6: 发送 done 信号
             await websocket.send_text(json.dumps({

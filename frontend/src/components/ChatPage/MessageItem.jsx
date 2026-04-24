@@ -1,4 +1,6 @@
 import React, { memo } from 'react';
+import ToolResultCard from './ToolResultCard';
+import ThinkingBlock from './ThinkingBlock';
 
 const MessageItem = memo(function MessageItem({ msg, isLast, isChatting, renderMarkdown, styles }) {
   return (
@@ -13,6 +15,13 @@ const MessageItem = memo(function MessageItem({ msg, isLast, isChatting, renderM
         </div>
       )}
       <div className={styles.messageBubble}>
+        {/* 深度思考块（如果有 thinkingContent） */}
+        {msg.role === 'assistant' && msg.thinkingContent && (
+          <ThinkingBlock
+            content={msg.thinkingContent}
+            isThinking={false}
+          />
+        )}
         {msg.content ? (
           msg.role === 'assistant' ? renderMarkdown(msg.content) : msg.content
         ) : (
@@ -22,12 +31,18 @@ const MessageItem = memo(function MessageItem({ msg, isLast, isChatting, renderM
             </div>
           ) : ''
         )}
+        {msg.role === 'assistant' && msg.toolResult && (
+          <ToolResultCard toolResult={msg.toolResult} />
+        )}
       </div>
     </div>
   );
 }, (prev, next) => {
   return prev.msg.id === next.msg.id
     && prev.msg.content === next.msg.content
+    && prev.msg.toolResult === next.msg.toolResult
+    && prev.msg.agentSteps === next.msg.agentSteps
+    && prev.msg.thinkingContent === next.msg.thinkingContent
     && prev.isLast === next.isLast
     && prev.isChatting === next.isChatting;
 });

@@ -3,6 +3,7 @@
 创建 FastAPI 应用实例，配置中间件、路由和生命周期事件
 """
 from contextlib import asynccontextmanager
+import asyncio
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -68,7 +69,7 @@ async def lifespan(app: FastAPI):
     # 初始化服务到 app.state（依赖注入）
     from app.services.rag_service import rag_service
     from app.services.llm.llm_service import llm_service
-    from app.services.agent_service import agent_service
+    from app.services.agent import agent_service  # 新版 agent 模块
     from app.services.event_bus import event_bus, Event, EventTypes
 
     app.state.rag_service = rag_service
@@ -76,6 +77,11 @@ async def lifespan(app: FastAPI):
     app.state.agent_service = agent_service
     app.state.event_bus = event_bus
     logger.info("Services registered to app.state (DI)")
+
+    # 初始化 ContextCompressor 并绑定 llm_service
+    from app.services.context_compressor import init_compressor
+    init_compressor(llm_service)
+    logger.info("ContextCompressor initialized")
 
     # 初始化三大 Registry（工具、MCP、Skill）
     from app.tools import ToolRegistry, ToolExecutor
@@ -100,6 +106,31 @@ async def lifespan(app: FastAPI):
     event_bus.subscribe(EventTypes.INDEX_REBUILD_STARTED, log_event_handler)
     event_bus.subscribe(EventTypes.INDEX_REBUILD_COMPLETED, log_event_handler)
     logger.info("Event bus subscribers registered")
+
+    # 订阅 SESSION_UPDATED 事件，触发 L3 后台预压缩
+    from app.services.core.event_bus import event_bus as core_event_bus, EventTypes as CoreEventTypes
+    from app.services.context_compressor import context_compressor
+    from app.services.chat.message_service import load_chat_history as _load_history
+
+    async def _on_session_updated(event: Event):
+        """会话更新后触发后台预压缩"""
+        session_id = event.data.get("session_id")
+        if not session_id:
+            return
+        try:
+            from app.database import AsyncSessionLocal
+            from langchain_core.messages import SystemMessage
+            async with AsyncSessionLocal() as db:
+                history = await _load_history(db, session_id, limit=30)
+                if history and history.messages:
+                    # 包装为带 system 占位的消息列表
+                    msgs = [SystemMessage(content="[placeholder]")] + list(history.messages)
+                    asyncio.create_task(context_compressor.background_precompress(str(session_id), msgs))
+        except Exception as e:
+            logger.warning(f"L3 预压缩触发失败（非阻塞）: {e}")
+
+    core_event_bus.subscribe(CoreEventTypes.SESSION_UPDATED, _on_session_updated)
+    logger.info("SESSION_UPDATED handler registered for L3 background precompression")
     
     yield
 

@@ -6,7 +6,8 @@ const NAV_ITEMS = [
     { path: '/chat', icon: '💬', labelKey: 'nav.chat' },
     { path: '/papers', icon: '📚', labelKey: 'nav.papers' },
     { path: '/knowledge', icon: '💡', labelKey: 'nav.knowledge' },
-    { path: '/writing', icon: '✍️', labelKey: 'nav.writing' },
+    // WritingPage 功能已收拢到 Chat，导航入口已隐藏
+    // { path: '/writing', icon: '✍️', labelKey: 'nav.writing' },
 ];
 
 function Navbar() {

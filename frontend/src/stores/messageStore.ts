@@ -1,11 +1,22 @@
 import { create } from 'zustand';
 import { chatApi } from '../api/chatApi';
 
+interface AgentStep {
+  type: 'thought' | 'action' | 'observation' | 'agent_thought' | 'agent_action' | 'agent_observation';
+  step: number;
+  content?: string;
+  tool?: string;
+  input?: any;
+}
+
 interface Message {
   id: number | string;
   role: string;
   content: string;
   sources?: any;
+  agentSteps?: AgentStep[];
+  thinkingContent?: string;
+  agentComplete?: boolean;
   [key: string]: any;
 }
 
@@ -34,6 +45,10 @@ interface MessageState {
   clearMessageCache: () => void;
   addMessage: (message: Message) => void;
   updateLastMessage: (content: string) => void;
+  setLastMessageToolResult: (toolResult: any) => void;
+  addAgentStep: (step: AgentStep) => void;
+  appendThinkingContent: (content: string) => void;
+  markAgentComplete: () => void;
   updateStreamingMessage: (content: string) => void;
   setIsStreaming: (isStreaming: boolean) => void;
   setSources: (sources: any[]) => void;
@@ -202,6 +217,75 @@ export const useMessageStore = create<MessageState>((set, get) => ({
     set(state => ({
       messages: [...state.messages, message]
     }));
+  },
+
+  // 向最后一条 assistant 消息追加 agentStep
+  addAgentStep: (step) => {
+    set(state => {
+      if (state.messages.length === 0) return state;
+      const updated = [...state.messages];
+      // 找到最后一条 assistant 消息
+      let lastAssistantIdx = -1;
+      for (let i = updated.length - 1; i >= 0; i--) {
+        if (updated[i].role === 'assistant') { lastAssistantIdx = i; break; }
+      }
+      if (lastAssistantIdx === -1) return state;
+      updated[lastAssistantIdx] = {
+        ...updated[lastAssistantIdx],
+        agentSteps: [...(updated[lastAssistantIdx].agentSteps || []), step],
+      };
+      return { messages: updated };
+    });
+  },
+
+  // 追加深度思考内容到最后一条 assistant 消息
+  appendThinkingContent: (content) => {
+    set(state => {
+      if (state.messages.length === 0) return state;
+      const updated = [...state.messages];
+      let lastAssistantIdx = -1;
+      for (let i = updated.length - 1; i >= 0; i--) {
+        if (updated[i].role === 'assistant') { lastAssistantIdx = i; break; }
+      }
+      if (lastAssistantIdx === -1) return state;
+      updated[lastAssistantIdx] = {
+        ...updated[lastAssistantIdx],
+        thinkingContent: (updated[lastAssistantIdx].thinkingContent || '') + content,
+      };
+      return { messages: updated };
+    });
+  },
+
+  // 标记 Agent 推理完成
+  markAgentComplete: () => {
+    set(state => {
+      if (state.messages.length === 0) return state;
+      const updated = [...state.messages];
+      let lastAssistantIdx = -1;
+      for (let i = updated.length - 1; i >= 0; i--) {
+        if (updated[i].role === 'assistant') { lastAssistantIdx = i; break; }
+      }
+      if (lastAssistantIdx === -1) return state;
+      updated[lastAssistantIdx] = {
+        ...updated[lastAssistantIdx],
+        agentComplete: true,
+      };
+      return { messages: updated };
+    });
+  },
+
+  // 设置最后一条消息的工具结果
+  setLastMessageToolResult: (toolResult) => {
+    set(state => {
+      if (state.messages.length === 0) return state;
+      const updated = [...state.messages];
+      const lastIndex = updated.length - 1;
+      updated[lastIndex] = {
+        ...updated[lastIndex],
+        toolResult,
+      };
+      return { messages: updated };
+    });
   },
 
   // 更新最后一条消息（用于流式输出）

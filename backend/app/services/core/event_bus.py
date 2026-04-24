@@ -120,3 +120,4 @@ class EventTypes:
     INDEX_REBUILD_COMPLETED = "index.rebuild_completed"
     SETTINGS_CHANGED = "settings.changed"
     INDEX_REBUILT = "index.rebuilt"
+    SESSION_UPDATED = "session.updated"  # 会话消息更新，触发后台预压缩
