@@ -56,6 +56,12 @@ _SERVICE_REGISTRY = {
         "requires_api_key": True,
         "env_vars": {"ZOTERO_API_KEY": "ZOTERO_API_KEY", "ZOTERO_LIBRARY_ID": "ZOTERO_LIBRARY_ID"},
     },
+    "report_generator": {
+        "display_name": "报告生成器",
+        "description": "结构化学术报告生成服务（免费，无需 API Key，复用项目 DeepSeek 配置）",
+        "requires_api_key": False,
+        "env_vars": {},
+    },
     "bing": {
         "display_name": "Bing 搜索",
         "description": "通用网络搜索（需要 API Key）",
@@ -71,6 +77,18 @@ _SERVICE_REGISTRY = {
     "brave": {
         "display_name": "Brave 搜索",
         "description": "隐私优先网络搜索（需要 API Key）",
+        "requires_api_key": True,
+        "is_search_adapter": True,
+    },
+    "baidu": {
+        "display_name": "百度搜索",
+        "description": "中文网络搜索（需要 API Key）",
+        "requires_api_key": True,
+        "is_search_adapter": True,
+    },
+    "wigolo": {
+        "display_name": "Wigolo 搜索",
+        "description": "通用网络搜索备选（需要 API Key）",
         "requires_api_key": True,
         "is_search_adapter": True,
     },
@@ -573,6 +591,8 @@ class UpdateApiKeyTool(Tool):
         env_key = f"{service_name.upper()}_API_KEY"
         if service_name == "bing":
             env_key = "BING_SEARCH_API_KEY"
+        elif service_name == "baidu":
+            env_key = "BAIDU_SEARCH_API_KEY"
         elif service_name == "semantic_scholar":
             env_key = "S2_API_KEY"
         os.environ[env_key] = api_key

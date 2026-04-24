@@ -9,7 +9,7 @@ class SearchResult:
     title: str
     url: str
     snippet: str
-    source: str           # "duckduckgo" / "bing" / "tavily" / "brave"
+    source: str           # "duckduckgo" / "bing" / "tavily" / "brave" / "baidu" / "wigolo"
     relevance_score: float = 0.0
     metadata: dict = field(default_factory=dict)
 

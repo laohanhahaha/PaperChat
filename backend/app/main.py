@@ -146,10 +146,48 @@ async def lifespan(app: FastAPI):
     # 启动后台健康检查（首次立即检查 + 60s 间隔）
     await health_svc.start_background_check()
 
+    # 初始化 EncryptionService 和 KeyRotationService
+    from app.services.security.encryption import (
+        EncryptionService, set_encryption_service,
+    )
+    from app.services.security.key_rotation import (
+        KeyRotationService, set_key_rotation_service,
+    )
+    encryption_svc = EncryptionService()
+    set_encryption_service(encryption_svc)
+    app.state.encryption_service = encryption_svc
+    service_container.register_instance("encryption_service", encryption_svc)
+    logger.info("[lifespan] EncryptionService 已初始化")
+
+    key_rotation_svc = KeyRotationService()
+    set_key_rotation_service(key_rotation_svc)
+    app.state.key_rotation_service = key_rotation_svc
+    service_container.register_instance("key_rotation_service", key_rotation_svc)
+
+    # 注册已配置的 Key 到轮换服务
+    try:
+        from app.services.settings_service import settings_service
+        from app.database import AsyncSessionLocal
+        from app.config import settings as app_settings
+        async with AsyncSessionLocal() as db:
+            vals = await settings_service.get_setting_values(
+                user_id=app_settings.DEFAULT_USER_ID, db=db,
+            )
+        # 检测所有含 api_key 的分类并注册
+        for cat, cfg in vals.items():
+            if isinstance(cfg, dict) and cfg.get("api_key"):
+                key_rotation_svc.register_key(cat)
+    except Exception as e:
+        logger.warning(f"[lifespan] 注册 Key 轮换元数据失败（非阻断）: {e}")
+
+    # 启动 Key 轮换后台检查
+    await key_rotation_svc.start()
+    logger.info("[lifespan] KeyRotationService 已启动")
+
     # 初始化并注册多源搜索调度器
     from app.services.search import (
         SearchDispatcher, DuckDuckGoAdapter, BingAdapter,
-        TavilyAdapter, BraveAdapter,
+        TavilyAdapter, BraveAdapter, BaiduAdapter, WigoloAdapter,
     )
     search_dispatcher = SearchDispatcher()
     search_dispatcher.register_adapter(DuckDuckGoAdapter())
@@ -162,6 +200,12 @@ async def lifespan(app: FastAPI):
     ))
     search_dispatcher.register_adapter(BraveAdapter(
         api_key=config_service.get("BRAVE_SEARCH_API_KEY")
+    ))
+    search_dispatcher.register_adapter(BaiduAdapter(
+        api_key=config_service.get("BAIDU_SEARCH_API_KEY")
+    ))
+    search_dispatcher.register_adapter(WigoloAdapter(
+        api_key=config_service.get("WIGOLO_API_KEY")
     ))
     app.state.search_dispatcher = search_dispatcher
     service_container.register_instance("search_dispatcher", search_dispatcher)
@@ -195,6 +239,15 @@ async def lifespan(app: FastAPI):
             logger.info("后台健康检查已停止")
     except Exception as e:
         logger.error(f"停止后台健康检查失败: {e}")
+
+    # 停止 KeyRotationService
+    try:
+        key_rotation_svc = getattr(app.state, "key_rotation_service", None)
+        if key_rotation_svc:
+            await key_rotation_svc.stop()
+            logger.info("KeyRotationService 已停止")
+    except Exception as e:
+        logger.error(f"停止 KeyRotationService 失败: {e}")
 
     # 关闭 RAG 线程池 + Worker
     try:

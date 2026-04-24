@@ -51,4 +51,11 @@ def get_academic_server_configs() -> List[MCPServerConfig]:
             env={"ZOTERO_API_KEY": "", "ZOTERO_LIBRARY_ID": ""},
             enabled=False,
         ),
+        MCPServerConfig(
+            name="report_generator",
+            transport=TransportType.STDIO,
+            command=sys.executable,
+            args=["-m", "app.mcp_services.servers.report_server"],
+            enabled=False,
+        ),
     ]

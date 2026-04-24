@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.settings import UserSettings
 from app.config import settings as app_settings
+from app.services.security.encryption import get_encryption_service
 
 logger = logging.getLogger(__name__)
 

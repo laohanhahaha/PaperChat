@@ -120,8 +120,9 @@ class SearchDispatcher:
             # 新闻搜索：优先 Bing/Brave
             priority = ["bing", "brave", "tavily", "duckduckgo"]
         else:
-            # 通用搜索：优先 Tavily（专为 AI 设计），降级到 DuckDuckGo
-            priority = ["tavily", "brave", "bing", "duckduckgo"]
+            # 通用搜索：优先 Tavily（专为 AI 设计），Bing/Brave 其次，
+            # Wigolo 作为通用备选，Baidu 适合中文搜索，降级到 DuckDuckGo
+            priority = ["tavily", "brave", "bing", "wigolo", "baidu", "duckduckgo"]
 
         selected = [name for name in priority if name in available]
 

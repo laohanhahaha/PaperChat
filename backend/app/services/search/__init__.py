@@ -5,6 +5,8 @@ from app.services.search.duckduckgo_adapter import DuckDuckGoAdapter
 from app.services.search.bing_adapter import BingAdapter
 from app.services.search.tavily_adapter import TavilyAdapter
 from app.services.search.brave_adapter import BraveAdapter
+from app.services.search.baidu_adapter import BaiduAdapter
+from app.services.search.wigolo_adapter import WigoloAdapter
 from app.services.search.dispatcher import SearchDispatcher
 
 __all__ = [
@@ -16,5 +18,7 @@ __all__ = [
     "BingAdapter",
     "TavilyAdapter",
     "BraveAdapter",
+    "BaiduAdapter",
+    "WigoloAdapter",
     "SearchDispatcher",
 ]

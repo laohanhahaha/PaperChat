@@ -2,15 +2,16 @@
 
 提供用户个性化配置的 API 端点
 """
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
-from typing import Dict, Any
+from typing import Dict, Any, List
 
 from app.database import get_db
 from app.services.auth_service import get_current_user
 from app.models.user import User
 from app.services.settings_service import settings_service
+from app.services.security.key_rotation import get_key_rotation_service
 
 
 class RotateKeyRequest(BaseModel):
@@ -154,3 +155,46 @@ async def validate_api_key(
         service_name=request.service_name,
         key=request.key,
     )
+
+
+@router.get("/key-status")
+async def get_key_status(
+    current_user: User = Depends(get_current_user)
+):
+    """获取所有 API Key 的轮换状态
+    
+    返回:
+        - keys: 所有 Key 的状态列表
+            - service: 服务名称
+            - status: valid / expiring_soon / expired
+            - days_until_expiry: 距过期天数
+            - created_at: Key 创建时间
+            - expires_at: Key 过期时间
+            - last_rotated_at: 上次轮换时间
+    """
+    rotation_svc = get_key_rotation_service()
+    keys = rotation_svc.check_all_keys()
+    return {"keys": keys}
+
+
+@router.post("/key-rotation/check")
+async def trigger_key_rotation_check(
+    current_user: User = Depends(get_current_user)
+):
+    """触发立即检查所有 Key 的轮换状态
+    
+    性能影响：仅遍历内存中的 Key 元数据（通常 < 10 个），
+    CPU 开销可忽略。如有到期 Key，通过 WebSocket 广播警告。
+    
+    返回:
+        - warnings: 到期警告列表
+        - checked_count: 检查的 Key 数量
+    """
+    rotation_svc = get_key_rotation_service()
+    await rotation_svc._perform_check()
+    all_status = rotation_svc.check_all_keys()
+    warnings = [s for s in all_status if s["status"] != "valid"]
+    return {
+        "warnings": warnings,
+        "checked_count": len(all_status),
+    }
