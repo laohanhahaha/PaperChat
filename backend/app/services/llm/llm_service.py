@@ -1,14 +1,16 @@
 """LLM 服务 - 基于 LangChain 的 DeepSeek 大模型交互"""
+import asyncio
+import asyncio
 import logging
 import time
-from typing import AsyncGenerator
+from typing import AsyncGenerator, Optional, Optional
 
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage
 from langchain_community.chat_message_histories import ChatMessageHistory
 
 from app.config import settings
-from app.services.llm.prompts import (
+from app.prompts import (
     ANALYZE_SYSTEM_PROMPT,
     CHAT_SYSTEM_PROMPT,
     RAG_CHAT_SYSTEM_PROMPT,
@@ -253,7 +255,14 @@ class LLMService:
             duration_ms = round((time.time() - start_time) * 1000)
             logger.info("LLM chat_with_rag completed", extra={"duration_ms": duration_ms, "response_len": len(full_response)})
             
-            # 6. 保存到历史记录
+            # 6. 异步记录 token 用量（非阻塞）
+            asyncio.create_task(self._record_usage_async(
+                session_id=str(session_id) if session_id else None,
+                prompt_messages=messages,
+                response_text=full_response,
+            ))
+
+            # 7. 保存到历史记录
             chat_history.add_user_message(message)
             chat_history.add_ai_message(full_response)
         except Exception as e:
@@ -723,6 +732,42 @@ class LLMService:
         except Exception as e:
             logger.error("关键词提取失败", exc_info=True)
             return []
+
+
+    async def _record_usage_async(
+        self,
+        session_id: Optional[str],
+        prompt_messages: list,
+        response_text: str,
+    ) -> None:
+        """异步估算并记录 token 用量（非阻塞，不影响响应速度）
+        
+        使用字符数估算 token 数（简单近似：1 token ≈ 4 chars for English,
+        1 token ≈ 2 chars for Chinese）
+        """
+        try:
+            from app.database import AsyncSessionLocal
+            from app.services.cost.cost_service import cost_service, get_current_model
+
+            # 估算 input tokens
+            prompt_text = " ".join(
+                (m.content if hasattr(m, "content") else str(m))
+                for m in prompt_messages
+            )
+            input_tokens = max(1, len(prompt_text) // 3)
+            output_tokens = max(1, len(response_text) // 3)
+
+            model = get_current_model()
+            async with AsyncSessionLocal() as db:
+                await cost_service.record_usage(
+                    db=db,
+                    model=model,
+                    input_tokens=input_tokens,
+                    output_tokens=output_tokens,
+                    session_id=session_id,
+                )
+        except Exception as e:
+            logger.debug(f"Token 用量记录失败（非阻塞）: {e}")
 
 
 # 全局单例

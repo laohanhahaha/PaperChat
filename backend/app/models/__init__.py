@@ -13,6 +13,7 @@ from app.models.memory import UserMemory
 from app.models.feedback import MessageFeedback
 from app.models.knowledge import KnowledgeCard, KnowledgeRelation
 from app.models.feature_flag import FeatureFlag
+from app.models.cost import UsageRecord, BudgetConfig
 
 __all__ = [
     "Base",
@@ -29,4 +30,6 @@ __all__ = [
     "KnowledgeCard",
     "KnowledgeRelation",
     "FeatureFlag",
+    "UsageRecord",
+    "BudgetConfig",
 ]

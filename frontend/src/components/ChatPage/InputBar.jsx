@@ -16,6 +16,7 @@ export default function InputBar({
   wsStatus,
   onOpenSelector,
   styles,
+  costSlot,
 }) {
   return (
     <div className={styles.inputWrapper}>
@@ -72,6 +73,7 @@ export default function InputBar({
         {wsStatus !== 'connected' && (
           <span className={styles.wsHint}>⚠ 连接中...</span>
         )}
+        {costSlot && <div style={{ marginLeft: 'auto', display: 'flex', gap: '6px', alignItems: 'center' }}>{costSlot}</div>}
       </div>
     </div>
   );

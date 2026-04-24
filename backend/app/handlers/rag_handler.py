@@ -33,7 +33,7 @@ async def extract_keywords_async(paper_id, text, ws):
 
     委托 session_service 处理数据库操作和 LLM 调用
     """
-    from app.services.session_service import extract_and_save_keywords
+    from app.services.chat.session_service import extract_and_save_keywords
     await extract_and_save_keywords(paper_id, text, ws)
 
 
@@ -115,7 +115,7 @@ class RagChatHandler(ChatHandlerBase):
                     }))
 
                 # 降级方案：使用论文文本预览作为上下文
-                from app.services.message_service import get_paper_text_preview
+                from app.services.chat.message_service import get_paper_text_preview
                 paper_preview = await get_paper_text_preview(db, paper_id)
                 if paper_preview:
                     relevant_chunks = [{

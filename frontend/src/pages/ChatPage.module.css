@@ -591,6 +591,15 @@
   box-shadow: 0 1px 3px rgba(92, 64, 51, 0.06);
 }
 
+/* hover 时显示保存按钮 */
+.messageBubble:hover .saveNoteBtn {
+  opacity: 1 !important;
+}
+
+.saveNoteBtn {
+  transition: opacity 0.15s, background 0.15s;
+}
+
 .messageUser .messageBubble {
   background: var(--color-accent, #B8860B);
   color: #fff;

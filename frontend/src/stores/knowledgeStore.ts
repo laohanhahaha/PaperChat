@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { knowledgeApi } from '../api/knowledgeApi';
+import { fetchWithCache, invalidateByPrefix } from '../hooks/useApiCache';
 
 interface KnowledgeCard {
   id: number | string;
@@ -87,36 +88,43 @@ const useKnowledgeStore = create<KnowledgeState>((set, get) => ({
         currentPage: 1 
     }),
     
-    // 获取知识卡片列表
+    // 获取知识卡片列表（使用 fetchWithCache + 请求去重）
     fetchCards: async (params = {}) => {
         const { currentPage, pageSize, filters } = get();
         
         set({ loading: true, error: null });
         
+        const apiParams = {
+            page: params.page || currentPage,
+            page_size: params.pageSize || pageSize,
+            search: filters.search,
+            category: filters.category ?? undefined,
+            source_type: filters.sourceType ?? undefined,
+            tag: filters.tag ?? undefined
+        };
+        
+        const cacheKey = `knowledge:cards:${JSON.stringify(apiParams)}`;
+        
         try {
-            const apiParams = {
-                page: params.page || currentPage,
-                page_size: params.pageSize || pageSize,
-                search: filters.search,
-                category: filters.category,
-                source_type: filters.sourceType,
-                tag: filters.tag
-            };
-            
-            const response = await knowledgeApi.getCards(apiParams);
+            interface CardsResponseData { cards: KnowledgeCard[]; total: number; page: number; page_size: number; }
+            const data = await fetchWithCache<CardsResponseData>(
+                cacheKey,
+                () => knowledgeApi.getCards(apiParams).then(r => r.data)
+            );
             
             set({
-                cards: response.data.cards,
-                totalCount: response.data.total,
-                currentPage: response.data.page,
-                pageSize: response.data.page_size,
+                cards: data.cards,
+                totalCount: data.total,
+                currentPage: data.page,
+                pageSize: data.page_size,
                 loading: false
             });
             
-            return response.data;
-        } catch (error: any) {
+            return data;
+        } catch (error: unknown) {
+            const errMsg = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail || '获取知识卡片失败';
             set({
-                error: error.response?.data?.detail || '获取知识卡片失败',
+                error: errMsg,
                 loading: false
             });
             throw error;
@@ -131,9 +139,10 @@ const useKnowledgeStore = create<KnowledgeState>((set, get) => ({
             const response = await knowledgeApi.getCard(cardId);
             set({ currentCard: response.data, loading: false });
             return response.data;
-        } catch (error: any) {
+        } catch (error: unknown) {
+            const errMsg = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail || '获取卡片详情失败';
             set({
-                error: error.response?.data?.detail || '获取卡片详情失败',
+                error: errMsg,
                 loading: false
             });
             throw error;
@@ -154,11 +163,13 @@ const useKnowledgeStore = create<KnowledgeState>((set, get) => ({
                 totalCount: totalCount + 1,
                 loading: false
             });
+            invalidateByPrefix('knowledge:cards:');
             
             return response.data;
-        } catch (error: any) {
+        } catch (error: unknown) {
+            const errMsg = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail || '创建知识卡片失败';
             set({
-                error: error.response?.data?.detail || '创建知识卡片失败',
+                error: errMsg,
                 loading: false
             });
             throw error;
@@ -178,6 +189,7 @@ const useKnowledgeStore = create<KnowledgeState>((set, get) => ({
                 c.id === cardId ? response.data : c
             );
             
+            invalidateByPrefix('knowledge:cards:');
             set({
                 cards: updatedCards,
                 currentCard: currentCard?.id === cardId ? response.data : currentCard,
@@ -185,9 +197,10 @@ const useKnowledgeStore = create<KnowledgeState>((set, get) => ({
             });
             
             return response.data;
-        } catch (error: any) {
+        } catch (error: unknown) {
+            const errMsg = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail || '更新知识卡片失败';
             set({
-                error: error.response?.data?.detail || '更新知识卡片失败',
+                error: errMsg,
                 loading: false
             });
             throw error;
@@ -203,6 +216,7 @@ const useKnowledgeStore = create<KnowledgeState>((set, get) => ({
             
             // 从列表中移除
             const { cards, totalCount, currentCard } = get();
+            invalidateByPrefix('knowledge:cards:');
             set({
                 cards: cards.filter(c => c.id !== cardId),
                 totalCount: totalCount - 1,
@@ -211,9 +225,10 @@ const useKnowledgeStore = create<KnowledgeState>((set, get) => ({
             });
             
             return true;
-        } catch (error: any) {
+        } catch (error: unknown) {
+            const errMsg = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail || '删除知识卡片失败';
             set({
-                error: error.response?.data?.detail || '删除知识卡片失败',
+                error: errMsg,
                 loading: false
             });
             throw error;
@@ -229,6 +244,7 @@ const useKnowledgeStore = create<KnowledgeState>((set, get) => ({
             
             // 更新列表
             const { cards, totalCount } = get();
+            invalidateByPrefix('knowledge:cards:');
             set({
                 cards: [response.data, ...cards],
                 totalCount: totalCount + 1,
@@ -236,9 +252,10 @@ const useKnowledgeStore = create<KnowledgeState>((set, get) => ({
             });
             
             return response.data;
-        } catch (error: any) {
+        } catch (error: unknown) {
+            const errMsg = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail || '从高亮创建知识卡片失败';
             set({
-                error: error.response?.data?.detail || '从高亮创建知识卡片失败',
+                error: errMsg,
                 loading: false
             });
             throw error;
@@ -254,6 +271,7 @@ const useKnowledgeStore = create<KnowledgeState>((set, get) => ({
             
             // 更新列表
             const { cards, totalCount } = get();
+            invalidateByPrefix('knowledge:cards:');
             set({
                 cards: [response.data, ...cards],
                 totalCount: totalCount + 1,
@@ -261,9 +279,10 @@ const useKnowledgeStore = create<KnowledgeState>((set, get) => ({
             });
             
             return response.data;
-        } catch (error: any) {
+        } catch (error: unknown) {
+            const errMsg = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail || '从问答创建知识卡片失败';
             set({
-                error: error.response?.data?.detail || '从问答创建知识卡片失败',
+                error: errMsg,
                 loading: false
             });
             throw error;
@@ -286,9 +305,10 @@ const useKnowledgeStore = create<KnowledgeState>((set, get) => ({
                 loading: false
             });
             return response.data.results;
-        } catch (error: any) {
+        } catch (error: unknown) {
+            const errMsg = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail || '搜索知识卡片失败';
             set({
-                error: error.response?.data?.detail || '搜索知识卡片失败',
+                error: errMsg,
                 loading: false
             });
             throw error;
@@ -306,9 +326,10 @@ const useKnowledgeStore = create<KnowledgeState>((set, get) => ({
                 loading: false
             });
             return response.data;
-        } catch (error: any) {
+        } catch (error: unknown) {
+            const errMsg = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail || '获取知识图谱数据失败';
             set({
-                error: error.response?.data?.detail || '获取知识图谱数据失败',
+                error: errMsg,
                 loading: false
             });
             throw error;
@@ -326,9 +347,10 @@ const useKnowledgeStore = create<KnowledgeState>((set, get) => ({
                 loading: false
             });
             return response.data;
-        } catch (error: any) {
+        } catch (error: unknown) {
+            const errMsg = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail || '获取统计信息失败';
             set({
-                error: error.response?.data?.detail || '获取统计信息失败',
+                error: errMsg,
                 loading: false
             });
             throw error;
@@ -343,9 +365,10 @@ const useKnowledgeStore = create<KnowledgeState>((set, get) => ({
             const response = await knowledgeApi.findRelations(cardId);
             set({ loading: false });
             return response.data.relations;
-        } catch (error: any) {
+        } catch (error: unknown) {
+            const errMsg = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail || '发现关联失败';
             set({
-                error: error.response?.data?.detail || '发现关联失败',
+                error: errMsg,
                 loading: false
             });
             throw error;
@@ -360,9 +383,10 @@ const useKnowledgeStore = create<KnowledgeState>((set, get) => ({
             const response = await knowledgeApi.getCardRelations(cardId);
             set({ loading: false });
             return response.data;
-        } catch (error: any) {
+        } catch (error: unknown) {
+            const errMsg = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail || '获取关联失败';
             set({
-                error: error.response?.data?.detail || '获取关联失败',
+                error: errMsg,
                 loading: false
             });
             throw error;
@@ -379,9 +403,10 @@ const useKnowledgeStore = create<KnowledgeState>((set, get) => ({
             );
             set({ loading: false });
             return response.data;
-        } catch (error: any) {
+        } catch (error: unknown) {
+            const errMsg = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail || '创建关联失败';
             set({
-                error: error.response?.data?.detail || '创建关联失败',
+                error: errMsg,
                 loading: false
             });
             throw error;
@@ -396,9 +421,10 @@ const useKnowledgeStore = create<KnowledgeState>((set, get) => ({
             await knowledgeApi.deleteRelation(relationId);
             set({ loading: false });
             return true;
-        } catch (error: any) {
+        } catch (error: unknown) {
+            const errMsg = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail || '删除关联失败';
             set({
-                error: error.response?.data?.detail || '删除关联失败',
+                error: errMsg,
                 loading: false
             });
             throw error;
@@ -427,9 +453,10 @@ const useKnowledgeStore = create<KnowledgeState>((set, get) => ({
             set({ cards: updatedCards, loading: false });
             
             return response.data.tags;
-        } catch (error: any) {
+        } catch (error: unknown) {
+            const errMsg = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail || '自动生成标签失败';
             set({
-                error: error.response?.data?.detail || '自动生成标签失败',
+                error: errMsg,
                 loading: false
             });
             throw error;

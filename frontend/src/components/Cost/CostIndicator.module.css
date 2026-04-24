@@ -1,0 +1,69 @@
+.wrapper {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-end;
+  position: relative;
+}
+
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 20px;
+  background: var(--surface, #fff);
+  cursor: pointer;
+  font-size: 11px;
+  color: var(--text-secondary, #6b7280);
+  transition: border-color 0.15s, color 0.15s;
+}
+.toggle:hover {
+  border-color: var(--primary, #6366f1);
+  color: var(--primary, #6366f1);
+}
+
+.coinIcon { font-size: 12px; }
+.costBadge {
+  font-weight: 600;
+  font-family: monospace;
+  font-size: 12px;
+}
+.chevron { font-size: 8px; opacity: 0.6; }
+
+.detail {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  right: 0;
+  width: 220px;
+  background: var(--surface, #fff);
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+  padding: 10px 14px;
+  z-index: 100;
+  animation: fadeUp 0.12s ease;
+}
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--divider, #f3f4f6);
+}
+.row:last-child { border-bottom: none; }
+.rowLabel {
+  font-size: 11px;
+  color: var(--text-secondary, #6b7280);
+}
+.rowValue {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-primary, #111827);
+  font-family: monospace;
+}

@@ -6,18 +6,18 @@ import api from './index';
  */
 export const knowledgeGraphApi = {
   /** 获取用户全量知识图谱 */
-  getGraph: (userId) => api.get(`/knowledge-graph/${userId}`),
+  getGraph: (userId: number | string) => api.get(`/knowledge-graph/${userId}`),
 
   /** 按论文筛选子图 */
-  getGraphByPaper: (userId, paperId) =>
+  getGraphByPaper: (userId: number | string, paperId: number | string) =>
     api.get(`/knowledge-graph/${userId}/paper/${paperId}`),
 
   /** 构建某篇论文的知识图谱 */
-  buildGraph: (paperId, userId) =>
+  buildGraph: (paperId: number | string, userId: number | string) =>
     api.post(`/knowledge-graph/build/${paperId}?user_id=${userId}`),
 
   /** 搜索图谱节点 */
-  searchGraph: (userId, query) =>
+  searchGraph: (userId: number | string, query: string) =>
     api.get(`/knowledge-graph/${userId}/search?query=${encodeURIComponent(query)}`),
 };
 

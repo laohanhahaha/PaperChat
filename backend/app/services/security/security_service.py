@@ -1,9 +1,12 @@
+# -*- coding: utf-8 -*-
 """提示词注入防护服务
 
 检测并过滤用户输入中的注入攻击，保护 Agent 安全。
+新增用户角色权限分级体系，支持上下文感知的权限判断。
 """
 import re
 import logging
+from enum import Enum
 from typing import Optional
 from dataclasses import dataclass
 
@@ -75,6 +78,36 @@ SENSITIVE_OUTPUT_PATTERNS = [
 ]
 
 
+# ---------------------------------------------------------------------------
+# 角色权限体系（2c 新增）
+# ---------------------------------------------------------------------------
+
+class UserRole(str, Enum):
+    """用户角色枚举
+
+    GUEST  — 访客（未登录/匿名），仅可使用只读低风险工具
+    USER   — 普通用户（已登录），可使用低/中风险工具
+    ADMIN  — 管理员，可使用全部工具（包括高风险）
+    """
+    GUEST = "guest"
+    USER = "user"
+    ADMIN = "admin"
+
+
+# 角色允许的最高风险等级
+ROLE_MAX_RISK: dict = {
+    UserRole.GUEST: "low",
+    UserRole.USER: "medium",
+    UserRole.ADMIN: "high",
+}
+
+# 批量操作关键词（命中时自动上调工具风险等级一档）
+_BULK_OPERATION_KEYWORDS = [
+    "批量", "all", "bulk", "batch", "all_papers",
+    "所有论文", "所有对话", "全部",
+]
+
+
 class SecurityService:
     """提示词注入防护服务"""
 
@@ -118,38 +151,90 @@ class SecurityService:
             sanitized_input=sanitized
         )
 
-    def check_tool_permission(self, tool_name: str, user_input: str) -> SecurityCheckResult:
-        """检查工具调用权限
-        
+    def check_tool_permission(
+        self,
+        tool_name: str,
+        user_input: str = "",
+        user_role: UserRole = UserRole.USER,
+        context: Optional[dict] = None,
+    ) -> SecurityCheckResult:
+        """检查工具调用权限（角色 + 上下文感知）
+
+        上下文感知规则:
+          - context 中包含 "bulk": True 或操作描述命中批量关键词时，
+            工具风险等级自动上调一档（low→medium, medium→high）。
+
+        权限判断:
+          - GUEST  仅允许 low 风险工具
+          - USER   允许 low + medium 风险工具
+          - ADMIN  允许全部工具（包括 high）
+
         Args:
             tool_name: 工具名称
-            user_input: 用户输入（用于上下文分析）
-            
+            user_input: 用户输入（兼容旧调用，用于批量操作检测）
+            user_role: 当前用户角色，默认 USER
+            context: 操作上下文字典，可包含:
+                       - "operation": 操作描述字符串
+                       - "bulk": bool，是否批量操作
+
         Returns:
             SecurityCheckResult: 权限检查结果
         """
-        risk_level = TOOL_RISK_LEVELS.get(tool_name, "medium")
-        
-        if risk_level == "high":
-            logger.warning(f"尝试调用高风险工具: {tool_name}")
+        context = context or {}
+        base_risk = TOOL_RISK_LEVELS.get(tool_name, "medium")
+
+        # 上下文感知：检测批量操作，自动提升风险等级
+        effective_risk = base_risk
+        is_bulk = bool(context.get("bulk", False))
+        operation_desc = str(context.get("operation", "") or user_input)
+        if not is_bulk:
+            is_bulk = any(kw in operation_desc for kw in _BULK_OPERATION_KEYWORDS)
+
+        if is_bulk:
+            risk_up = {"none": "low", "low": "medium", "medium": "high", "high": "high"}
+            effective_risk = risk_up.get(base_risk, base_risk)
+            logger.info(
+                f"批量操作检测：工具 '{tool_name}' 风险等级从 {base_risk} 上调至 {effective_risk}"
+            )
+
+        # 角色权限判断
+        max_allowed = ROLE_MAX_RISK.get(user_role, "medium")
+        allowed = RISK_PRIORITY.get(effective_risk, 1) <= RISK_PRIORITY.get(max_allowed, 1)
+
+        if not allowed:
+            logger.warning(
+                f"权限拒绝：角色={user_role.value} 工具='{tool_name}' "
+                f"风险={effective_risk} 最高允许={max_allowed}"
+            )
             return SecurityCheckResult(
                 is_safe=False,
-                risk_level="high",
-                reason=f"工具 '{tool_name}' 为高风险操作"
+                risk_level=effective_risk,
+                reason=(
+                    f"角色 '{user_role.value}' 无权调用风险等级为 '{effective_risk}' 的工具 '{tool_name}'。"
+                    f"该角色最高允许 '{max_allowed}' 风险工具。"
+                ),
             )
-        elif risk_level == "medium":
+
+        if effective_risk == "high":
+            logger.warning(f"ADMIN 调用高风险工具: {tool_name}")
+            return SecurityCheckResult(
+                is_safe=True,
+                risk_level=effective_risk,
+                reason=f"工具 '{tool_name}' 为高风险操作，ADMIN 权限已授权",
+            )
+        elif effective_risk == "medium":
             logger.info(f"调用中风险工具: {tool_name}")
             return SecurityCheckResult(
                 is_safe=True,
-                risk_level="medium",
-                reason=f"工具 '{tool_name}' 为中风险操作，已允许执行"
+                risk_level=effective_risk,
+                reason=f"工具 '{tool_name}' 为中风险操作，已允许执行",
             )
         else:
             logger.debug(f"调用低风险工具: {tool_name}")
             return SecurityCheckResult(
                 is_safe=True,
-                risk_level="low",
-                reason=f"工具 '{tool_name}' 为低风险操作"
+                risk_level=effective_risk,
+                reason=f"工具 '{tool_name}' 为低风险操作",
             )
 
     def check_output(self, llm_output: str) -> SecurityCheckResult:

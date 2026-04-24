@@ -4,7 +4,9 @@ import { useDropzone } from 'react-dropzone';
 import { useTranslation } from 'react-i18next';
 import usePaperStore from '../stores/paperStore';
 import BatchImport from '../components/BatchImport/BatchImport';
+import BatchAnalysis from '../components/BatchAnalysis/BatchAnalysis';
 import Recommendations from '../components/Recommendations/Recommendations';
+import RecommendationPanel from '../components/Recommendations/RecommendationPanel';
 import styles from './PaperList.module.css';
 
 // 阅读状态映射
@@ -145,6 +147,7 @@ function PaperList() {
   const [page, setPage] = useState(1);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [showBatchImport, setShowBatchImport] = useState(false);
+  const [showBatchAnalysis, setShowBatchAnalysis] = useState(false);
   const [, setUploadProgress] = useState(0);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
 
@@ -263,6 +266,15 @@ function PaperList() {
             </svg>
             批量导入
           </button>
+          <button
+            className={styles.batchAnalysisBtn}
+            onClick={() => setShowBatchAnalysis(true)}
+          >
+            <svg className={styles.icon} viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            批量分析
+          </button>
         </div>
       </header>
 
@@ -279,6 +291,15 @@ function PaperList() {
             emptyText="上传更多论文以获取个性化推荐"
           />
         </div>
+
+      {/* 综合推荐面板（知识图谱 + 内容相似 + 个性化融合） */}
+      <div className={styles.recommendationsSection}>
+        <RecommendationPanel
+          title="智能综合推荐"
+          topK={8}
+          collapsed={true}
+        />
+      </div>
 
       {/* 搜索和筛选栏 */}
       <div className={styles.filterBar}>
@@ -411,6 +432,11 @@ function PaperList() {
             loadPapers();
           }}
         />
+      )}
+
+      {/* 批量分析弹窗 */}
+      {showBatchAnalysis && (
+        <BatchAnalysis onClose={() => setShowBatchAnalysis(false)} />
       )}
 
       {/* 删除确认弹窗 */}

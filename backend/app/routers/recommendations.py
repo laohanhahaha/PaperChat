@@ -3,6 +3,7 @@
 提供相似论文推荐和个性化推荐接口
 """
 from typing import List, Optional
+from pydantic import BaseModel, Field
 
 from fastapi import APIRouter, HTTPException, status, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,6 +14,16 @@ from app.services.auth_service import get_current_user
 from app.services.recommendation_service import recommendation_service
 
 router = APIRouter(prefix="/api/v1", tags=["推荐"])
+
+
+# ========== Pydantic 模型 ==========
+
+class FeedbackRequest(BaseModel):
+    """推荐反馈请求体"""
+    paper_id: int = Field(..., description="被推荐的论文 ID")
+    feedback_type: str = Field(..., pattern="^(useful|not_useful)$", description="反馈类型: useful | not_useful")
+    source: Optional[str] = Field(None, description="推荐来源: similar | personal | graph | comprehensive")
+    comment: Optional[str] = Field(None, max_length=500, description="可选备注")
 
 
 @router.get("/papers/{paper_id}/recommendations")
@@ -230,4 +241,97 @@ async def get_web_recommendations(
     return {
         "results": results,
         "total": len(results)
+    }
+
+
+@router.get("/recommendations/comprehensive")
+async def get_comprehensive_recommendations(
+    paper_id: Optional[int] = Query(None, description="当前论文 ID，用于内容相似推荐"),
+    top_k: int = Query(8, ge=1, le=20, description="返回数量"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """综合推荐
+
+    融合内容相似推荐、个性化推荐和知识图谱推荐，按权重混合排序。
+    每篇推荐附带 reason 字段说明推荐理由。
+
+    查询参数:
+        - paper_id: 当前正在查看的论文 ID（可选）
+        - top_k: 返回数量（默认 8，最大 20）
+
+    返回:
+        - recommendations: 综合推荐论文列表（含 reason 字段）
+        - total: 推荐数量
+
+    性能说明:
+        - 并行计算三路推荐，总耗时约 200-500ms
+        - 首次计算嵌入向量可能耗时 1-2s
+    """
+    recommendations = await recommendation_service.get_comprehensive_recommendations(
+        user_id=current_user.id,
+        db=db,
+        paper_id=paper_id,
+        top_k=top_k
+    )
+
+    return {
+        "total": len(recommendations),
+        "source_paper_id": paper_id,
+        "recommendations": recommendations
+    }
+
+
+@router.post("/recommendations/feedback")
+async def submit_recommendation_feedback(
+    body: FeedbackRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """提交推荐反馈
+
+    记录用户对推荐结果的使用反馈，用于后续推荐优化。
+    目前将反馈记录到日志，后续可按需入库。
+
+    请求体:
+        - paper_id: 被推荐的论文 ID
+        - feedback_type: useful | not_useful
+        - source: 推荐来源（similar / personal / graph / comprehensive）
+        - comment: 可选备注
+
+    返回:
+        - success: 是否成功
+        - message: 状态信息
+    """
+    from sqlalchemy import select, and_
+    from app.models.paper import Paper
+    import logging
+
+    logger = logging.getLogger(__name__)
+
+    # 验证被推荐论文属于当前用户
+    result = await db.execute(
+        select(Paper).where(
+            and_(Paper.id == body.paper_id, Paper.user_id == current_user.id)
+        )
+    )
+    paper = result.scalar_one_or_none()
+
+    if not paper:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="论文不存在"
+        )
+
+    # 记录反馈（当前记录到日志，可后续扩展入库）
+    logger.info(
+        f"[recommendation_feedback] user={current_user.id} paper={body.paper_id} "
+        f"type={body.feedback_type} source={body.source} comment={body.comment!r}"
+    )
+
+    return {
+        "success": True,
+        "message": "反馈已记录，感谢您的建议",
+        "paper_id": body.paper_id,
+        "feedback_type": body.feedback_type
     }

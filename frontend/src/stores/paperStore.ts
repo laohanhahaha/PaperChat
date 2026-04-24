@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { paperApi } from '../api/paperApi';
+import { fetchWithCache, invalidateByPrefix } from '../hooks/useApiCache';
 
 interface Paper {
   id: number | string;
@@ -73,27 +74,34 @@ const usePaperStore = create<PaperState>((set, get) => ({
   webRecommendations: [],
   webRecommendationsLoading: false,
   
-  // 获取论文列表
+  // 获取论文列表（使用 fetchWithCache + 请求去重）
   fetchPapers: async (params = {}) => {
     set({ loading: true, error: null });
+    // 列表缓存键（按参数序列化）
+    const cacheKey = `papers:list:${JSON.stringify(params)}`;
     try {
-      const response = await paperApi.getPapers(params);
+      interface PapersResponseData { papers: Paper[]; total: number; }
+      const data = await fetchWithCache<PapersResponseData>(
+        cacheKey,
+        () => paperApi.getPapers(params).then(r => r.data)
+      );
       set({ 
-        papers: response.data.papers, 
-        total: response.data.total,
+        papers: data.papers, 
+        total: data.total,
         loading: false 
       });
-      return response.data;
-    } catch (error: any) {
+      return data;
+    } catch (error: unknown) {
+      const errMsg = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail || '获取论文列表失败';
       set({ 
-        error: error.response?.data?.detail || '获取论文列表失败', 
+        error: errMsg, 
         loading: false 
       });
       throw error;
     }
   },
   
-  // 获取单篇论文详情（带缓存）
+  // 获取单篇论文详情（内置 paperCache + CACHE_TTL 保持不变）
   fetchPaper: async (id) => {
     const cached = get().paperCache[id];
     if (cached && (Date.now() - cached.timestamp < CACHE_TTL)) {
@@ -113,9 +121,10 @@ const usePaperStore = create<PaperState>((set, get) => ({
         loading: false 
       }));
       return response.data;
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const errMsg = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail || '获取论文详情失败';
       set({ 
-        error: error.response?.data?.detail || '获取论文详情失败', 
+        error: errMsg, 
         loading: false 
       });
       throw error;
@@ -142,6 +151,9 @@ const usePaperStore = create<PaperState>((set, get) => ({
     try {
       const response = await paperApi.uploadPaper(file, metadata, onProgress);
       
+      // 上传成功后失效列表缓存
+      invalidateByPrefix('papers:list:');
+      
       // 更新列表
       const { papers } = get();
       set({ 
@@ -151,9 +163,10 @@ const usePaperStore = create<PaperState>((set, get) => ({
       });
       
       return response.data;
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const errMsg = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail || '上传论文失败';
       set({ 
-        error: error.response?.data?.detail || '上传论文失败', 
+        error: errMsg, 
         loading: false 
       });
       throw error;
@@ -168,6 +181,7 @@ const usePaperStore = create<PaperState>((set, get) => ({
       
       // 更新列表并清除缓存
       const { papers } = get();
+      invalidateByPrefix('papers:list:');
       set(state => {
         const newCache = { ...state.paperCache };
         delete newCache[String(id)];
@@ -178,9 +192,10 @@ const usePaperStore = create<PaperState>((set, get) => ({
           loading: false 
         };
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const errMsg = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail || '删除论文失败';
       set({ 
-        error: error.response?.data?.detail || '删除论文失败', 
+        error: errMsg, 
         loading: false 
       });
       throw error;
@@ -199,7 +214,8 @@ const usePaperStore = create<PaperState>((set, get) => ({
         p.id === id ? response.data : p
       );
       
-      // 更新缓存
+      // 失效列表缓存 + 更新 paperCache
+      invalidateByPrefix('papers:list:');
       set(state => ({
         papers: updatedPapers,
         currentPaper: response.data,
@@ -211,9 +227,10 @@ const usePaperStore = create<PaperState>((set, get) => ({
       }));
       
       return response.data;
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const errMsg = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail || '更新论文失败';
       set({ 
-        error: error.response?.data?.detail || '更新论文失败', 
+        error: errMsg, 
         loading: false 
       });
       throw error;
@@ -258,7 +275,7 @@ const usePaperStore = create<PaperState>((set, get) => ({
       );
       set({ papers: updatedPapers });
       return response.data;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('标记阅读状态失败:', error);
       throw error;
     }
@@ -274,9 +291,10 @@ const usePaperStore = create<PaperState>((set, get) => ({
         recommendationsLoading: false 
       });
       return response.data;
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const errMsg = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail || '获取推荐失败';
       set({ 
-        error: error.response?.data?.detail || '获取推荐失败',
+        error: errMsg,
         recommendationsLoading: false 
       });
       throw error;
@@ -293,9 +311,10 @@ const usePaperStore = create<PaperState>((set, get) => ({
         personalRecommendationsLoading: false 
       });
       return response.data;
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const errMsg = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail || '获取个性化推荐失败';
       set({ 
-        error: error.response?.data?.detail || '获取个性化推荐失败',
+        error: errMsg,
         personalRecommendationsLoading: false 
       });
       throw error;
@@ -315,7 +334,7 @@ const usePaperStore = create<PaperState>((set, get) => ({
         webRecommendationsLoading: false 
       });
       return response.data;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('网络推荐搜索失败:', error);
       set({ webRecommendationsLoading: false });
       throw error;
@@ -336,7 +355,7 @@ const usePaperStore = create<PaperState>((set, get) => ({
         )
       }));
       return res.data.keywords;
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.warn('提取关键词失败:', err);
       return [];
     }
@@ -354,9 +373,10 @@ const usePaperStore = create<PaperState>((set, get) => ({
       
       set({ loading: false });
       return response.data;
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const errMsg = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail || '批量上传失败';
       set({ 
-        error: error.response?.data?.detail || '批量上传失败', 
+        error: errMsg, 
         loading: false 
       });
       throw error;
@@ -375,9 +395,10 @@ const usePaperStore = create<PaperState>((set, get) => ({
       
       set({ loading: false });
       return response.data;
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const errMsg = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail || 'ZIP 导入失败';
       set({ 
-        error: error.response?.data?.detail || 'ZIP 导入失败', 
+        error: errMsg, 
         loading: false 
       });
       throw error;

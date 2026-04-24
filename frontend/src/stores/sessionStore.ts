@@ -263,7 +263,8 @@ export const useSessionStore = create<SessionState>((set, get) => ({
 
   // 获取某论文的会话列表
   fetchSessionsByPaper: async (paperId) => {
-    return await get().fetchSessions(paperId);
+    const id = typeof paperId === 'string' ? Number(paperId) : paperId;
+    return await get().fetchSessions(id);
   },
 
   // 创建跨文档会话

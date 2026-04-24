@@ -8,22 +8,12 @@
 import json
 import asyncio
 import logging
-import time
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
-from jose import jwt, JWTError
-from langchain_community.chat_message_histories import ChatMessageHistory
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import settings
 from app.database import AsyncSessionLocal
-from app.models.user import User
-
-logger = logging.getLogger(__name__)
-from app.services.auth_service import get_current_user
-from app.services.session_service import get_paper_by_id
-from app.services.message_service import get_paper_full_text, get_paper_text_preview
+from app.routers.ws_state import ConnectionState
+from app.routers.ws_auth import verify_websocket_token
 from app.handlers.analyze_handler import handle_analyze, handle_deep_analyze
 from app.handlers.chat_handler import handle_chat
 from app.handlers.rag_handler import handle_rag_chat
@@ -31,121 +21,9 @@ from app.handlers.agent_handler import handle_agent_chat
 from app.handlers.cross_doc_handler import handle_cross_doc_chat
 from app.handlers.unified_handler import handle_unified_chat
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(tags=["WebSocket"])
-
-
-class ChunkBuffer:
-    """合并高频 WebSocket chunk 消息，减少发送次数
-
-    性能影响说明：
-    - 默认 50ms 的合并间隔对用户体验影响极小（人眼感知延迟约 100ms）
-    - 可显著减少 WebSocket 消息数量（通常减少 80-90%）
-    - 降低前端 React 重渲染频率，提升整体流畅度
-    """
-    def __init__(self, websocket, interval_ms=50):
-        self.websocket = websocket
-        self.interval = interval_ms / 1000  # 转换为秒
-        self.buffer = ""
-        self.last_flush = time.time()
-        self._lock = asyncio.Lock()
-        self._closed = False
-
-    async def add(self, chunk: str, msg_type: str = "stream"):
-        """添加 chunk 到缓冲区，如果达到间隔时间则自动 flush
-
-        Args:
-            chunk: 要发送的文本内容
-            msg_type: 消息类型，默认 "stream"，也可用于 "chat_chunk", "rag_chat_chunk" 等
-        """
-        if self._closed:
-            return
-
-        async with self._lock:
-            self.buffer += chunk
-            now = time.time()
-            if now - self.last_flush >= self.interval:
-                await self._flush(msg_type)
-
-    async def flush(self, msg_type: str = "stream"):
-        """强制刷新缓冲区，发送所有累积的内容"""
-        if self._closed:
-            return
-
-        async with self._lock:
-            await self._flush(msg_type)
-
-    async def _flush(self, msg_type: str):
-        """内部刷新方法（需在持有锁的情况下调用）"""
-        if self.buffer:
-            await self.websocket.send_text(json.dumps({
-                "type": msg_type,
-                "content": self.buffer
-            }))
-            self.buffer = ""
-            self.last_flush = time.time()
-
-    def close(self):
-        """关闭 buffer，不再接受新内容"""
-        self._closed = True
-
-
-async def send_chunk_with_buffer(websocket, chunk_buffer, chunk: str, msg_type: str = "stream"):
-    """使用 buffer 发送 chunk 的辅助函数
-
-    如果 chunk_buffer 为 None，则直接发送；否则使用 buffer。
-    这样允许 handler 选择是否使用缓冲功能。
-    """
-    if chunk_buffer is not None:
-        await chunk_buffer.add(chunk, msg_type)
-    else:
-        await websocket.send_text(json.dumps({
-            "type": msg_type,
-            "content": chunk
-        }))
-
-
-async def verify_websocket_token(token: str = None):
-    """验证 WebSocket token，无 token 时降级为默认用户"""
-    if not token:
-        # 向后兼容：无 token 时使用默认用户（个人使用模式）
-        async with AsyncSessionLocal() as db:
-            return await get_current_user(db)
-
-    try:
-        payload = jwt.decode(
-            token,
-            settings.JWT_SECRET_KEY,
-            algorithms=[settings.JWT_ALGORITHM]
-        )
-        user_id = int(payload.get("sub"))
-        async with AsyncSessionLocal() as db:
-            result = await db.execute(select(User).where(User.id == user_id))
-            user = result.scalar_one_or_none()
-            if user and user.is_active:
-                return user
-        return None
-    except Exception:
-        return None
-
-
-class ConnectionState:
-    """WebSocket 连接状态，在各 handler 间共享"""
-    def __init__(self):
-        self.paper_context = ""
-        self.current_paper_id = None
-        self.current_session_id = None
-        self.current_user_id = None
-        self.chat_history = ChatMessageHistory()
-        self.running_tasks = {}
-
-
-async def get_db_session():
-    """获取数据库会话"""
-    async with AsyncSessionLocal() as session:
-        try:
-            yield session
-        finally:
-            await session.close()
 
 
 @router.websocket("/ws")
@@ -181,6 +59,8 @@ async def websocket_endpoint(websocket: WebSocket, token: str = Query(default=No
         await websocket.close(code=4001, reason="Unauthorized")
         return
 
+    # WS permessage-deflate 压缩已在 uvicorn 层启用（run.py: ws_per_message_deflate=True）
+    # Starlette 不支持在 accept() 级别直接配置压缩，压缩协商由 uvicorn ASGI 服务器处理
     await websocket.accept()
 
     state = ConnectionState()
@@ -373,35 +253,6 @@ async def websocket_endpoint(websocket: WebSocket, token: str = Query(default=No
                         message_data=data,
                     )
                 )
-
-                # [DEPRECATED] 旧版内联路由，已被 unified_handler 替代
-                # 旧版只支持 13 种意图、5 个 handler，无 ReAct 循环和安全检测
-                # 如需回滚，注释掉上方新版代码块，取消注释以下代码:
-                #
-                # from app.services.agent_service import classify_by_keywords
-                # intent_result = classify_by_keywords(message)
-                # await websocket.send_text(json.dumps({
-                #     "type": "intent_detected",
-                #     "intent": intent_result.get("intent", "simple_qa") if intent_result.get("matched") else "simple_qa",
-                #     "tool": intent_result.get("tool", "rag_chat") if intent_result.get("matched") else "rag_chat",
-                #     "confidence": intent_result.get("confidence", "low"),
-                #     "matched": intent_result.get("matched", False)
-                # }))
-                # if intent_result.get("matched"):
-                #     tool = intent_result.get("tool")
-                #     if tool == "analyze_paper":
-                #         # ... 旧版 analyze_paper 路由逻辑 ...
-                #         pass
-                #     elif tool == "deep_analyze_paper":
-                #         pass  # ... 旧版 deep_analyze_paper 路由逻辑 ...
-                #     elif tool == "cross_doc_chat":
-                #         pass  # ... 旧版 cross_doc_chat 路由逻辑 ...
-                #     elif tool == "rag_chat" or tool == "search_text":
-                #         pass  # ... 旧版 RAG 路由逻辑 ...
-                #     else:
-                #         pass  # ... 旧版 fallback 到 RAG ...
-                # else:
-                #     pass  # ... 旧版默认 RAG 路由 ...
 
             else:
                 await websocket.send_text(json.dumps({

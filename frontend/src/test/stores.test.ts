@@ -52,7 +52,7 @@ describe('sessionStore', () => {
   describe('createSession', () => {
     it('成功创建会话后，会话出现在列表中', async () => {
       const newSession = { id: 1, title: '新对话', paper_id: null }
-      vi.mocked(chatApi.createSession).mockResolvedValueOnce({ data: newSession })
+      vi.mocked(chatApi.createSession).mockResolvedValueOnce({ data: newSession } as any)
 
       const result = await useSessionStore.getState().createSession(null, '新对话')
 
@@ -64,7 +64,7 @@ describe('sessionStore', () => {
 
     it('成功创建会话后，currentSessionId 更新为新会话 ID', async () => {
       const newSession = { id: 42, title: '测试会话', paper_id: null }
-      vi.mocked(chatApi.createSession).mockResolvedValueOnce({ data: newSession })
+      vi.mocked(chatApi.createSession).mockResolvedValueOnce({ data: newSession } as any)
 
       await useSessionStore.getState().createSession()
 
@@ -77,7 +77,7 @@ describe('sessionStore', () => {
         sessions: [{ id: 10, title: '旧会话', paper_id: 1 }],
       })
       const newSession = { id: 20, title: '新论文会话', paper_id: 1 }
-      vi.mocked(chatApi.createSession).mockResolvedValueOnce({ data: newSession })
+      vi.mocked(chatApi.createSession).mockResolvedValueOnce({ data: newSession } as any)
 
       await useSessionStore.getState().createSession(1, '新论文会话')
 
@@ -121,7 +121,7 @@ describe('sessionStore', () => {
         ],
         currentSessionId: 3,
       })
-      vi.mocked(chatApi.deleteSession).mockResolvedValueOnce({})
+      vi.mocked(chatApi.deleteSession).mockResolvedValueOnce({} as any)
 
       const result = await useSessionStore.getState().deleteSession(1)
 
@@ -139,7 +139,7 @@ describe('sessionStore', () => {
         ],
         currentSessionId: 1,
       })
-      vi.mocked(chatApi.deleteSession).mockResolvedValueOnce({})
+      vi.mocked(chatApi.deleteSession).mockResolvedValueOnce({} as any)
 
       await useSessionStore.getState().deleteSession(1)
 
@@ -151,7 +151,7 @@ describe('sessionStore', () => {
         sessions: [{ id: 5, title: '唯一会话' }],
         currentSessionId: 5,
       })
-      vi.mocked(chatApi.deleteSession).mockResolvedValueOnce({})
+      vi.mocked(chatApi.deleteSession).mockResolvedValueOnce({} as any)
 
       await useSessionStore.getState().deleteSession(5)
 
@@ -246,7 +246,7 @@ describe('messageStore', () => {
           ],
           total: 2,
         },
-      })
+      } as any)
 
       await useMessageStore.getState().fetchMessages(10)
 
@@ -332,28 +332,18 @@ describe('messageStore', () => {
   // ── 消息缓存 ─────────────────────────────────────────────────────────────────
 
   describe('message cache', () => {
-    it('invalidateMessageCache 移除指定会话的缓存', () => {
-      useMessageStore.setState({
-        messageCache: {
-          '1': { messages: [], timestamp: Date.now() },
-          '2': { messages: [], timestamp: Date.now() },
-        },
-      })
-      useMessageStore.getState().invalidateMessageCache('1')
-
-      const { messageCache } = useMessageStore.getState()
-      expect(messageCache['1']).toBeUndefined()
-      expect(messageCache['2']).toBeDefined()
+    it('invalidateMessageCache 不报错并可多次调用', () => {
+      // 缓存现在由 useApiCache 管理，Store 本身不再持有 messageCache
+      expect(() => {
+        useMessageStore.getState().invalidateMessageCache('1')
+        useMessageStore.getState().invalidateMessageCache('2')
+      }).not.toThrow()
     })
 
-    it('clearMessageCache 清空所有缓存', () => {
-      useMessageStore.setState({
-        messageCache: {
-          '1': { messages: [], timestamp: Date.now() },
-        },
-      })
-      useMessageStore.getState().clearMessageCache()
-      expect(useMessageStore.getState().messageCache).toEqual({})
+    it('clearMessageCache 不报错', () => {
+      expect(() => {
+        useMessageStore.getState().clearMessageCache()
+      }).not.toThrow()
     })
   })
 })

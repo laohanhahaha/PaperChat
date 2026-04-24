@@ -7,6 +7,7 @@ import json
 import asyncio
 import logging
 import time
+import uuid
 from typing import List, Optional, Dict, Any, Tuple
 from concurrent.futures import ThreadPoolExecutor
 
@@ -50,6 +51,12 @@ class RAGService:
 
         # 索引状态追踪（正在索引的论文ID集合）
         self._indexing_papers: set = set()
+
+        # 异步重建索引任务队列（内存队列 + Worker）
+        self._reindex_queue: asyncio.Queue = asyncio.Queue()
+        # 任务状态表: task_id -> {paper_id, status, progress_pct, error}
+        self._reindex_tasks: Dict[str, Dict[str, Any]] = {}
+        self._worker_task: Optional[asyncio.Task] = None
 
         # 运行时配置
         self._top_k = 5  # 默认检索数量
@@ -387,6 +394,87 @@ class RAGService:
     def is_indexing(self, paper_id: int) -> bool:
         """检查论文是否正在索引"""
         return paper_id in self._indexing_papers
+
+    # ------------------------------------------------------------------
+    # 异步重建索引任务队列
+    # ------------------------------------------------------------------
+
+    async def start_worker(self) -> None:
+        """Phase 2 中启动索引任务 Worker（单例）"""
+        if self._worker_task is None or self._worker_task.done():
+            self._worker_task = asyncio.create_task(self._reindex_worker())
+            logger.info("RAG 索引队列 Worker 已启动")
+
+    async def _reindex_worker(self) -> None:
+        """Worker 协程：顺序消费队列内索引任务"""
+        logger.info("RAG Worker 开始监听重建索引队列")
+        while True:
+            try:
+                task_id, paper_id, blocks_data = await self._reindex_queue.get()
+                self._reindex_tasks[task_id]["status"] = "running"
+                self._reindex_tasks[task_id]["progress_pct"] = 0
+                logger.info(f"RAG Worker 开始处理 task={task_id} paper_id={paper_id}")
+                try:
+                    await self._reindex_with_progress(task_id, paper_id, blocks_data)
+                    self._reindex_tasks[task_id]["status"] = "done"
+                    self._reindex_tasks[task_id]["progress_pct"] = 100
+                    logger.info(f"RAG Worker 完成 task={task_id} paper_id={paper_id}")
+                except Exception as e:
+                    self._reindex_tasks[task_id]["status"] = "error"
+                    self._reindex_tasks[task_id]["error"] = str(e)
+                    logger.error(f"RAG Worker 失败 task={task_id}: {e}")
+                finally:
+                    self._reindex_queue.task_done()
+            except asyncio.CancelledError:
+                logger.info("RAG Worker 收到取消信号，退出")
+                break
+            except Exception as e:
+                logger.error(f"RAG Worker 未预期异常: {e}")
+
+    async def _reindex_with_progress(self, task_id: str, paper_id: int, blocks_data: list) -> None:
+        """带进度更新的索引重建"""
+        self._reindex_tasks[task_id]["progress_pct"] = 10
+        self._indexing_papers.add(paper_id)
+        try:
+            await self.reindex_paper(paper_id, blocks_data)
+            self._reindex_tasks[task_id]["progress_pct"] = 90
+        finally:
+            self._indexing_papers.discard(paper_id)
+
+    def submit_reindex(self, paper_id: int, blocks_data: list) -> str:
+        """提交索引重建任务到队列，返回 task_id
+
+        Args:
+            paper_id: 论文 ID
+            blocks_data: 文本块数据
+
+        Returns:
+            task_id: 可用于查询进度
+        """
+        task_id = str(uuid.uuid4())
+        self._reindex_tasks[task_id] = {
+            "paper_id": paper_id,
+            "status": "pending",
+            "progress_pct": 0,
+            "error": None,
+        }
+        try:
+            self._reindex_queue.put_nowait((task_id, paper_id, blocks_data))
+        except asyncio.QueueFull:
+            self._reindex_tasks[task_id]["status"] = "error"
+            self._reindex_tasks[task_id]["error"] = "Queue full"
+        return task_id
+
+    def get_reindex_status(self, task_id: str) -> Optional[Dict[str, Any]]:
+        """获取索引重建任务进度
+
+        Args:
+            task_id: submit_reindex 返回的 task_id
+
+        Returns:
+            {paper_id, status, progress_pct, error} 或 None（未找到）
+        """
+        return self._reindex_tasks.get(task_id)
 
     def try_start_indexing(self, paper_id: int) -> bool:
         """原子检查+标记。若已在索引中返回 False，否则标记并返回 True"""

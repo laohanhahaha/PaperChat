@@ -28,34 +28,14 @@ from app.handlers.rag_handler import handle_rag_chat
 from app.handlers.cross_doc_handler import handle_cross_doc_chat
 from app.handlers.ws_utils import ChunkBuffer
 from app.services.agent.react_agent import react_agent
+from app.services.agent.coordinator import ResearchCoordinator
 from app.services.chat.context_service import context_service
 from app.services.security.security_service import security_service
 from app.services.security.clarification_service import clarification_service
 from app.services.user.profile_service import profile_service
+from app.prompts.chat import GENERAL_CHAT_SYSTEM_PROMPT, THINKING_PROMPT
 
 logger = logging.getLogger(__name__)
-
-# 通用对话 system prompt
-GENERAL_CHAT_SYSTEM_PROMPT = (
-    "你是 PaperChat 学术助手，帮助用户解答学术相关问题。"
-    "当前用户没有选择论文，请基于你的知识回答。"
-    "如果用户的问题涉及某篇具体论文的内容，建议用户先上传并选择论文以获得更精准的回答。"
-)
-
-# 深度思考模式 prompt
-THINKING_PROMPT = """你是一位学术研究助手。请仔细分析以下用户请求，展示你的思考过程：
-
-用户请求：{message}
-{context}
-
-请分步骤思考：
-1. 用户的核心需求是什么？
-2. 需要哪些信息或工具来满足这个需求？
-3. 最佳的回答策略是什么？
-4. 需要注意哪些关键点？
-
-请用简洁的中文展示你的思考过程。"""
-
 
 # 深度研究模式触发关键词
 DEEP_RESEARCH_KEYWORDS = [
@@ -70,6 +50,32 @@ CROSS_PAPER_TOOLS = {
     "verify_consistency", "find_research_gaps",
     "cross_paper_reason",
 }
+
+
+def _is_multi_agent_research(intent: str, message: str) -> bool:
+    """判断是否需要多 Agent 研究模式
+
+    触发条件（满足任一）：
+    1. 意图为 literature_review 或 deep_analysis
+    2. 消息中包含综合研究类关键词
+    3. 消息长度 > 50 且包含多个问号（复合问题）
+    """
+    multi_agent_keywords = ["综合研究", "系统分析", "全面调研", "深入研究", "多角度", "全方位"]
+
+    # 条件1：特定意图
+    if intent in ("literature_review", "deep_analysis"):
+        return True
+
+    # 条件2：关键词匹配
+    for kw in multi_agent_keywords:
+        if kw in message:
+            return True
+
+    # 条件3：复合问题（长消息含多个问号）
+    if len(message) > 50 and message.count("？") + message.count("?") >= 2:
+        return True
+
+    return False
 
 
 def _is_deep_research_request(message: str, intent_result: dict) -> bool:
@@ -181,6 +187,12 @@ async def _handle_react_agent(websocket, db, state, message, session_id, user_id
             }))
             agent_steps.append(event)
 
+        elif event_type == "agent_reflection":
+            await websocket.send_text(json.dumps({
+                "type": "agent_reflection",
+                "content": event["content"]
+            }))
+
         elif event_type == "agent_final":
             full_response = event["content"]
             # 先通知前端 Agent 推理结束（触发 agentSteps 持久化）
@@ -199,6 +211,12 @@ async def _handle_react_agent(websocket, db, state, message, session_id, user_id
                 await chunk_buffer.flush("rag_chat_chunk")
             finally:
                 chunk_buffer.close()
+            # Agent 完成：发送 agent_chat channel 的 done 事件
+            await websocket.send_text(json.dumps({
+                "type": "done",
+                "channel": "agent_chat",
+                "session_id": session.id
+            }))
 
     # 保存 AI 回复
     await save_message(db, session.id, "assistant", full_response)
@@ -680,6 +698,136 @@ async def _handle_paper_query_tool(websocket, db, state, tool_name, tool_instanc
         }))
 
 
+async def _handle_multi_agent_research(
+    websocket, db, state, message,
+    paper_id, paper_ids, chat_history, session, thinking_mode="quick"
+):
+    """多 Agent 研究模式处理
+
+    流程：
+    1. 构建工具上下文
+    2. 创建 ResearchCoordinator
+    3. 遍历 coordinator.run() 事件流并转发到 WebSocket
+    4. agent_final 时保存消息到数据库并发送 done
+
+    性能说明：完整流程约 8-25s（比单 ReAct 深度模式多 30-60% 开销）。
+    多角色协同可获得更深入、结构化的研究报告，适合复杂综合性问题。
+    """
+    from app.services.agent.agent_service import ToolContext
+
+    # 保存用户消息
+    await save_message(db, session.id, "user", message)
+
+    # 构建工具上下文
+    effective_paper_ids = list(paper_ids or [])
+    if not effective_paper_ids:
+        effective_paper_ids = session.get_related_paper_ids() if hasattr(session, 'get_related_paper_ids') else []
+        if not effective_paper_ids and paper_id:
+            effective_paper_ids = [paper_id]
+
+    ctx = ToolContext(
+        db=db,
+        paper_id=paper_id,
+        paper_ids=effective_paper_ids,
+        user_id=session.user_id if hasattr(session, 'user_id') else None,
+        session_id=session.id,
+    )
+
+    # 创建协调器
+    coordinator = ResearchCoordinator(
+        react_agent=react_agent,
+        llm_service=llm_service,
+        ctx=ctx,
+    )
+
+    full_response = ""
+
+    try:
+        async for event in coordinator.run(query=message, chat_history=chat_history):
+            event_type = event.get("type", "")
+            sub_agent = event.get("sub_agent", "orchestrator")
+
+            if event_type == "agent_thought":
+                await websocket.send_text(json.dumps({
+                    "type": "agent_thought",
+                    "step": event.get("step", 0),
+                    "content": event.get("content", ""),
+                    "sub_agent": sub_agent,
+                }))
+
+            elif event_type == "agent_action":
+                await websocket.send_text(json.dumps({
+                    "type": "agent_action",
+                    "step": event.get("step", 0),
+                    "tool": event.get("tool", ""),
+                    "input": event.get("input", {}),
+                    "sub_agent": sub_agent,
+                }))
+
+            elif event_type == "agent_observation":
+                await websocket.send_text(json.dumps({
+                    "type": "agent_observation",
+                    "step": event.get("step", 0),
+                    "content": event.get("content", ""),
+                    "sub_agent": sub_agent,
+                }))
+
+            elif event_type == "agent_reflection":
+                await websocket.send_text(json.dumps({
+                    "type": "agent_reflection",
+                    "content": event.get("content", ""),
+                    "sub_agent": sub_agent,
+                }))
+
+            elif event_type == "agent_final":
+                full_response = event.get("content", "")
+                # 通知前端 Agent 推理结束
+                await websocket.send_text(json.dumps({
+                    "type": "agent_final",
+                    "content": "",
+                    "sub_agent": sub_agent,
+                }))
+                # 流式发送最终回答（打字机效果）
+                chunk_buffer = ChunkBuffer(websocket, interval_ms=50)
+                try:
+                    chunk_size = 20
+                    for i in range(0, len(full_response), chunk_size):
+                        chunk = full_response[i:i + chunk_size]
+                        await chunk_buffer.add(chunk, "rag_chat_chunk")
+                    await chunk_buffer.flush("rag_chat_chunk")
+                finally:
+                    chunk_buffer.close()
+                # 发送 agent_chat channel done
+                await websocket.send_text(json.dumps({
+                    "type": "done",
+                    "channel": "agent_chat",
+                    "session_id": session.id,
+                }))
+
+    except asyncio.CancelledError:
+        raise
+    except Exception as e:
+        logger.error(f"多 Agent 研究模式执行失败: {e}")
+        await websocket.send_text(json.dumps({
+            "type": "error",
+            "message": f"多 Agent 研究失败: {str(e)}",
+        }))
+        return
+
+    # 保存 AI 回复
+    await save_message(db, session.id, "assistant", full_response)
+
+    # 更新标题
+    await auto_title(db, session, message)
+
+    # 发送完成标记
+    await websocket.send_text(json.dumps({
+        "type": "done",
+        "channel": "rag_chat",
+        "session_id": session.id,
+    }))
+
+
 async def handle_unified_chat(websocket, state, message, paper_id, paper_ids, session_id, user_id, enable_search, forced_tool=None, thinking_mode="quick", task_key="unified", message_data=None):
     """统一聊天入口 - 根据意图自动路由到不同功能
 
@@ -789,6 +937,18 @@ async def handle_unified_chat(websocket, state, message, paper_id, paper_ids, se
                     websocket, db, state, message, session_id, user_id,
                     paper_id, paper_ids, chat_history, thinking_mode,
                     mode="deep_research"
+                )
+            return
+
+        # 2.6 多 Agent 研究模式检测
+        intent_str = intent_result.get("intent", "") if intent_result and intent_result.get("matched") else ""
+        if _is_multi_agent_research(intent_str, message):
+            logger.info(f"多 Agent 研究模式触发: message='{message[:50]}'")
+            async with AsyncSessionLocal() as db:
+                session = await get_or_create_session(db, session_id, user_id, paper_id=paper_id)
+                await _handle_multi_agent_research(
+                    websocket, db, state, message,
+                    paper_id, paper_ids, chat_history, session, thinking_mode
                 )
             return
 

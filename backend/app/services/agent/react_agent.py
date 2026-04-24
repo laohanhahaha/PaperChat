@@ -102,10 +102,12 @@ Final Answer: [最终回答]
         self.tools = tools
         self.max_iterations = max_iterations
     
-    async def run(self, query: str, ctx: ToolContext, 
+    async def run(self, query: str, ctx: ToolContext,
                   chat_history: str = "",
                   thinking_mode: str = "quick",
-                  mode: str = "normal") -> AsyncGenerator[dict, None]:
+                  mode: str = "normal",
+                  system_prompt_override: Optional[str] = None,
+                  tool_subset: Optional[List[str]] = None) -> AsyncGenerator[dict, None]:
         """ReAct 主循环
         
         Args:
@@ -156,7 +158,9 @@ Final Answer: [最终回答]
                     verification_done = True
                 
                 # 1. 构建 prompt
-                prompt = self._build_prompt(query, scratchpad, chat_history, max_iter, mode=mode)
+                prompt = self._build_prompt(query, scratchpad, chat_history, max_iter, mode=mode,
+                                            system_prompt_override=system_prompt_override,
+                                            tool_subset=tool_subset)
                 
                 # 2. 调用 LLM（非流式，需要完整解析）
                 response = await self._call_llm(prompt)
@@ -191,7 +195,7 @@ Final Answer: [最终回答]
                 # 7. 执行工具（支持并行）
                 if len(parsed.actions) > 1:
                     # 并行执行多个工具
-                    observations = await self._execute_tools_parallel(parsed.actions, ctx, tool_call_records)
+                    observations = await self._execute_tools_parallel(parsed.actions, ctx, tool_call_records, tool_subset=tool_subset)
                     
                     # yield 每个 observation 事件
                     for obs in observations:
@@ -217,7 +221,11 @@ Final Answer: [最终回答]
                     scratchpad.append((parsed.thought, parsed.actions[0].action, parsed.actions[0].action_input, combined_obs))
                 else:
                     # 单个 Action，保持原有串行逻辑
-                    observation = await self._execute_tool(parsed.actions[0].action, parsed.actions[0].action_input or {}, ctx, tool_call_records)
+                    # tool_subset 校验：工具不在允许列表中则跳过
+                    if tool_subset is not None and parsed.actions[0].action not in tool_subset:
+                        observation = "该工具不可用"
+                    else:
+                        observation = await self._execute_tool(parsed.actions[0].action, parsed.actions[0].action_input or {}, ctx, tool_call_records)
                     
                     # 改动1: 工具失败自动恢复
                     is_failure = (observation.startswith("错误") or 
@@ -276,24 +284,62 @@ Final Answer: [最终回答]
             except Exception as e:
                 logger.error(f"Failed to record metrics: {e}")
     
-    def _build_prompt(self, query: str, scratchpad: list, chat_history: str, max_iterations: int, mode: str = "normal") -> list:
+    def _build_prompt(self, query: str, scratchpad: list, chat_history: str, max_iterations: int,
+                       mode: str = "normal",
+                       system_prompt_override: Optional[str] = None,
+                       tool_subset: Optional[List[str]] = None) -> list:
         """构建 ReAct Prompt
-        
+
         Args:
             query: 用户问题
             scratchpad: 历史步骤列表
             chat_history: 格式化后的对话历史
             max_iterations: 最大迭代次数
             mode: "normal" 或 "deep_research"
-            
+            system_prompt_override: 若不为 None，替换默认系统提示词（多 Agent 子角色使用）
+            tool_subset: 若不为 None，工具描述只包含该列表中的工具
+
         Returns:
             LangChain Message 列表
         """
-        # 获取工具描述
-        tools_description = agent_service.get_tools_description()
-        
-        # 构建 System Prompt
-        if mode == "deep_research":
+        # 获取工具描述（可按 tool_subset 过滤）
+        if tool_subset is not None:
+            all_tools_desc = agent_service.get_tools_description()
+            # 按行解析工具描述，过滤出 tool_subset 中的工具块
+            filtered_lines = []
+            current_tool_lines: List[str] = []
+            current_tool_name: Optional[str] = None
+            for line in all_tools_desc.splitlines():
+                # 工具描述块以 "工具名：" 或 "- 工具名" 开头（根据 get_tools_description 实现适配）
+                # 尝试匹配 "tool_name:" 或 "- tool_name" 格式
+                stripped = line.strip()
+                matched_name = None
+                for tname in (self.tools.keys() if self.tools else []):
+                    if stripped.startswith(tname + ":") or stripped.startswith("- " + tname):
+                        matched_name = tname
+                        break
+                if matched_name is not None:
+                    # 保存上一个工具块
+                    if current_tool_name is not None and current_tool_name in tool_subset:
+                        filtered_lines.extend(current_tool_lines)
+                    current_tool_name = matched_name
+                    current_tool_lines = [line]
+                elif current_tool_name is not None:
+                    current_tool_lines.append(line)
+                else:
+                    filtered_lines.append(line)
+            # 处理最后一个工具块
+            if current_tool_name is not None and current_tool_name in tool_subset:
+                filtered_lines.extend(current_tool_lines)
+            tools_description = "\n".join(filtered_lines) if filtered_lines else all_tools_desc
+        else:
+            tools_description = agent_service.get_tools_description()
+
+        # 构建 System Prompt（优先使用 override）
+        if system_prompt_override is not None:
+            # 子 Agent 角色覆盖：将工具描述注入到 override 提示词末尾
+            system_content = system_prompt_override + f"\n\n可用工具：\n{tools_description}"
+        elif mode == "deep_research":
             format_instructions = """如果需要使用工具：
 Thought: [阶段标签] [你的推理过程，分析用户需求，决定下一步行动]
 Action: [工具名称]
@@ -505,19 +551,25 @@ Final Answer: [最终回答]"""
             return error_msg
     
     async def _execute_tools_parallel(self, actions: List[ParsedAction], ctx: ToolContext,
-                                      tool_call_records: List[dict] = None) -> List[str]:
+                                      tool_call_records: List[dict] = None,
+                                      tool_subset: Optional[List[str]] = None) -> List[str]:
         """串行执行多个工具调用（避免 AsyncSession 并发访问问题）
-        
+
         Args:
             actions: Action 列表
             ctx: 工具执行上下文
             tool_call_records: 工具调用记录列表（用于指标采集）
-            
+            tool_subset: 若不为 None，不在列表中的工具将被跳过
+
         Returns:
             各工具执行结果字符串列表
         """
         observations = []
         for act in actions:
+            # tool_subset 校验：工具不在允许列表中则跳过
+            if tool_subset is not None and act.action not in tool_subset:
+                observations.append("该工具不可用")
+                continue
             try:
                 obs = await self._execute_tool(act.action, act.action_input or {}, ctx, tool_call_records)
             except Exception as e:

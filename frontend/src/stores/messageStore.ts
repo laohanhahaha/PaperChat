@@ -1,65 +1,68 @@
 import { create } from 'zustand';
 import { chatApi } from '../api/chatApi';
+import { fetchWithCache, invalidate, invalidateAll, invalidateByPrefix } from '../hooks/useApiCache';
 
 interface AgentStep {
-  type: 'thought' | 'action' | 'observation' | 'agent_thought' | 'agent_action' | 'agent_observation';
+  type: 'thought' | 'action' | 'observation' | 'agent_thought' | 'agent_action' | 'agent_observation' | 'reflection';
   step: number;
   content?: string;
   tool?: string;
-  input?: any;
+  input?: unknown;
+  subAgent?: string;
+}
+
+interface Source {
+  [key: string]: unknown;
 }
 
 interface Message {
   id: number | string;
   role: string;
   content: string;
-  sources?: any;
+  sources?: Source[];
   agentSteps?: AgentStep[];
   thinkingContent?: string;
   agentComplete?: boolean;
-  [key: string]: any;
-}
-
-interface CachedMessages {
-  messages: Message[];
-  timestamp: number;
+  toolResult?: unknown;
+  [key: string]: unknown;
 }
 
 interface MessageState {
   messages: Message[];
   messagesLoading: boolean;
-  sources: any[];
-  crossDocSources: any[];
+  sources: Source[];
+  crossDocSources: Source[];
   streamingMessage: string;
   isStreaming: boolean;
   error: string | null;
-  messageCache: Record<string, CachedMessages>;
   hasMore: boolean;
   loadingMore: boolean;
   pageSize: number;
 
   fetchMessages: (sessionId: number | string, reset?: boolean) => Promise<Message[]>;
   loadMoreMessages: (sessionId: number | string) => Promise<Message[]>;
-  loadMessagesFromCache: (sessionId: number | string) => Message[] | null;
   invalidateMessageCache: (sessionId: number | string) => void;
   clearMessageCache: () => void;
   addMessage: (message: Message) => void;
   updateLastMessage: (content: string) => void;
-  setLastMessageToolResult: (toolResult: any) => void;
+  setLastMessageToolResult: (toolResult: unknown) => void;
   addAgentStep: (step: AgentStep) => void;
   appendThinkingContent: (content: string) => void;
   markAgentComplete: () => void;
   updateStreamingMessage: (content: string) => void;
   setIsStreaming: (isStreaming: boolean) => void;
-  setSources: (sources: any[]) => void;
-  setCrossDocSources: (sources: any[]) => void;
+  setSources: (sources: Source[]) => void;
+  setCrossDocSources: (sources: Source[]) => void;
   clearMessages: () => void;
   clearError: () => void;
   reset: () => void;
 }
 
-const CACHE_TTL = 5 * 60 * 1000; // 5 分钟缓存过期时间
 const DEFAULT_PAGE_SIZE = 50; // 默认每页消息数
+
+// 缓存键生成函数
+const msgCacheKey = (sessionId: number | string, offset: number, limit: number) =>
+  `messages:${sessionId}:offset=${offset}:limit=${limit}`;
 
 export const useMessageStore = create<MessageState>((set, get) => ({
   // 状态
@@ -70,9 +73,6 @@ export const useMessageStore = create<MessageState>((set, get) => ({
   streamingMessage: '',
   isStreaming: false,
   error: null,
-  
-  // 消息缓存: { [sessionId]: { messages, timestamp } }
-  messageCache: {},
   
   // 分页状态
   hasMore: true,        // 是否有更多历史消息
@@ -90,18 +90,23 @@ export const useMessageStore = create<MessageState>((set, get) => ({
     }
     
     const offset = reset ? 0 : get().messages.length;
+    const cacheKey = msgCacheKey(sessionId, offset, pageSize);
     
     try {
-      const response = await chatApi.getMessages(sessionId, { 
-        limit: pageSize, 
-        offset 
-      });
+      interface MessagesResponseData {
+        messages: Array<{ id: number | string; role: string; content: string; sources?: Source[] }>;
+        total: number;
+      }
+      const data = await fetchWithCache<MessagesResponseData>(
+        cacheKey,
+        () => chatApi.getMessages(sessionId, { limit: pageSize, offset }).then(r => r.data)
+      );
       
-      const newMessages = response.data.messages || [];
-      const total = response.data.total || 0;
+      const newMessages = data.messages || [];
+      const total = data.total || 0;
       
       // 后端返回的是倒序（最新在前），需要 reverse 变成正序（最新在底部）
-      const formattedMessages: Message[] = newMessages.map((m: any) => ({
+      const formattedMessages: Message[] = newMessages.map(m => ({
         id: m.id,
         role: m.role,
         content: m.content,
@@ -113,21 +118,14 @@ export const useMessageStore = create<MessageState>((set, get) => ({
         messages: reset ? orderedMessages : [...state.messages, ...orderedMessages],
         hasMore: total > (reset ? orderedMessages.length : state.messages.length + orderedMessages.length),
         messagesLoading: false,
-        // 更新缓存
-        messageCache: {
-          ...state.messageCache,
-          [sessionId]: { 
-            messages: reset ? orderedMessages : [...state.messages, ...orderedMessages], 
-            timestamp: Date.now() 
-          }
-        }
       }));
       
       return orderedMessages;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('获取消息失败:', error);
+      const errMsg = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail || '获取消息失败';
       set({ 
-        error: error.response?.data?.detail || '获取消息失败',
+        error: errMsg,
         messagesLoading: false 
       });
       return [];
@@ -141,18 +139,23 @@ export const useMessageStore = create<MessageState>((set, get) => ({
     set({ loadingMore: true });
     const offset = get().messages.length;
     const { pageSize } = get();
+    const cacheKey = msgCacheKey(sessionId, offset, pageSize);
     
     try {
-      const response = await chatApi.getMessages(sessionId, {
-        limit: pageSize,
-        offset
-      });
+      interface MessagesResponseData {
+        messages: Array<{ id: number | string; role: string; content: string; sources?: Source[] }>;
+        total: number;
+      }
+      const data = await fetchWithCache<MessagesResponseData>(
+        cacheKey,
+        () => chatApi.getMessages(sessionId, { limit: pageSize, offset }).then(r => r.data)
+      );
       
-      const olderMessages = response.data.messages || [];
-      const total = response.data.total || 0;
+      const olderMessages = data.messages || [];
+      const total = data.total || 0;
       
       // 后端返回的也是倒序，reverse 后追加到数组前面（更早的消息放前面）
-      const formattedMessages: Message[] = olderMessages.map((m: any) => ({
+      const formattedMessages: Message[] = olderMessages.map(m => ({
         id: m.id,
         role: m.role,
         content: m.content,
@@ -166,50 +169,26 @@ export const useMessageStore = create<MessageState>((set, get) => ({
           messages: updatedMessages,
           hasMore: updatedMessages.length < total,
           loadingMore: false,
-          // 更新缓存
-          messageCache: {
-            ...state.messageCache,
-            [sessionId]: { 
-              messages: updatedMessages, 
-              timestamp: Date.now() 
-            }
-          }
         };
       });
       
       return orderedMessages;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('加载更多消息失败:', error);
       set({ loadingMore: false });
       return [];
     }
   },
   
-  // 从缓存加载消息
-  loadMessagesFromCache: (sessionId) => {
-    const cached = get().messageCache[sessionId];
-    if (cached && (Date.now() - cached.timestamp < CACHE_TTL)) {
-      set({ 
-        messages: cached.messages,
-        messagesLoading: false 
-      });
-      return cached.messages;
-    }
-    return null;
-  },
-  
-  // 清除指定会话的消息缓存
+  // 清除指定会话的消息缓存（通过 useApiCache 失效）
   invalidateMessageCache: (sessionId) => {
-    set(state => {
-      const newCache = { ...state.messageCache };
-      delete newCache[sessionId];
-      return { messageCache: newCache };
-    });
+    // 失效该 sessionId 下所有分页缓存
+    invalidateByPrefix(`messages:${sessionId}:`);
   },
   
   // 清除所有消息缓存
   clearMessageCache: () => {
-    set({ messageCache: {} });
+    invalidateAll();
   },
 
   // 添加本地消息（用于流式显示）
@@ -339,18 +318,20 @@ export const useMessageStore = create<MessageState>((set, get) => ({
   clearError: () => set({ error: null }),
 
   // 重置状态
-  reset: () => set({
-    messages: [],
-    messagesLoading: false,
-    sources: [],
-    crossDocSources: [],
-    streamingMessage: '',
-    isStreaming: false,
-    error: null,
-    messageCache: {},
-    hasMore: true,
-    loadingMore: false
-  })
+  reset: () => {
+    invalidateAll();
+    set({
+      messages: [],
+      messagesLoading: false,
+      sources: [],
+      crossDocSources: [],
+      streamingMessage: '',
+      isStreaming: false,
+      error: null,
+      hasMore: true,
+      loadingMore: false
+    });
+  }
 }));
 
 export default useMessageStore;

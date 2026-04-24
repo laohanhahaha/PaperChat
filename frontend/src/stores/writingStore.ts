@@ -18,9 +18,9 @@ interface WritingState {
   setError: (error: string | null) => void;
   setStreamingContent: (streamingContent: string) => void;
   reset: () => void;
-  generateOutline: (topic: string, paperIds?: number[], requirements?: string, onChunk?: (chunk: string) => void) => Promise<string>;
-  generateDraft: (outlineSection: string, context?: string, style?: string, onChunk?: (chunk: string) => void) => Promise<string>;
-  polishText: (text: string, polishType?: string, onChunk?: (chunk: string) => void) => Promise<string>;
+  generateOutline: (topic: string, paperIds?: number[], requirements?: string, onChunk?: ((chunk: string) => void) | null) => Promise<string>;
+  generateDraft: (outlineSection: string, context?: string, style?: string, onChunk?: ((chunk: string) => void) | null) => Promise<string>;
+  polishText: (text: string, polishType?: string, onChunk?: ((chunk: string) => void) | null) => Promise<string>;
   generateCitations: (paperIds: number[], format?: string) => Promise<any[]>;
   getFormats: () => Promise<any>;
 }
@@ -58,7 +58,7 @@ const useWritingStore = create<WritingState>((set) => ({
   }),
   
   // 生成论文大纲（流式）
-  generateOutline: async (topic, paperIds = [], requirements = '', onChunk = null) => {
+  generateOutline: async (topic, paperIds = [], requirements = '', onChunk = undefined) => {
     set({ isGenerating: true, error: null, streamingContent: '' });
     
     try {
@@ -110,7 +110,7 @@ const useWritingStore = create<WritingState>((set) => ({
   },
   
   // 生成段落初稿（流式）
-  generateDraft: async (outlineSection, context = '', style = 'academic', onChunk = null) => {
+  generateDraft: async (outlineSection, context = '', style = 'academic', onChunk = undefined) => {
     set({ isGenerating: true, error: null, streamingContent: '' });
     
     try {
@@ -162,7 +162,7 @@ const useWritingStore = create<WritingState>((set) => ({
   },
   
   // 学术润色（流式）
-  polishText: async (text, polishType = 'academic', onChunk = null) => {
+  polishText: async (text, polishType = 'academic', onChunk = undefined) => {
     set({ isGenerating: true, error: null, streamingContent: '' });
     
     try {

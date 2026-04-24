@@ -91,20 +91,23 @@ export function useChatMessages({
 
       // Agent 推理事件
       onMessage('agent_thought', (msg) => {
-        if (addAgentStep) addAgentStep({ type: 'agent_thought', step: msg.step || 0, content: msg.content });
+        if (addAgentStep) addAgentStep({ type: 'agent_thought', step: msg.step || 0, content: msg.content, subAgent: msg.sub_agent || msg.subAgent });
       }),
       onMessage('agent_action', (msg) => {
-        if (addAgentStep) addAgentStep({ type: 'agent_action', step: msg.step || 0, tool: msg.tool, input: msg.input });
+        if (addAgentStep) addAgentStep({ type: 'agent_action', step: msg.step || 0, tool: msg.tool, input: msg.input, subAgent: msg.sub_agent || msg.subAgent });
       }),
       onMessage('agent_observation', (msg) => {
-        if (addAgentStep) addAgentStep({ type: 'agent_observation', step: msg.step || 0, content: msg.content });
+        if (addAgentStep) addAgentStep({ type: 'agent_observation', step: msg.step || 0, content: msg.content, subAgent: msg.sub_agent || msg.subAgent });
+      }),
+      onMessage('agent_reflection', (msg) => {
+        if (addAgentStep) addAgentStep({ type: 'reflection', content: msg.content, subAgent: msg.sub_agent || msg.subAgent });
       }),
       onMessage('agent_final', () => {
         if (markAgentComplete) markAgentComplete();
       }),
 
       onMessage('done', (msg) => {
-        if (['rag_chat', 'cross_doc_chat', 'analyze', 'deep_analyze'].includes(msg.channel)) {
+        if (['rag_chat', 'agent_chat', 'cross_doc_chat', 'analyze', 'deep_analyze'].includes(msg.channel)) {
           typewriter.markDone();
           if (msg.session_id) {
             const changed = msg.session_id !== currentSessionIdRef.current;

@@ -27,6 +27,8 @@ from app.prompts.analyze import (
 # ── chat ─────────────────────────────────────────────────────────────────────
 from app.prompts.chat import (
     CHAT_SYSTEM_PROMPT,
+    GENERAL_CHAT_SYSTEM_PROMPT,
+    THINKING_PROMPT,
 )
 
 # ── rag ──────────────────────────────────────────────────────────────────────
@@ -101,6 +103,8 @@ __all__ = [
     "COMPARE_PAPERS_PROMPT",
     # chat
     "CHAT_SYSTEM_PROMPT",
+    "GENERAL_CHAT_SYSTEM_PROMPT",
+    "THINKING_PROMPT",
     # rag
     "RAG_CHAT_SYSTEM_PROMPT",
     "RAG_CHAT_WITH_SEARCH_SYSTEM_PROMPT",

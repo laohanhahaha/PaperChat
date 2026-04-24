@@ -22,6 +22,8 @@ export const INTENT_LABELS = {
   // 论文查询工具
   'recent_papers': '📄 最近上传论文',
   'search_papers': '🔎 搜索论文',
+  // Agent 推理步骤
+  'reflection': '🔄 反思',
 };
 
 export const SUGGESTIONS = [

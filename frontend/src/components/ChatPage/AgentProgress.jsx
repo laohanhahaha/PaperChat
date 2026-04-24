@@ -1,13 +1,24 @@
 /**
  * AgentProgress - 展示 ReAct Agent 的 Thought/Action/Observation 过程
  * 
- * 类似 ThinkingBlock 的折叠式 UI，但展示多步推理过程
+ * 支持两种模式：
+ * 1. 单 Agent 模式（无 subAgent 字段）：保持原有扁平列表展示
+ * 2. 多 Agent 模式（有 subAgent 字段）：按子 Agent 分组，层级展示
  */
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import styles from './AgentProgress.module.css';
+
+// 角色配置：图标 + 中文标签
+const ROLE_CONFIG = {
+  orchestrator: { icon: '🧠', label: '协调器' },
+  retriever:    { icon: '🔍', label: '检索专家' },
+  analyzer:     { icon: '📊', label: '分析专家' },
+  recommender:  { icon: '💡', label: '推荐专家' },
+};
 
 // 辅助函数：解析研究阶段
 function parseResearchPhase(content) {
+  if (!content) return null;
   if (content.startsWith('[检索阶段]')) return { phase: 'search', label: '检索阶段', content: content.slice(6) };
   if (content.startsWith('[分析阶段]')) return { phase: 'analyze', label: '分析阶段', content: content.slice(6) };
   if (content.startsWith('[推荐阶段]')) return { phase: 'recommend', label: '推荐阶段', content: content.slice(6) };
@@ -47,93 +58,18 @@ const ReflectionIcon = () => (
   </svg>
 );
 
-const AgentProgress = ({ steps = [], isRunning = false }) => {
-  const [isExpanded, setIsExpanded] = useState(true);
-  
-  // Agent 运行中自动展开，结束后可折叠
-  useEffect(() => {
-    if (isRunning) setIsExpanded(true);
-  }, [isRunning]);
-
-  if (!steps || steps.length === 0) return null;
-
-  const totalSteps = Math.max(...steps.map(s => s.step || 0));
-
-  return (
-    <div className={styles.agentProgress}>
-      <div 
-        className={styles.header} 
-        onClick={() => setIsExpanded(!isExpanded)}
-      >
-        <span className={`${styles.indicator} ${isRunning ? styles.running : styles.done}`}>
-          {isRunning ? '⚙️' : '✅'}
-        </span>
-        <span className={styles.title}>
-          {isRunning 
-            ? `Agent 推理中... (${totalSteps} 步)` 
-            : `Agent 推理完成 (${totalSteps} 步)`
-          }
-        </span>
-        <span className={`${styles.chevron} ${isExpanded ? styles.expanded : ''}`}>
-          ▾
-        </span>
-      </div>
-      
-      {isExpanded && (
-        <div className={styles.stepsContainer}>
-          {steps.map((step, idx) => {
-            const prevStep = idx > 0 ? steps[idx - 1] : null;
-            const showDivider = prevStep && 
-              prevStep.type === 'agent_thought' && 
-              step.type === 'agent_thought' &&
-              parseResearchPhase(prevStep.content)?.phase !== parseResearchPhase(step.content)?.phase &&
-              parseResearchPhase(step.content) !== null;
-            
-            return (
-              <React.Fragment key={idx}>
-                {showDivider && (
-                  <div className={styles.phaseDivider}>
-                    <span className={styles.phaseDividerText}>
-                      切换到 {parseResearchPhase(step.content)?.label}
-                    </span>
-                  </div>
-                )}
-                <StepItem step={step} />
-              </React.Fragment>
-            );
-          })}
-          {isRunning && (
-            <div className={styles.thinkingCursor}>
-              <span className={styles.dot}>●</span>
-              <span className={styles.dot}>●</span>
-              <span className={styles.dot}>●</span>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-};
-
+// ─── 单步渲染 ────────────────────────────────────────────────
 const StepItem = ({ step }) => {
   switch (step.type) {
     case 'agent_thought': {
       const phaseInfo = parseResearchPhase(step.content);
-      
       if (phaseInfo) {
-        // 深度研究模式 - 显示角色 badge
         const badgeClass = {
           search: styles.phaseBadgeSearch,
           analyze: styles.phaseBadgeAnalyze,
           recommend: styles.phaseBadgeRecommend
         }[phaseInfo.phase];
-        
-        const Icon = {
-          search: SearchIcon,
-          analyze: AnalyzeIcon,
-          recommend: RecommendIcon
-        }[phaseInfo.phase];
-        
+        const Icon = { search: SearchIcon, analyze: AnalyzeIcon, recommend: RecommendIcon }[phaseInfo.phase];
         return (
           <div className={styles.stepItem}>
             <span className={`${styles.stepBadge} ${styles.thoughtBadge}`}>💭 思考</span>
@@ -147,8 +83,6 @@ const StepItem = ({ step }) => {
           </div>
         );
       }
-      
-      // 普通模式 - 保持原样
       return (
         <div className={styles.stepItem}>
           <span className={`${styles.stepBadge} ${styles.thoughtBadge}`}>💭 思考</span>
@@ -187,6 +121,194 @@ const StepItem = ({ step }) => {
     default:
       return null;
   }
+};
+
+// ─── 子 Agent 分组块 ─────────────────────────────────────────
+const SubAgentBlock = ({ agentKey, steps, isRunning, isLast }) => {
+  const config = ROLE_CONFIG[agentKey] || { icon: '🤖', label: agentKey };
+  // 运行中最后一个 agent 默认展开，其余完成后折叠
+  const [expanded, setExpanded] = useState(true);
+
+  // 当前 agent 如果还在运行（isRunning && isLast），自动保持展开
+  useEffect(() => {
+    if (isRunning && isLast) setExpanded(true);
+  }, [isRunning, isLast]);
+
+  // 生成摘要：取最后一条 observation / thought 内容
+  const summary = useMemo(() => {
+    const obs = [...steps].reverse().find(s => s.type === 'agent_observation' || s.type === 'agent_thought');
+    if (!obs) return null;
+    const text = obs.content || '';
+    return text.length > 60 ? text.slice(0, 60) + '…' : text;
+  }, [steps]);
+
+  const isDone = !isRunning || !isLast;
+
+  return (
+    <div className={styles.subAgentBlock}>
+      <div
+        className={`${styles.subAgentHeader} ${isDone ? styles.subAgentDone : styles.subAgentRunning}`}
+        onClick={() => setExpanded(v => !v)}
+        role="button"
+        tabIndex={0}
+        onKeyDown={e => e.key === 'Enter' && setExpanded(v => !v)}
+      >
+        <span className={styles.subAgentIcon}>{config.icon}</span>
+        <span className={styles.subAgentLabel}>{config.label}</span>
+        {agentKey !== 'orchestrator' && (
+          <span className={styles.subAgentRoleKey}>({agentKey})</span>
+        )}
+        {isRunning && isLast && (
+          <span className={styles.subAgentSpinner} />
+        )}
+        {isDone && !expanded && summary && (
+          <span className={styles.subAgentSummary}>{summary}</span>
+        )}
+        <span className={`${styles.chevron} ${expanded ? styles.expanded : ''}`}>▾</span>
+      </div>
+
+      {expanded && (
+        <div className={styles.subAgentSteps}>
+          {steps.map((step, idx) => (
+            <div key={idx} className={styles.subAgentStepRow}>
+              <span className={styles.subAgentTreeLine}>└─</span>
+              <StepItem step={step} />
+            </div>
+          ))}
+          {isRunning && isLast && (
+            <div className={styles.thinkingCursor}>
+              <span className={styles.dot}>●</span>
+              <span className={styles.dot}>●</span>
+              <span className={styles.dot}>●</span>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ─── 主组件 ──────────────────────────────────────────────────
+const AgentProgress = ({ steps = [], isRunning = false }) => {
+  const [isExpanded, setIsExpanded] = useState(true);
+
+  useEffect(() => {
+    if (isRunning) setIsExpanded(true);
+  }, [isRunning]);
+
+  if (!steps || steps.length === 0) return null;
+
+  // 判断是否是多 Agent 模式
+  const hasSubAgent = steps.some(s => s.subAgent);
+
+  if (hasSubAgent) {
+    // ── 多 Agent 分组模式 ──
+    // 按出现顺序收集各 agent 的 steps，保持顺序
+    const agentOrder = [];
+    const agentMap = {};
+    for (const step of steps) {
+      const key = step.subAgent || 'unknown';
+      if (!agentMap[key]) {
+        agentMap[key] = [];
+        agentOrder.push(key);
+      }
+      agentMap[key].push(step);
+    }
+
+    const totalAgents = agentOrder.length;
+
+    return (
+      <div className={styles.agentProgress}>
+        <div
+          className={styles.header}
+          onClick={() => setIsExpanded(!isExpanded)}
+        >
+          <span className={`${styles.indicator} ${isRunning ? styles.running : styles.done}`}>
+            {isRunning ? '⚙️' : '✅'}
+          </span>
+          <span className={styles.title}>
+            {isRunning
+              ? `多 Agent 协作中... (${totalAgents} 个专家)`
+              : `多 Agent 协作完成 (${totalAgents} 个专家)`
+            }
+          </span>
+          <span className={`${styles.chevron} ${isExpanded ? styles.expanded : ''}`}>▾</span>
+        </div>
+
+        {isExpanded && (
+          <div className={styles.stepsContainer}>
+            {agentOrder.map((agentKey, idx) => (
+              <SubAgentBlock
+                key={agentKey}
+                agentKey={agentKey}
+                steps={agentMap[agentKey]}
+                isRunning={isRunning}
+                isLast={idx === agentOrder.length - 1}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // ── 单 Agent 原有模式（向后兼容）──
+  const totalSteps = Math.max(...steps.map(s => s.step || 0));
+
+  return (
+    <div className={styles.agentProgress}>
+      <div
+        className={styles.header}
+        onClick={() => setIsExpanded(!isExpanded)}
+      >
+        <span className={`${styles.indicator} ${isRunning ? styles.running : styles.done}`}>
+          {isRunning ? '⚙️' : '✅'}
+        </span>
+        <span className={styles.title}>
+          {isRunning
+            ? `Agent 推理中... (${totalSteps} 步)`
+            : `Agent 推理完成 (${totalSteps} 步)`
+          }
+        </span>
+        <span className={`${styles.chevron} ${isExpanded ? styles.expanded : ''}`}>
+          ▾
+        </span>
+      </div>
+
+      {isExpanded && (
+        <div className={styles.stepsContainer}>
+          {steps.map((step, idx) => {
+            const prevStep = idx > 0 ? steps[idx - 1] : null;
+            const showDivider = prevStep &&
+              prevStep.type === 'agent_thought' &&
+              step.type === 'agent_thought' &&
+              parseResearchPhase(prevStep.content)?.phase !== parseResearchPhase(step.content)?.phase &&
+              parseResearchPhase(step.content) !== null;
+
+            return (
+              <React.Fragment key={idx}>
+                {showDivider && (
+                  <div className={styles.phaseDivider}>
+                    <span className={styles.phaseDividerText}>
+                      切换到 {parseResearchPhase(step.content)?.label}
+                    </span>
+                  </div>
+                )}
+                <StepItem step={step} />
+              </React.Fragment>
+            );
+          })}
+          {isRunning && (
+            <div className={styles.thinkingCursor}>
+              <span className={styles.dot}>●</span>
+              <span className={styles.dot}>●</span>
+              <span className={styles.dot}>●</span>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
 };
 
 export default React.memo(AgentProgress);

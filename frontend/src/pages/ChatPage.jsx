@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import WebViewPanel from '../components/WebView/WebViewPanel';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import usePaperStore from '../stores/paperStore';
 import { useSessionStore } from '../stores/sessionStore';
@@ -16,6 +17,8 @@ import AgentProgress from '../components/ChatPage/AgentProgress';
 import SelectedPapersBar from '../components/ChatPage/SelectedPapersBar';
 import InputBar from '../components/ChatPage/InputBar';
 import SessionSidebar from '../components/ChatPage/SessionSidebar';
+import ModelSelector from '../components/Cost/ModelSelector';
+import CostIndicator from '../components/Cost/CostIndicator';
 import styles from './ChatPage.module.css';
 
 let msgIdCounter = 0;
@@ -75,6 +78,11 @@ function ChatPage() {
   const [selectedPaperId, setSelectedPaperId] = useState(null);
   const [showPaperSelector, setShowPaperSelector] = useState(false);
   const [isChatting, setIsChatting] = useState(false);
+
+  // WebView 状态
+  const [webViewUrl, setWebViewUrl] = useState(null);
+  const [showWebView, setShowWebView] = useState(false);
+  const [webViewPlacement, setWebViewPlacement] = useState('bottom');
   const { status: wsStatus, sendUnifiedChatMessage, sendCancel, onMessage } = useWebSocket();
 
   const textareaRef = useRef(null);
@@ -259,6 +267,30 @@ function ChatPage() {
     setShowPaperSelector(false);
   };
 
+  // ---- WebView 处理 ----
+  const handleOpenWebView = useCallback((url, placement = 'bottom') => {
+    setWebViewUrl(url);
+    setWebViewPlacement(placement);
+    setShowWebView(true);
+  }, []);
+
+  const handleCloseWebView = useCallback(() => {
+    setShowWebView(false);
+  }, []);
+
+  // 拦截消息列表区域内的外部链接
+  const handleMessageListClick = useCallback((e) => {
+    const anchor = e.target.closest('a[href]');
+    if (!anchor) return;
+    const href = anchor.getAttribute('href');
+    if (!href) return;
+    if (/^https?:\/\//i.test(href)) {
+      e.preventDefault();
+      e.stopPropagation();
+      handleOpenWebView(href, 'bottom');
+    }
+  }, [handleOpenWebView]);
+
   // ---- 辅助函数 ----
   const getPaperTitle = (pid) => {
     const paper = papers.find(p => p.id === pid);
@@ -350,6 +382,7 @@ function ChatPage() {
               wsStatus={wsStatus}
               onOpenSelector={() => setShowPaperSelector(true)}
               styles={styles}
+              costSlot={<><ModelSelector /><CostIndicator sessionId={currentSessionId} /></>}
             />
           </div>
         ) : (
@@ -369,7 +402,7 @@ function ChatPage() {
               </div>
             )}
 
-            <div ref={messageListRef} className={styles.messageList} onScroll={handleScroll}>
+            <div ref={messageListRef} className={styles.messageList} onScroll={handleScroll} onClick={handleMessageListClick}>
               {/* 加载更多指示器 */}
               {loadingMore && (
                 <div className={styles.loadingMoreIndicator}>
@@ -401,6 +434,7 @@ function ChatPage() {
                         isChatting={isChatting}
                         renderMarkdown={renderMarkdown}
                         styles={styles}
+                        paperId={selectedPaperId || (selectedPaperIds.length === 1 ? selectedPaperIds[0] : null)}
                       />
                     </div>
                   );
@@ -470,6 +504,7 @@ function ChatPage() {
               wsStatus={wsStatus}
               onOpenSelector={() => setShowPaperSelector(true)}
               styles={styles}
+              costSlot={<><ModelSelector /><CostIndicator sessionId={currentSessionId} /></>}
             />
           </div>
         )}
@@ -482,6 +517,15 @@ function ChatPage() {
         initialSelectedIds={selectedPaperIds}
         maxSelection={10}
       />
+
+      {/* WebView 面板 */}
+      {showWebView && webViewUrl && (
+        <WebViewPanel
+          url={webViewUrl}
+          placement={webViewPlacement}
+          onClose={handleCloseWebView}
+        />
+      )}
     </div>
   );
 }

@@ -86,6 +86,27 @@
   color: var(--accent, #B8860B);
 }
 
+.batchAnalysisBtn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  background: transparent;
+  color: var(--text-h, #2C2C2C);
+  border: 1px solid var(--border, rgba(92, 64, 51, 0.2));
+  border-radius: 0.375rem;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.batchAnalysisBtn:hover {
+  background: rgba(92, 64, 51, 0.04);
+  border-color: var(--accent, #B8860B);
+  color: var(--accent, #B8860B);
+}
+
 .compareBtn {
   display: flex;
   align-items: center;

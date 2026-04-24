@@ -24,7 +24,6 @@ interface ChatState {
   loadingMore: boolean;
   pageSize: number;
   sessionCache: any;
-  messageCache: any;
 
   // 会话方法
   fetchSessions: (p?: any, force?: boolean) => Promise<any>;
@@ -46,7 +45,6 @@ interface ChatState {
   setSources: (s: any) => void;
   clearMessages: () => void;
   loadMoreMessages: (id: any) => Promise<any>;
-  loadMessagesFromCache: (id: any) => any;
   invalidateMessageCache: (id: any) => void;
   clearMessageCache: () => void;
 
@@ -99,7 +97,6 @@ const useChatStore = create<ChatState>(() => {
     
     // 缓存相关状态
     get sessionCache() { return S().sessionCache; },
-    get messageCache() { return M().messageCache; },
 
     // 会话方法
     fetchSessions: (p?, force?) => S().fetchSessions(p, force),
@@ -121,7 +118,6 @@ const useChatStore = create<ChatState>(() => {
     setSources: (s) => M().setSources(s),
     clearMessages: () => M().clearMessages(),
     loadMoreMessages: (id) => M().loadMoreMessages(id),
-    loadMessagesFromCache: (id) => M().loadMessagesFromCache(id),
     invalidateMessageCache: (id) => M().invalidateMessageCache(id),
     clearMessageCache: () => M().clearMessageCache(),
 

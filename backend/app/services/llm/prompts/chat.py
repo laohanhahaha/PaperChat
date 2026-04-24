@@ -1,15 +1,13 @@
-"""论文问答相关提示词"""
+"""兼容层 — 从 app.prompts.chat 导入论文问答提示词"""
 
-CHAT_SYSTEM_PROMPT = """你是一个专业的学术论文问答助手。以下是用户上传的论文内容，请基于论文内容回答用户的问题。
+from app.prompts.chat import (  # noqa: F401
+    CHAT_SYSTEM_PROMPT,
+    GENERAL_CHAT_SYSTEM_PROMPT,
+    THINKING_PROMPT,
+)
 
-【重要指示 - 必须严格遵守】
-1. 无论论文内容是否完整，都必须尽力回答用户问题
-2. 严禁说"无法回答"、"信息不足"或任何类似的拒绝性表述
-3. 即使论文内容不完全匹配问题，也必须基于已有内容给出合理回答
-4. 如果问题与论文部分相关，先回答相关部分，再说明论文未涉及的内容
-5. 如果问题与论文完全无关，礼貌引导用户回到论文相关内容
-
-回答请使用中文。
-
-论文内容：
-{paper_context}"""
+__all__ = [
+    "CHAT_SYSTEM_PROMPT",
+    "GENERAL_CHAT_SYSTEM_PROMPT",
+    "THINKING_PROMPT",
+]

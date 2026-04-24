@@ -22,7 +22,7 @@ from app.middleware import setup_error_handlers
 from app.rate_limiter import limiter
 
 logger = logging.getLogger(__name__)
-from app.routers import papers_router, highlights_router, notes_router, ws_router, reading_router, analysis_router, chat_router, knowledge_router, writing_router, recommendations_router, settings_router
+from app.routers import papers_router, highlights_router, notes_router, ws_router, reading_router, analysis_router, chat_router, knowledge_router, writing_router, recommendations_router, settings_router, batch_analysis_router, cost_router
 from app.routers.feedback import router as feedback_router
 from app.routers.backup import router as backup_router
 from app.routers.feature_flags import router as feature_flags_router
@@ -33,122 +33,59 @@ from app.routers.feature_flags import router as feature_flags_router
 async def lifespan(app: FastAPI):
     """
     应用生命周期管理
-    
-    启动时:
-        - 初始化数据库连接
-        - 创建数据库表
-        - 加载默认用户配置并应用
-    
+
+    启动时（通过 StartupManager 分 3 阶段）:
+        Phase 1: 日志 + DB 连接 + 表创建
+        Phase 2: 并行初始化 RAG / LLM / Agent / 设置
+        Phase 3: 懒加载 ToolRegistry / MCPManager / SkillRegistry
+
     关闭时:
         - 关闭数据库连接
     """
-    # 启动：初始化日志系统
-    setup_logging(debug=settings.DEBUG)
+    from app.startup import StartupManager
+    from app.dependencies import service_container
+    from app.config import config_service
+
+    manager = StartupManager(app)
+    await manager.run()
+
+    # 将 ConfigService 挂载到 app.state（供 get_config_service 依赖使用）
+    app.state.config_service = config_service
+    service_container.register_instance("config_service", config_service)
+
+    # 将核心服务同步注册到 ServiceContainer（便于后续按名解析）
+    for _name in (
+        "rag_service", "llm_service", "agent_service", "event_bus",
+        "tool_registry", "tool_executor", "mcp_manager", "skill_registry",
+    ):
+        _instance = getattr(app.state, _name, None)
+        if _instance is not None:
+            service_container.register_instance(_name, _instance)
+
+    # 注册事件订阅者（所有服务就绪后）
+    manager.register_event_subscribers()
+
     logger.info(f"Starting {settings.APP_NAME}...")
 
-    # JWT 密钥安全检查
-    if settings.JWT_SECRET_KEY == "your-secret-key-change-in-production":
-        logger.warning("⚠️ JWT_SECRET_KEY 使用默认值！请在 .env 中设置安全的密钥")
-
-    await init_db()
-    logger.info("Database initialized")
-    
-    # 加载默认用户配置并应用
-    try:
-        from app.database import AsyncSessionLocal
-        from app.services.settings_service import settings_service
-        
-        async with AsyncSessionLocal() as db:
-            # 加载默认用户的配置
-            settings_values = await settings_service.get_setting_values(user_id=settings.DEFAULT_USER_ID, db=db)
-            await settings_service.apply_settings(settings_values)
-            logger.info("User settings loaded and applied")
-    except Exception as e:
-        logger.warning(f"Failed to load user settings: {e}")
-    
-    # 初始化服务到 app.state（依赖注入）
-    from app.services.rag_service import rag_service
-    from app.services.llm.llm_service import llm_service
-    from app.services.agent import agent_service  # 新版 agent 模块
-    from app.services.event_bus import event_bus, Event, EventTypes
-
-    app.state.rag_service = rag_service
-    app.state.llm_service = llm_service
-    app.state.agent_service = agent_service
-    app.state.event_bus = event_bus
-    logger.info("Services registered to app.state (DI)")
-
-    # 初始化 ContextCompressor 并绑定 llm_service
-    from app.services.context_compressor import init_compressor
-    init_compressor(llm_service)
-    logger.info("ContextCompressor initialized")
-
-    # 初始化三大 Registry（工具、MCP、Skill）
-    from app.tools import ToolRegistry, ToolExecutor
-    from app.mcp_services import MCPManager
-    from app.skills import SkillRegistry, LiteratureReviewSkill, PaperAnalysisSkill
-
-    app.state.tool_registry = ToolRegistry()
-    app.state.tool_executor = ToolExecutor(app.state.tool_registry)
-    app.state.mcp_manager = MCPManager()
-    app.state.skill_registry = SkillRegistry()
-    app.state.skill_registry.register(LiteratureReviewSkill())
-    app.state.skill_registry.register(PaperAnalysisSkill())
-    logger.info("ToolRegistry, MCPManager, SkillRegistry initialized")
-
-    # 注册事件订阅者（日志记录）
-    async def log_event_handler(event: Event):
-        logger.info(f"Event: {event.type}", extra={"event_data": event.data})
-
-    event_bus.subscribe(EventTypes.PAPER_UPLOADED, log_event_handler)
-    event_bus.subscribe(EventTypes.PAPER_DELETED, log_event_handler)
-    event_bus.subscribe(EventTypes.ANALYSIS_COMPLETED, log_event_handler)
-    event_bus.subscribe(EventTypes.INDEX_REBUILD_STARTED, log_event_handler)
-    event_bus.subscribe(EventTypes.INDEX_REBUILD_COMPLETED, log_event_handler)
-    logger.info("Event bus subscribers registered")
-
-    # 订阅 SESSION_UPDATED 事件，触发 L3 后台预压缩
-    from app.services.core.event_bus import event_bus as core_event_bus, EventTypes as CoreEventTypes
-    from app.services.context_compressor import context_compressor
-    from app.services.chat.message_service import load_chat_history as _load_history
-
-    async def _on_session_updated(event: Event):
-        """会话更新后触发后台预压缩"""
-        session_id = event.data.get("session_id")
-        if not session_id:
-            return
-        try:
-            from app.database import AsyncSessionLocal
-            from langchain_core.messages import SystemMessage
-            async with AsyncSessionLocal() as db:
-                history = await _load_history(db, session_id, limit=30)
-                if history and history.messages:
-                    # 包装为带 system 占位的消息列表
-                    msgs = [SystemMessage(content="[placeholder]")] + list(history.messages)
-                    asyncio.create_task(context_compressor.background_precompress(str(session_id), msgs))
-        except Exception as e:
-            logger.warning(f"L3 预压缩触发失败（非阻塞）: {e}")
-
-    core_event_bus.subscribe(CoreEventTypes.SESSION_UPDATED, _on_session_updated)
-    logger.info("SESSION_UPDATED handler registered for L3 background precompression")
-    
     yield
 
     # 优雅关停
     logger.info("正在关闭服务...")
 
-    # 关闭 RAG 线程池
+    # 关闭 RAG 线程池 + Worker
     try:
         from app.services.rag_service import rag_service
         if hasattr(rag_service, '_executor'):
             rag_service._executor.shutdown(wait=True, cancel_futures=True)
             logger.info("RAG 线程池已关闭")
+        if hasattr(rag_service, '_worker_task') and rag_service._worker_task:
+            rag_service._worker_task.cancel()
     except Exception as e:
         logger.error(f"关闭 RAG 线程池失败: {e}")
 
     # 清空缓存
     try:
-        from app.services.message_service import invalidate_full_text_cache
+        from app.services.chat.message_service import invalidate_full_text_cache
         invalidate_full_text_cache()
         logger.info("全文缓存已清空")
     except Exception as e:
@@ -174,7 +111,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 def create_app() -> FastAPI:
     """
     创建并配置 FastAPI 应用实例
-    
+
     Returns:
         配置好的 FastAPI 应用实例
     """
@@ -185,7 +122,7 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
         debug=settings.DEBUG
     )
-    
+
     # 安全响应头中间件
     app.add_middleware(SecurityHeadersMiddleware)
 
@@ -197,14 +134,14 @@ def create_app() -> FastAPI:
         allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
         allow_headers=["Content-Type", "Authorization", "X-Requested-With"],
     )
-    
+
     # 设置全局异常处理
     setup_error_handlers(app)
-    
+
     # 配置请求限流
     app.state.limiter = limiter
     app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
-    
+
     # 注册路由（全部已迁移到 /api/v1 前缀）
     app.include_router(papers_router)
     app.include_router(highlights_router)
@@ -220,14 +157,16 @@ def create_app() -> FastAPI:
     app.include_router(feedback_router)
     app.include_router(backup_router)
     app.include_router(feature_flags_router)
-    
+    app.include_router(batch_analysis_router)
+    app.include_router(cost_router)
+
     # 旧路径向后兼容重定向：/api/xxx → /api/v1/xxx
     _LEGACY_PREFIXES = [
         "papers", "chat", "analysis", "writing", "highlights", "notes",
         "reading", "recommendations", "settings", "feedback", "knowledge", "auth",
         "backup", "features"
     ]
-    
+
     @app.api_route("/api/{path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
     async def legacy_redirect(request: Request, path: str):
         """将旧版 /api/xxx 请求重定向到 /api/v1/xxx"""
@@ -238,7 +177,7 @@ def create_app() -> FastAPI:
         # 不匹配任何已知前缀的路径，返回 404
         from fastapi.responses import JSONResponse
         return JSONResponse(status_code=404, content={"detail": "Not found"})
-    
+
     return app
 
 
@@ -250,7 +189,7 @@ app = create_app()
 async def health_check():
     """
     健康检查端点
-    
+
     返回:
         - 应用状态信息
     """

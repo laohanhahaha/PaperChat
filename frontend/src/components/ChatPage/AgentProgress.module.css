@@ -199,3 +199,110 @@
   color: #9CA3AF;
   white-space: nowrap;
 }
+
+/* ═══════════════════════════════════════════
+   多 Agent 分组样式
+   ═══════════════════════════════════════════ */
+
+/* 子 Agent 整体块 */
+.subAgentBlock {
+  margin-bottom: 8px;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid var(--color-border, #E5E7EB);
+}
+
+/* 子 Agent 头部 */
+.subAgentHeader {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  user-select: none;
+  transition: background 0.15s ease;
+}
+
+.subAgentHeader:hover {
+  filter: brightness(0.96);
+}
+
+/* 运行中 */
+.subAgentRunning {
+  background: rgba(52, 152, 219, 0.06);
+  color: var(--color-agent-accent, #3498db);
+}
+
+/* 完成 */
+.subAgentDone {
+  background: var(--color-bg-secondary, #F5F3EE);
+  color: var(--color-text-tertiary, #888);
+}
+
+.subAgentIcon {
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.subAgentLabel {
+  font-weight: 600;
+  color: inherit;
+}
+
+.subAgentRoleKey {
+  font-size: 11px;
+  opacity: 0.6;
+}
+
+/* 运行中旋转动画小点 */
+.subAgentSpinner {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border: 2px solid rgba(52, 152, 219, 0.3);
+  border-top-color: var(--color-agent-accent, #3498db);
+  border-radius: 50%;
+  animation: spinSub 0.8s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes spinSub {
+  to { transform: rotate(360deg); }
+}
+
+/* 折叠时摘要文字 */
+.subAgentSummary {
+  flex: 1;
+  font-size: 11px;
+  color: var(--color-text-tertiary, #aaa);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-left: 4px;
+}
+
+/* 子 Agent 步骤列表区域 */
+.subAgentSteps {
+  padding: 4px 12px 6px 20px;
+  border-left: 2px solid var(--color-agent-accent, rgba(52, 152, 219, 0.35));
+  margin-left: 18px;
+  margin-bottom: 4px;
+  animation: fadeIn 0.15s ease;
+}
+
+/* 每行前的树形符号 */
+.subAgentStepRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.subAgentTreeLine {
+  font-size: 11px;
+  color: var(--color-border, #ccc);
+  flex-shrink: 0;
+  margin-top: 5px;
+  font-family: monospace;
+}

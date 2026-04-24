@@ -8,10 +8,11 @@ import numpy as np
 from typing import List, Dict, Optional, Any
 from datetime import datetime
 
-from sqlalchemy import select, and_, func
+from sqlalchemy import select, and_, func, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.paper import Paper, PaperTextBlock
+from app.models.knowledge import KnowledgeCard, KnowledgeRelation
 from app.services.memory_service import memory_service
 
 logger = logging.getLogger(__name__)
@@ -495,6 +496,301 @@ class RecommendationService:
         else:
             self._embedding_cache.clear()
     
+    async def get_graph_based_recommendations(
+        self,
+        paper_id: int,
+        user_id: int,
+        db: AsyncSession,
+        top_k: int = 5
+    ) -> List[Dict[str, Any]]:
+        """基于知识图谱关系推荐论文
+
+        通过挖掘知识卡片间的关联关系，找出与当前论文
+        存在共同主题或概念联系的其他论文：
+        1. 获取当前论文关联的知识卡片及其标签
+        2. 寻找拥有相同/相近标签的其他论文知识卡片
+        3. 通过 KnowledgeRelation 发现跨论文概念连接
+        4. 按命中关系数排序，组装推荐结果
+
+        Args:
+            paper_id: 当前论文 ID
+            user_id:  当前用户 ID
+            db:       数据库会话
+            top_k:    返回数量
+
+        Returns:
+            推荐论文列表（含推荐理由）
+        """
+        try:
+            # 1. 获取当前论文的知识卡片
+            result = await db.execute(
+                select(KnowledgeCard).where(
+                    and_(
+                        KnowledgeCard.paper_id == paper_id,
+                        KnowledgeCard.user_id == user_id
+                    )
+                )
+            )
+            source_cards = result.scalars().all()
+
+            if not source_cards:
+                return []
+
+            source_card_ids = [c.id for c in source_cards]
+
+            # 收集当前论文的所有标签
+            source_tags: set = set()
+            for card in source_cards:
+                if card.tags:
+                    for tag in card.tags:
+                        source_tags.add(tag.lower())
+
+            # 2. 通过 KnowledgeRelation 找关联卡片（跨论文）
+            related_card_ids: set = set()
+
+            if source_card_ids:
+                # 查询以 source_cards 为起点或终点的关联
+                rel_result = await db.execute(
+                    select(KnowledgeRelation).where(
+                        or_(
+                            KnowledgeRelation.source_card_id.in_(source_card_ids),
+                            KnowledgeRelation.target_card_id.in_(source_card_ids)
+                        )
+                    )
+                )
+                relations = rel_result.scalars().all()
+
+                for rel in relations:
+                    if rel.source_card_id not in source_card_ids:
+                        related_card_ids.add(rel.source_card_id)
+                    if rel.target_card_id not in source_card_ids:
+                        related_card_ids.add(rel.target_card_id)
+
+            # 3. 查找拥有相同标签的其他用户卡片
+            tag_matched_card_ids: set = set()
+            if source_tags:
+                all_cards_result = await db.execute(
+                    select(KnowledgeCard).where(
+                        and_(
+                            KnowledgeCard.user_id == user_id,
+                            KnowledgeCard.paper_id != paper_id,
+                            KnowledgeCard.paper_id.isnot(None)
+                        )
+                    )
+                )
+                all_other_cards = all_cards_result.scalars().all()
+
+                for card in all_other_cards:
+                    if card.tags:
+                        card_tags = {t.lower() for t in card.tags}
+                        if card_tags & source_tags:  # 有交集
+                            tag_matched_card_ids.add(card.id)
+
+            # 4. 合并所有关联卡片 ID
+            candidate_card_ids = related_card_ids | tag_matched_card_ids
+
+            if not candidate_card_ids:
+                return []
+
+            # 5. 获取候选卡片对应的论文 ID（排除源论文）
+            cands_result = await db.execute(
+                select(KnowledgeCard).where(
+                    and_(
+                        KnowledgeCard.id.in_(candidate_card_ids),
+                        KnowledgeCard.paper_id != paper_id
+                    )
+                )
+            )
+            candidate_cards = cands_result.scalars().all()
+
+            # 统计每个候选论文的命中次数
+            paper_hit: Dict[int, int] = {}
+            paper_reasons: Dict[int, List[str]] = {}
+
+            for card in candidate_cards:
+                pid = card.paper_id
+                if pid is None:
+                    continue
+                paper_hit[pid] = paper_hit.get(pid, 0) + 1
+
+                # 收集匹配理由
+                reasons = paper_reasons.setdefault(pid, [])
+                if card.id in related_card_ids and "图谱关联" not in reasons:
+                    reasons.append("图谱关联")
+                if card.id in tag_matched_card_ids and "共同主题" not in reasons:
+                    reasons.append("共同主题")
+
+            # 6. 排序并取 top_k
+            sorted_pids = sorted(paper_hit.keys(), key=lambda p: paper_hit[p], reverse=True)[:top_k]
+
+            if not sorted_pids:
+                return []
+
+            # 7. 查询论文详情
+            papers_result = await db.execute(
+                select(Paper).where(
+                    and_(
+                        Paper.id.in_(sorted_pids),
+                        Paper.user_id == user_id
+                    )
+                )
+            )
+            papers = {p.id: p for p in papers_result.scalars().all()}
+
+            recommendations = []
+            for pid in sorted_pids:
+                paper = papers.get(pid)
+                if not paper:
+                    continue
+
+                abstract_preview = ""
+                if paper.abstract:
+                    abstract_preview = paper.abstract[:100] + "..." if len(paper.abstract) > 100 else paper.abstract
+
+                reasons = paper_reasons.get(pid, [])
+                reason_text = "、".join(reasons) if reasons else "知识图谱关联"
+
+                recommendations.append({
+                    "id": paper.id,
+                    "title": paper.title,
+                    "authors": paper.authors,
+                    "similarity": None,
+                    "hit_count": paper_hit.get(pid, 0),
+                    "match_reason": reason_text,
+                    "abstract_preview": abstract_preview,
+                    "page_count": paper.page_count,
+                    "reading_status": paper.reading_status,
+                    "category": paper.category,
+                    "created_at": paper.created_at.isoformat() if paper.created_at else None
+                })
+
+            return recommendations
+
+        except Exception as e:
+            logger.error("获取知识图谱推荐失败", exc_info=True)
+            return []
+
+    async def get_comprehensive_recommendations(
+        self,
+        user_id: int,
+        db: AsyncSession,
+        paper_id: Optional[int] = None,
+        top_k: int = 8
+    ) -> List[Dict[str, Any]]:
+        """综合推荐：融合内容相似 + 个性化 + 知识图谱推荐
+
+        权重设计：
+        - 内容相似（针对指定 paper_id）：0.5
+        - 个性化：0.3
+        - 知识图谱：0.2
+
+        Args:
+            user_id:  当前用户 ID
+            db:       数据库会话
+            paper_id: 当前论文 ID（可选，有则加入内容相似推荐）
+            top_k:    返回数量
+
+        Returns:
+            综合推荐列表（含推荐理由字段 reason）
+        """
+        try:
+            # 并行获取三路推荐
+            import asyncio
+
+            tasks = []
+            task_names = []
+
+            async def _empty():
+                return []
+
+            if paper_id:
+                tasks.append(
+                    self.get_similar_papers(paper_id, user_id, db, top_k=top_k)
+                )
+                task_names.append("similar")
+            else:
+                tasks.append(_empty())
+                task_names.append("similar")
+
+            tasks.append(self.get_personalized_recommendations(user_id, db, top_k=top_k))
+            task_names.append("personal")
+
+            if paper_id:
+                tasks.append(
+                    self.get_graph_based_recommendations(paper_id, user_id, db, top_k=top_k)
+                )
+                task_names.append("graph")
+            else:
+                tasks.append(_empty())
+                task_names.append("graph")
+
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+
+            similar_list = results[0] if not isinstance(results[0], Exception) else []
+            personal_list = results[1] if not isinstance(results[1], Exception) else []
+            graph_list = results[2] if not isinstance(results[2], Exception) else []
+
+            # 按论文 ID 合并打分
+            score_map: Dict[int, float] = {}
+            reason_map: Dict[int, str] = {}
+            paper_data: Dict[int, Dict] = {}
+
+            weights = {
+                "similar": 0.5,
+                "personal": 0.3,
+                "graph": 0.2
+            }
+
+            reason_templates = {
+                "similar": "与您正在阅读的论文主题相似",
+                "personal": "基于您的研究兴趣",
+                "graph": "知识图谱中与当前论文存在关联"
+            }
+
+            def _merge(items: List[Dict], source: str, weight: float):
+                for item in items:
+                    pid = item["id"]
+                    sim = item.get("similarity") or 0.0
+                    contribution = sim * weight
+                    score_map[pid] = score_map.get(pid, 0.0) + contribution
+                    if pid not in paper_data:
+                        paper_data[pid] = item
+                    # 合并推荐理由
+                    existing_reasons = reason_map.get(pid, "")
+                    new_reason = reason_templates[source]
+                    if new_reason not in existing_reasons:
+                        reason_map[pid] = (existing_reasons + "; " + new_reason).lstrip("; ")
+
+            _merge(similar_list, "similar", weights["similar"])
+            _merge(personal_list, "personal", weights["personal"])
+            _merge(graph_list, "graph", weights["graph"])
+
+            # 如果所有分数都为 0（没有 similarity），按命中次数排序
+            for pid in list(score_map.keys()):
+                if score_map[pid] == 0:
+                    # 赋予基础分，使命中多个来源的论文排在前面
+                    hit_sources = sum([
+                        1 if any(p["id"] == pid for p in similar_list) else 0,
+                        1 if any(p["id"] == pid for p in personal_list) else 0,
+                        1 if any(p["id"] == pid for p in graph_list) else 0,
+                    ])
+                    score_map[pid] = hit_sources * 10.0
+
+            sorted_pids = sorted(score_map.keys(), key=lambda p: score_map[p], reverse=True)[:top_k]
+
+            recommendations = []
+            for pid in sorted_pids:
+                data = paper_data[pid].copy()
+                data["reason"] = reason_map.get(pid, "基于您的读书历史")
+                data["score"] = round(score_map.get(pid, 0), 2)
+                recommendations.append(data)
+
+            return recommendations
+
+        except Exception as e:
+            logger.error("获取综合推荐失败", exc_info=True)
+            return []
+
     async def search_web_recommendations(self, paper_id: int, db: AsyncSession, max_results: int = 8) -> List[Dict[str, Any]]:
         """从网络搜索相关学术文献
         
