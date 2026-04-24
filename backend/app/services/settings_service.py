@@ -5,8 +5,10 @@
 import json
 import copy
 import logging
+import time
 from typing import Dict, Any, Optional
 
+import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -160,6 +162,35 @@ DEFAULT_SETTINGS: Dict[str, Dict[str, Dict[str, Any]]] = {
             "max": 100,
             "label": "对话历史条数",
             "description": "每次问答时携带的历史消息数量"
+        }
+    },
+    "zotero": {
+        "api_key": {
+            "value": "",
+            "type": "password",
+            "label": "Zotero API Key",
+            "description": "从 Zotero 个人设置中生成的 API Key"
+        },
+        "library_id": {
+            "value": "",
+            "type": "text",
+            "label": "Zotero Library ID",
+            "description": "你的 Zotero 用户 ID（数字）"
+        },
+        "library_type": {
+            "value": "users",
+            "type": "select",
+            "options": ["users", "groups"],
+            "label": "Library 类型",
+            "description": "个人库 (users) 或群组库 (groups)"
+        }
+    },
+    "mcp": {
+        "status": {
+            "value": "",
+            "type": "text",
+            "label": "服务状态",
+            "description": "MCP 学术服务配置状态（此分组由 ConfigAgentPanel 组件渲染）"
         }
     }
 }
@@ -450,6 +481,235 @@ class SettingsService:
         # 脱敏值格式：**** + 0-4个字符
         suffix = api_key[4:]
         return len(suffix) <= 4
+
+    # ------------------------------------------------------------------
+    # API Key 轮换与验证
+    # ------------------------------------------------------------------
+
+    # 支持的第三方服务名称 → 验证端点映射
+    _KEY_VALIDATION_MAP: Dict[str, Dict[str, Any]] = {
+        "deepseek": {
+            "url": "https://api.deepseek.com/models",
+            "method": "GET",
+            "headers": lambda key: {"Authorization": f"Bearer {key}"},
+            "expect_status": 200,
+            "label": "DeepSeek",
+        },
+        "bing": {
+            "url": "https://api.bing.microsoft.com/v7.0/search?q=test",
+            "method": "GET",
+            "headers": lambda key: {"Ocp-Apim-Subscription-Key": key},
+            "expect_status": 200,
+            "label": "Bing Search",
+        },
+        "tavily": {
+            "url": "https://api.tavily.com/search",
+            "method": "POST",
+            "headers": lambda key: {"Content-Type": "application/json"},
+            "body": lambda key: {"api_key": key, "query": "test", "max_results": 1},
+            "expect_status": 200,
+            "label": "Tavily Search",
+        },
+        "brave": {
+            "url": "https://api.search.brave.com/res/v1/web/search?q=test&count=1",
+            "method": "GET",
+            "headers": lambda key: {"X-Subscription-Token": key},
+            "expect_status": 200,
+            "label": "Brave Search",
+        },
+        "zotero": {
+            "url": "https://api.zotero.org/users/me",
+            "method": "GET",
+            "headers": lambda key: {"Zotero-API-Key": key},
+            "expect_status": 200,
+            "label": "Zotero",
+        },
+        "semantic_scholar": {
+            "url": "https://api.semanticscholar.org/graph/v1/paper/search?query=test&limit=1",
+            "method": "GET",
+            "headers": lambda key: {"x-api-key": key},
+            "expect_status": 200,
+            "label": "Semantic Scholar",
+        },
+    }
+
+    async def validate_api_key(self, service_name: str, key: str) -> dict:
+        """验证 API Key 有效性
+
+        根据服务名称调用对应的验证端点，检测 Key 是否可用。
+        所有请求带有 5s 超时保护，避免阻塞。
+
+        性能影响：每次验证发起一次 HTTP 请求，延迟取决于目标服务响应速度
+        （通常 200ms~2s），5s 超时兜底。不影响其他并发请求。
+
+        Args:
+            service_name: 服务名称（deepseek/bing/tavily/brave/zotero/semantic_scholar）
+            key: 待验证的 API Key
+
+        Returns:
+            {"valid": bool, "message": str, "latency_ms": int}
+        """
+        service_name = service_name.lower().strip()
+        if service_name not in self._KEY_VALIDATION_MAP:
+            return {
+                "valid": False,
+                "message": f"不支持的服务: {service_name}，支持: {', '.join(self._KEY_VALIDATION_MAP.keys())}",
+                "latency_ms": 0,
+            }
+
+        if not key or not key.strip():
+            return {"valid": False, "message": "API Key 不能为空", "latency_ms": 0}
+
+        config = self._KEY_VALIDATION_MAP[service_name]
+        start = time.monotonic()
+
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                headers = config["headers"](key)
+                method = config["method"]
+                url = config["url"]
+
+                if method == "GET":
+                    resp = await client.get(url, headers=headers)
+                else:  # POST
+                    body = config.get("body", lambda k: {})(key)
+                    resp = await client.post(url, headers=headers, json=body)
+
+            latency_ms = int((time.monotonic() - start) * 1000)
+
+            if resp.status_code == config["expect_status"]:
+                return {
+                    "valid": True,
+                    "message": f"{config['label']} API Key 验证通过",
+                    "latency_ms": latency_ms,
+                }
+            elif resp.status_code in (401, 403):
+                return {
+                    "valid": False,
+                    "message": f"{config['label']} API Key 无效（HTTP {resp.status_code}）",
+                    "latency_ms": latency_ms,
+                }
+            else:
+                return {
+                    "valid": False,
+                    "message": f"{config['label']} 验证异常（HTTP {resp.status_code}），无法确认有效性",
+                    "latency_ms": latency_ms,
+                }
+
+        except httpx.TimeoutException:
+            latency_ms = int((time.monotonic() - start) * 1000)
+            return {
+                "valid": False,
+                "message": f"{config['label']} 验证超时（5s）",
+                "latency_ms": latency_ms,
+            }
+        except Exception as e:
+            latency_ms = int((time.monotonic() - start) * 1000)
+            return {
+                "valid": False,
+                "message": f"{config['label']} 验证失败: {str(e)[:100]}",
+                "latency_ms": latency_ms,
+            }
+
+    async def rotate_api_key(
+        self,
+        user_id: int,
+        service_name: str,
+        new_key: str,
+        db: AsyncSession,
+    ) -> dict:
+        """轮换 API Key
+
+        步骤：
+          1. 读取旧 key（脱敏记录）
+          2. 验证新 key 有效性
+          3. 更新数据库中的 key
+          4. 应用到运行时服务
+          5. 记录审计日志
+
+        性能影响：轮换过程中包含一次 HTTP 验证请求（200ms~2s），
+        以及数据库写操作。LLM 服务实例会重建，但仅在轮换完成时触发一次，
+        不影响正在进行的流式请求（下一个请求生效）。
+
+        Args:
+            user_id: 用户 ID
+            service_name: 服务名称
+            new_key: 新的 API Key
+            db: 数据库会话
+
+        Returns:
+            {"success": bool, "message": str, "service": str}
+        """
+        service_name = service_name.lower().strip()
+
+        # 1. 读取旧 key
+        old_values = await self.get_setting_values(user_id, db)
+        old_key = ""
+        if service_name == "deepseek":
+            old_key = old_values.get("llm", {}).get("api_key", "")
+        else:
+            # 其他服务的 key 也存储在 llm 配置区域或单独区域
+            old_key = old_values.get(service_name, {}).get("api_key", "")
+
+        # 2. 验证新 key
+        validation = await self.validate_api_key(service_name, new_key)
+        if not validation["valid"]:
+            return {
+                "success": False,
+                "message": f"新 Key 验证失败: {validation['message']}",
+                "service": service_name,
+            }
+
+        # 3. 更新数据库
+        if service_name == "deepseek":
+            update_payload = {"llm": {"api_key": new_key}}
+        else:
+            update_payload = {service_name: {"api_key": new_key}}
+
+        try:
+            result = await self.update_settings(user_id, update_payload, db)
+        except Exception as e:
+            return {
+                "success": False,
+                "message": f"数据库更新失败: {str(e)[:100]}",
+                "service": service_name,
+            }
+
+        # 4. 应用到运行时服务
+        if service_name == "deepseek":
+            try:
+                from app.services.llm.llm_service import llm_service
+                await llm_service.update_config(api_key=new_key)
+                logger.info(f"DeepSeek API Key 已轮换并应用到运行时服务")
+            except Exception as e:
+                logger.warning(f"运行时应用新 Key 失败: {e}")
+
+        # 5. 记录审计日志（复用 ApiKeyAuditor）
+        try:
+            from app.services.privacy.privacy_service import api_key_auditor
+            api_key_auditor.log_access(
+                key_id=self._mask_api_key(old_key),
+                action="rotate_key",
+                source=f"user:{user_id}",
+            )
+            api_key_auditor.log_access(
+                key_id=self._mask_api_key(new_key),
+                action="rotate_key_new",
+                source=f"user:{user_id}",
+            )
+        except Exception as e:
+            logger.debug(f"审计日志记录失败（非阻断）: {e}")
+
+        logger.info(
+            f"API Key 轮换成功: service={service_name}, user={user_id}, "
+            f"old={self._mask_api_key(old_key)}, new={self._mask_api_key(new_key)}"
+        )
+
+        return {
+            "success": True,
+            "message": f"{service_name} API Key 轮换成功",
+            "service": service_name,
+        }
 
     async def apply_settings(self, settings_values: Dict[str, Dict[str, Any]]) -> bool:
         """将设置应用到各服务的运行时参数

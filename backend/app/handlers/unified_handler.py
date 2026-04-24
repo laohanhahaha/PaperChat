@@ -51,6 +51,24 @@ CROSS_PAPER_TOOLS = {
     "cross_paper_reason",
 }
 
+# 配置意图关键词
+CONFIG_INTENT_KEYWORDS = [
+    "配置", "设置服务", "接入", "连接服务", "启用服务", "关闭服务",
+    "API Key", "apikey", "api key",
+    "configure", "setup", "connect service", "enable service", "disable service",
+    "MCP服务", "mcp服务", "学术服务",
+]
+
+
+def _is_config_intent(message: str) -> bool:
+    """判断消息是否包含配置意图
+
+    检测关键词: 配置/设置/接入/连接/启用/configure/setup/connect
+    性能影响：关键词匹配 O(n)，<1ms。
+    """
+    from app.services.agent.config_agent import is_config_intent
+    return is_config_intent(message)
+
 
 def _is_multi_agent_research(intent: str, message: str) -> bool:
     """判断是否需要多 Agent 研究模式
@@ -109,6 +127,173 @@ _recent_papers_tool = RecentPapersTool()
 _search_papers_tool = SearchPapersTool()
 
 
+# MCP 工具依赖的服务映射（工具名 -> 所需 MCP 服务名）
+_MCP_TOOL_SERVICE_MAP = {
+    # arXiv 工具
+    "search_arxiv_papers": "arxiv",
+    "get_arxiv_paper": "arxiv",
+    # Semantic Scholar 工具
+    "search_s2_papers": "semantic_scholar",
+    "get_s2_paper": "semantic_scholar",
+    "get_s2_citations": "semantic_scholar",
+    # CrossRef 工具
+    "search_crossref": "crossref",
+    "get_doi_metadata": "crossref",
+    # DBLP 工具
+    "search_dblp": "dblp",
+    "get_dblp_author": "dblp",
+    # Zotero 工具
+    "search_zotero": "zotero",
+    "get_zotero_collections": "zotero",
+}
+
+
+def _check_mcp_service_available(tool_name: str, state) -> tuple[bool, str]:
+    """检查工具所需的 MCP 服务是否已配置
+
+    Returns:
+        (is_available, service_name) — 如果可用返回 (True, "")，否则返回 (False, service_name)
+    """
+    service_name = _MCP_TOOL_SERVICE_MAP.get(tool_name, "")
+    if not service_name:
+        return True, ""  # 非依赖 MCP 服务的工具
+
+    mcp_manager = getattr(state, "mcp_manager", None)
+    if not mcp_manager:
+        return False, service_name
+
+    if service_name in mcp_manager._clients:
+        return True, ""
+
+    return False, service_name
+
+
+def _sync_mcp_tools_to_agent(state):
+    """动态将 MCP 桥接工具同步到 Agent 的工具注册表
+
+    从 app.state.tool_registry 读取已桥接的 MCP 工具，
+    并注册到 agent_service 的 tool_registry 中，使 ReAct Agent 可用。
+
+    性能影响：仅遍历 tool_registry 已注册工具，O(n) <1ms。
+    """
+    try:
+        from app.services.agent.agent_service import agent_service
+        app_tool_registry = getattr(state, "tool_registry", None)
+        if not app_tool_registry:
+            return
+
+        for tool in app_tool_registry.list_tools():
+            # 仅同步 MCP 桥接工具（名称以 MCP_ 开头的动态类）
+            if tool.name not in agent_service.tool_registry._tools:
+                agent_service.tool_registry.register(tool)
+    except Exception as e:
+        logger.warning(f"[unified_handler] MCP 工具同步失败（非阻断）: {e}")
+
+
+async def _handle_config_agent(websocket, db, state, message, session_id, user_id, chat_history="", thinking_mode="quick"):
+    """使用 ConfigAgent 处理配置类请求
+
+    ConfigAgent 使用专用的配置工具集和系统提示词，
+    事件流格式与 ReActAgent 完全一致，前端 AgentProgress 组件可直接复用。
+
+    性能影响：简单配置（免费服务）约 3-8s，需 API Key 的服务约 5-15s。
+    """
+    from app.services.agent.config_agent import ConfigAgent
+    from app.services.agent.agent_service import ToolContext
+
+    session = await get_or_create_session(db, session_id, user_id, paper_id=None)
+
+    # 保存用户消息
+    await save_message(db, session.id, "user", message)
+
+    # 构建 ToolContext
+    ctx = ToolContext(
+        db=db,
+        user_id=user_id,
+        session_id=session.id,
+    )
+
+    # 从 app.state 创建 ConfigAgent
+    config_agent = ConfigAgent.from_app_state(state)
+
+    full_response = ""
+
+    # 运行 ConfigAgent 循环
+    async for event in config_agent.run(
+        query=message,
+        ctx=ctx,
+        chat_history=chat_history,
+        thinking_mode=thinking_mode,
+    ):
+        event_type = event["type"]
+
+        if event_type == "agent_thought":
+            await websocket.send_text(json.dumps({
+                "type": "agent_thought",
+                "step": event.get("step", 0),
+                "content": event.get("content", ""),
+            }))
+
+        elif event_type == "agent_action":
+            await websocket.send_text(json.dumps({
+                "type": "agent_action",
+                "step": event.get("step", 0),
+                "tool": event.get("tool", ""),
+                "input": event.get("input", {}),
+            }))
+
+        elif event_type == "agent_observation":
+            await websocket.send_text(json.dumps({
+                "type": "agent_observation",
+                "step": event.get("step", 0),
+                "content": event.get("content", ""),
+            }))
+
+        elif event_type == "agent_final":
+            full_response = event.get("content", "")
+            # 通知前端 Agent 推理结束
+            await websocket.send_text(json.dumps({
+                "type": "agent_final",
+                "content": "",
+            }))
+            # 流式发送最终回答
+            chunk_buffer = ChunkBuffer(websocket, interval_ms=50)
+            try:
+                chunk_size = 20
+                for i in range(0, len(full_response), chunk_size):
+                    chunk = full_response[i:i+chunk_size]
+                    await chunk_buffer.add(chunk, "rag_chat_chunk")
+                await chunk_buffer.flush("rag_chat_chunk")
+            finally:
+                chunk_buffer.close()
+            # Agent 完成
+            await websocket.send_text(json.dumps({
+                "type": "done",
+                "channel": "agent_chat",
+                "session_id": session.id,
+            }))
+
+    # 保存 AI 回复
+    await save_message(db, session.id, "assistant", full_response)
+
+    # 更新标题
+    await auto_title(db, session, message)
+
+    # 推送 config_update 事件通知前端刷新状态
+    await websocket.send_text(json.dumps({
+        "type": "config_update",
+        "action": "configured",
+        "message": "配置已更新",
+    }))
+
+    # 发送完成标记
+    await websocket.send_text(json.dumps({
+        "type": "done",
+        "channel": "rag_chat",
+        "session_id": session.id,
+    }))
+
+
 async def _handle_react_agent(websocket, db, state, message, session_id, user_id,
                                paper_id, paper_ids, chat_history, thinking_mode="quick", mode="normal"):
     """使用 ReAct Agent 处理需要多步推理的请求
@@ -119,6 +304,9 @@ async def _handle_react_agent(websocket, db, state, message, session_id, user_id
     from app.services.agent.agent_service import ToolContext
 
     session = await get_or_create_session(db, session_id, user_id, paper_id=paper_id)
+
+    # 动态合并 MCP 工具到 Agent 可用工具集
+    _sync_mcp_tools_to_agent(state)
 
     # 保存用户消息
     await save_message(db, session.id, "user", message)
@@ -168,6 +356,18 @@ async def _handle_react_agent(websocket, db, state, message, session_id, user_id
                     "type": "agent_observation",
                     "step": event["step"],
                     "content": f"工具 {event['tool']} 被安全策略拒绝"
+                }))
+                continue
+
+            # MCP 服务可用性检查：工具依赖的服务未配置时，返回引导信息
+            available, svc_name = _check_mcp_service_available(event["tool"], state)
+            if not available:
+                from app.tools.config_tools import _SERVICE_REGISTRY
+                display = _SERVICE_REGISTRY.get(svc_name, {}).get("display_name", svc_name)
+                await websocket.send_text(json.dumps({
+                    "type": "agent_observation",
+                    "step": event["step"],
+                    "content": f"{display} 服务未配置，无法使用工具 {event['tool']}。请先配置 {display} 服务（在设置页面或对话中输入 \"配置{display}\"）"
                 }))
                 continue
 
@@ -940,7 +1140,17 @@ async def handle_unified_chat(websocket, state, message, paper_id, paper_ids, se
                 )
             return
 
-        # 2.6 多 Agent 研究模式检测
+        # 2.6 配置意图检测：检测到配置关键词时，路由到 ConfigAgent
+        if _is_config_intent(message):
+            logger.info(f"配置意图检测触发: message='{message[:50]}'")
+            async with AsyncSessionLocal() as db:
+                await _handle_config_agent(
+                    websocket, db, state, message, session_id, user_id,
+                    chat_history, thinking_mode
+                )
+            return
+
+        # 2.7 多 Agent 研究模式检测
         intent_str = intent_result.get("intent", "") if intent_result and intent_result.get("matched") else ""
         if _is_multi_agent_research(intent_str, message):
             logger.info(f"多 Agent 研究模式触发: message='{message[:50]}'")

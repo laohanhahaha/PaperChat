@@ -23,6 +23,7 @@ from app.services.agent import AgentService  # 新版 agent 模块
 from app.tools import ToolRegistry, ToolExecutor
 from app.mcp_services import MCPManager
 from app.skills import SkillRegistry
+from app.services.health import HealthService
 
 logger = logging.getLogger(__name__)
 
@@ -151,6 +152,15 @@ def get_skill_registry(request: Request) -> SkillRegistry:
     return request.app.state.skill_registry
 
 
+def get_search_dispatcher(request: Request):
+    """从 app.state 获取多源搜索调度器"""
+    from app.services.search import SearchDispatcher
+    dispatcher = getattr(request.app.state, "search_dispatcher", None)
+    if dispatcher is None:
+        raise RuntimeError("SearchDispatcher 未初始化")
+    return dispatcher
+
+
 def get_config_service(request: Request):
     """从 app.state 获取 ConfigService（四层覆盖链配置服务）
 
@@ -165,5 +175,19 @@ def get_config_service(request: Request):
     """
     from app.config import ConfigService  # 延迟导入，避免循环依赖
     return request.app.state.config_service
+
+
+def get_health_service(request: Request) -> HealthService:
+    """从 app.state 获取 HealthService（通用服务健康监控）
+
+    用法:
+        from app.dependencies import get_health_service
+        from fastapi import Depends
+
+        @router.get("/...")
+        async def endpoint(health = Depends(get_health_service)):
+            status = health.get_cached_status()
+    """
+    return request.app.state.health_service
 
 

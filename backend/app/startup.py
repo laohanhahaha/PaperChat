@@ -227,4 +227,18 @@ class StartupManager:
                 logger.warning(f"知识图谱自动更新失败（非阻断）: {e}")
 
         event_bus.subscribe(EventTypes.PAPER_UPLOADED, _on_paper_uploaded_update_graph)
+
+        # CONFIG_UPDATED -> WebSocket 广播
+        async def _on_config_updated(event: Event):
+            """配置变更时，通过事件总线转发到 WebSocket
+
+            由于 event_bus 没有直接访问 ws 的能力，
+            将配置变更事件存入 app.state 供前端轮询或 ws 独立推送。
+            此处仅做日志记录，实际 ws 推送在 unified_handler 中通过 ctx 传递。
+            """
+            svc = event.data.get("service", "unknown")
+            logger.info(f"[EventBus] 配置变更事件: {svc}")
+
+        event_bus.subscribe(EventTypes.CONFIG_UPDATED, _on_config_updated)
+
         logger.info("[Startup] 所有事件订阅者已注册")

@@ -107,6 +107,27 @@
   color: var(--accent, #B8860B);
 }
 
+.selectBtn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  background: transparent;
+  color: var(--text-h, #2C2C2C);
+  border: 1px solid var(--border, rgba(92, 64, 51, 0.2));
+  border-radius: 0.375rem;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.selectBtn:hover {
+  background: rgba(92, 64, 51, 0.04);
+  border-color: var(--accent, #B8860B);
+  color: var(--accent, #B8860B);
+}
+
 .compareBtn {
   display: flex;
   align-items: center;
@@ -282,6 +303,28 @@
   cursor: not-allowed;
 }
 
+.citeExportBtn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background: var(--accent, #B8860B);
+  border: none;
+  border-radius: 0.375rem;
+  font-size: 13px;
+  font-weight: 500;
+  color: white;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 4px rgba(184, 134, 11, 0.2);
+}
+
+.citeExportBtn:hover {
+  background: #9A7009;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(184, 134, 11, 0.25);
+}
+
 /* 个性化推荐区块 */
 .recommendationsSection {
   margin-bottom: 24px;
@@ -435,6 +478,20 @@
   border-color: rgba(184, 134, 11, 0.3);
   box-shadow: 0 4px 12px rgba(92, 64, 51, 0.08);
   transform: translateY(-2px);
+}
+
+.paperCardSelected {
+  border-color: var(--accent, #B8860B) !important;
+  background: rgba(184, 134, 11, 0.06) !important;
+  box-shadow: 0 0 0 2px var(--accent, #B8860B) !important;
+}
+
+.selectCheckbox {
+  width: 18px;
+  height: 18px;
+  margin-right: 8px;
+  accent-color: var(--accent, #B8860B);
+  cursor: pointer;
 }
 
 .paperGrid.selectionMode .paperCard {

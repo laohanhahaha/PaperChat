@@ -1,4 +1,4 @@
-import { useEffect, lazy, Suspense } from 'react';
+import { useEffect, useState, lazy, Suspense } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import useTheme, { initializeTheme } from './hooks/useTheme';
 import useAuthStore from './stores/authStore';
@@ -6,6 +6,7 @@ import useSettingsStore from './stores/settingsStore';
 import Toast from './components/Toast/Toast';
 import ErrorBoundary from './components/ErrorBoundary/ErrorBoundary';
 import AppLayout from './components/AppLayout/AppLayout';
+import SetupWizard from './components/Config/SetupWizard';
 import './App.css';
 
 // 初始化主题（在应用启动时立即应用，避免闪烁）
@@ -51,6 +52,11 @@ function App() {
   const { initialize } = useAuthStore();
   const fetchSettings = useSettingsStore(state => state.fetchSettings);
 
+  // 新用户引导向导状态
+  const [setupCompleted, setSetupCompleted] = useState(() => {
+    return localStorage.getItem('setup_completed') === 'true';
+  });
+
   // 应用主题
   useTheme();
 
@@ -67,6 +73,10 @@ function App() {
   return (
     <ErrorBoundary>
       <Toast />
+      {/* 新用户引导向导 */}
+      {!setupCompleted && (
+        <SetupWizard onComplete={() => setSetupCompleted(true)} />
+      )}
       <Routes>
         {/* 论文列表页 */}
         <Route

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import useSettingsStore from '../stores/settingsStore';
+import ConfigAgentPanel from '../components/Config/ConfigAgentPanel';
 import styles from './SettingsPage.module.css';
 
 // 分组配置
@@ -8,6 +9,7 @@ const GROUP_CONFIG = {
     llm: { title: 'AI 模型设置', icon: '🤖' },
     rag: { title: 'RAG 检索设置', icon: '🔍' },
     search: { title: '联网搜索设置', icon: '🌐' },
+    mcp: { title: 'MCP 学术服务', icon: '🔌' },
     recommendation: { title: '推荐设置', icon: '📊' },
     general: { title: '通用设置', icon: '⚙️' }
 };
@@ -280,6 +282,20 @@ export default function SettingsPage() {
                 {settings && Object.entries(settings).map(([groupKey, groupSettings]) => {
                     const config = GROUP_CONFIG[groupKey];
                     if (!config) return null;
+                    // MCP 服务分组使用 ConfigAgentPanel 组件
+                    if (groupKey === 'mcp') {
+                        return (
+                            <div key={groupKey} className={styles.sectionCard}>
+                                <div className={styles.sectionHeader}>
+                                    <span className={styles.sectionIcon}>{config.icon}</span>
+                                    <h3 className={styles.sectionTitle}>{config.title}</h3>
+                                </div>
+                                <div className={styles.sectionContent}>
+                                    <ConfigAgentPanel />
+                                </div>
+                            </div>
+                        );
+                    }
                     return (
                         <SettingSection
                             key={groupKey}

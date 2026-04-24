@@ -14,6 +14,9 @@ from app.routers.backup import router as backup_router
 from app.routers.feature_flags import router as feature_flags_router
 from app.routers.batch_analysis import router as batch_analysis_router
 from app.routers.cost import router as cost_router
+from app.routers.health import router as health_router
+from app.routers.citations import router as citations_router
+from app.routers.config import router as config_router
 
 __all__ = [
     "papers_router",
@@ -31,4 +34,7 @@ __all__ = [
     "feature_flags_router",
     "batch_analysis_router",
     "cost_router",
+    "health_router",
+    "citations_router",
+    "config_router",
 ]

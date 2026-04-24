@@ -21,6 +21,7 @@ import { useState, useEffect } from 'react';
  * @param {Function} [params.fetchSessions] - 可选，刷新会话列表（会话 ID 变化时调用）
  * @param {Function} [params.onError] - 可选，自定义错误处理
  * @param {Function} [params.onCancelled] - 可选，自定义取消处理
+ * @param {Function} [params.onConfigUpdate] - 可选，配置变更回调（收到 config_update 事件时调用）
  * @param {Function} [params.resetStreamState] - 可选，默认错误处理中重置流状态
  */
 export function useChatMessages({
@@ -40,6 +41,7 @@ export function useChatMessages({
   fetchSessions,
   onError,
   onCancelled,
+  onConfigUpdate,
   resetStreamState,
 }) {
   const [currentIntent, setCurrentIntent] = useState(null);
@@ -106,6 +108,11 @@ export function useChatMessages({
         if (markAgentComplete) markAgentComplete();
       }),
 
+      // 配置变更事件
+      onMessage('config_update', (msg) => {
+        if (onConfigUpdate) onConfigUpdate(msg);
+      }),
+
       onMessage('done', (msg) => {
         if (['rag_chat', 'agent_chat', 'cross_doc_chat', 'analyze', 'deep_analyze'].includes(msg.channel)) {
           typewriter.markDone();
@@ -138,7 +145,7 @@ export function useChatMessages({
     return () => {
       unsubs.forEach(fn => fn());
     };
-  }, [onMessage, typewriter, isChattingRef, setSources, setCrossDocSources, setSearchStatus, updateLastMessage, setLastMessageToolResult, addAgentStep, appendThinkingContent, markAgentComplete, setCurrentSession, fetchSessions, onError, onCancelled, resetStreamState, currentSessionIdRef]);
+  }, [onMessage, typewriter, isChattingRef, setSources, setCrossDocSources, setSearchStatus, updateLastMessage, setLastMessageToolResult, addAgentStep, appendThinkingContent, markAgentComplete, setCurrentSession, fetchSessions, onError, onCancelled, onConfigUpdate, resetStreamState, currentSessionIdRef]);
 
   return { currentIntent, setCurrentIntent };
 }

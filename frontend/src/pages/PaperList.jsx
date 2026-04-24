@@ -7,6 +7,7 @@ import BatchImport from '../components/BatchImport/BatchImport';
 import BatchAnalysis from '../components/BatchAnalysis/BatchAnalysis';
 import Recommendations from '../components/Recommendations/Recommendations';
 import RecommendationPanel from '../components/Recommendations/RecommendationPanel';
+import CitationExport from '../components/Citations/CitationExport';
 import styles from './PaperList.module.css';
 
 // 阅读状态映射
@@ -46,13 +47,31 @@ const formatFileSize = (bytes) => {
 };
 
 // 论文卡片组件 - 使用 React.memo 优化渲染性能
-const PaperCard = memo(({ paper, onNavigate, onDeleteClick }) => {
+const PaperCard = memo(({ paper, onNavigate, onDeleteClick, isSelected, onToggleSelect, selectionMode }) => {
   return (
     <div
-      className={styles.paperCard}
-      onClick={() => onNavigate(paper.id)}
+      className={`${styles.paperCard} ${isSelected ? styles.paperCardSelected : ''}`}
+      onClick={() => {
+        if (selectionMode) {
+          onToggleSelect(paper.id);
+        } else {
+          onNavigate(paper.id);
+        }
+      }}
     >
       <div className={styles.cardHeader}>
+        {selectionMode && (
+          <input
+            type="checkbox"
+            className={styles.selectCheckbox}
+            checked={isSelected}
+            onChange={(e) => {
+              e.stopPropagation();
+              onToggleSelect(paper.id);
+            }}
+            onClick={(e) => e.stopPropagation()}
+          />
+        )}
         <div className={styles.statusSection}>
           <span
             className={styles.statusBadge}
@@ -148,8 +167,11 @@ function PaperList() {
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [showBatchImport, setShowBatchImport] = useState(false);
   const [showBatchAnalysis, setShowBatchAnalysis] = useState(false);
+  const [showCitationExport, setShowCitationExport] = useState(false);
   const [, setUploadProgress] = useState(0);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
+  const [selectedPapers, setSelectedPapers] = useState(new Set());
+  const [selectionMode, setSelectionMode] = useState(false);
 
   const pageSize = 12;
 
@@ -237,6 +259,28 @@ function PaperList() {
     setDeleteConfirm(paper);
   }, []);
 
+  // 论文选中相关
+  const toggleSelect = useCallback((paperId) => {
+    setSelectedPapers(prev => {
+      const next = new Set(prev);
+      if (next.has(paperId)) {
+        next.delete(paperId);
+      } else {
+        next.add(paperId);
+      }
+      return next;
+    });
+  }, []);
+
+  const clearSelection = useCallback(() => {
+    setSelectedPapers(new Set());
+    setSelectionMode(false);
+  }, []);
+
+  const enterSelectionMode = useCallback(() => {
+    setSelectionMode(true);
+  }, []);
+
   const totalPages = Math.ceil(total / pageSize);
 
   return (
@@ -274,6 +318,15 @@ function PaperList() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
             </svg>
             批量分析
+          </button>
+          <button
+            className={styles.selectBtn}
+            onClick={enterSelectionMode}
+          >
+            <svg className={styles.icon} viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+            </svg>
+            选择
           </button>
         </div>
       </header>
@@ -341,6 +394,32 @@ function PaperList() {
         </select>
       </div>
 
+      {/* 选中论文工具栏 */}
+      {selectionMode && selectedPapers.size > 0 && (
+        <div className={styles.selectionBar}>
+          <span className={styles.selectionInfo}>
+            已选择 <strong>{selectedPapers.size}</strong> 篇论文
+          </span>
+          <div className={styles.selectionActions}>
+            <button
+              className={styles.citeExportBtn}
+              onClick={() => setShowCitationExport(true)}
+            >
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+              </svg>
+              导出引用
+            </button>
+            <button
+              className={styles.selectMoreBtn}
+              onClick={clearSelection}
+            >
+              取消选择
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* 错误提示 */}
       {error && (
         <div className={styles.errorBanner}>
@@ -360,13 +439,16 @@ function PaperList() {
         </div>
       ) : (
         <>
-          <div className={styles.paperGrid}>
+          <div className={`${styles.paperGrid} ${selectionMode ? styles.paperGridSelectionMode : ''}`}>
             {papers.map((paper) => (
               <PaperCard
                 key={paper.id}
                 paper={paper}
                 onNavigate={handleNavigateToPaper}
                 onDeleteClick={handleDeleteClick}
+                isSelected={selectedPapers.has(paper.id)}
+                onToggleSelect={toggleSelect}
+                selectionMode={selectionMode}
               />
             ))}
           </div>
@@ -437,6 +519,14 @@ function PaperList() {
       {/* 批量分析弹窗 */}
       {showBatchAnalysis && (
         <BatchAnalysis onClose={() => setShowBatchAnalysis(false)} />
+      )}
+
+      {/* 引用导出弹窗 */}
+      {showCitationExport && (
+        <CitationExport
+          paperIds={Array.from(selectedPapers)}
+          onClose={() => setShowCitationExport(false)}
+        />
       )}
 
       {/* 删除确认弹窗 */}

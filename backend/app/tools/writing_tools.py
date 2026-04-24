@@ -11,6 +11,7 @@ from langchain_core.messages import SystemMessage, HumanMessage
 
 from app.tools.base import Tool, ToolContext, ToolResult
 from app.services.llm_service import llm_service
+from app.services.citation import CitationFormatter
 
 logger = logging.getLogger(__name__)
 
@@ -65,18 +66,22 @@ class LiteratureReviewTool(Tool):
 class CitePaperTool(Tool):
     """引用格式化"""
     name = "cite_paper"
-    description = "将论文引用格式化为指定格式（APA/MLA/Chicago）"
+    description = "将论文引用格式化为指定格式（APA/MLA/Chicago/BibTeX/RIS/GB/T 7714）"
     parameters = {
         "type": "object",
         "properties": {
             "paper_info": {"type": "object", "description": "论文信息对象（可选）"},
-            "format": {"type": "string", "default": "apa", "description": "引用格式（apa/mla/chicago）"}
+            "format": {"type": "string", "default": "apa", "description": "引用格式（apa/mla/chicago/bibtex/ris/gbt7714）"}
         },
         "required": []
     }
 
+    _formatter = CitationFormatter()
+    # 标准格式无需 LLM，纯字符串模板生成
+    _STANDARD_FORMATS = {"apa", "mla", "chicago", "bibtex", "ris", "gbt7714", "gbt"}
+
     async def execute(self, ctx: ToolContext, paper_info: dict = None, format: str = "apa", **kwargs) -> ToolResult:
-        """根据论文元数据和请求格式生成引用，不需要 LLM 调用"""
+        """根据论文元数据和请求格式生成引用"""
         # 尝试从 ctx.db 获取论文信息
         if not paper_info:
             paper_info = kwargs.get("paper_info", {})
@@ -93,13 +98,20 @@ class CitePaperTool(Tool):
                     "authors": paper.authors or "未知作者",
                     "year": paper.created_at.year if paper.created_at else "n.d.",
                     "journal": "",
+                    "doi": paper.doi or "",
                 }
 
         if not paper_info:
             return ToolResult(success=False, error="需要提供论文信息(paper_info)或paper_id")
 
-        # 使用 llm_service 的 generate_citation 方法
-        citation = await llm_service.generate_citation(paper_info, format)
+        fmt = format.lower().strip()
+
+        # 标准格式使用纯模板生成，不调用 LLM（更快、更稳定）
+        if fmt in self._STANDARD_FORMATS:
+            citation = self._formatter.format(paper_info, fmt)
+        else:
+            # 非标准格式回退到 LLM
+            citation = await llm_service.generate_citation(paper_info, fmt)
 
         return ToolResult(data={
             "citation": citation,

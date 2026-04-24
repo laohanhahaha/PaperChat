@@ -5,6 +5,7 @@ import { useSessionStore } from '../../stores/sessionStore';
 import { useMessageStore } from '../../stores/messageStore';
 import { useChatConfigStore } from '../../stores/chatConfigStore';
 import usePaperStore from '../../stores/paperStore';
+import useSettingsStore from '../../stores/settingsStore';
 import PaperSelector from '../PaperSelector/PaperSelector';
 import MarkdownContent from '../../utils/MarkdownRenderer';
 import { useTypewriter } from '../../hooks/useTypewriter';
@@ -253,6 +254,10 @@ function ChatPanel({
       updateLastMessage(msg.message || '请求失败，请重试。');
       setIsChatting(false);
     }, [typewriter, updateLastMessage, setIsChatting]),
+    onConfigUpdate: useCallback(() => {
+      // 配置变更时刷新设置，使 SettingsPage 服务状态自动更新
+      useSettingsStore.getState().fetchSettings();
+    }, []),
   });
 
   const handleSend = () => {

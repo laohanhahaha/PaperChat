@@ -118,3 +118,4 @@ class EventTypes:
     SESSION_CREATED = "session.created"
     INDEX_REBUILD_STARTED = "index.rebuild_started"
     INDEX_REBUILD_COMPLETED = "index.rebuild_completed"
+    CONFIG_UPDATED = "config.updated"

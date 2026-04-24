@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import WebViewPanel from '../components/WebView/WebViewPanel';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import usePaperStore from '../stores/paperStore';
+import useSettingsStore from '../stores/settingsStore';
 import { useSessionStore } from '../stores/sessionStore';
 import { useMessageStore } from '../stores/messageStore';
 import { useChatConfigStore } from '../stores/chatConfigStore';
@@ -161,6 +162,9 @@ function ChatPage() {
       resetStreamState();
     }, [typewriter, updateLastMessage, resetStreamState]),
     resetStreamState,
+    onConfigUpdate: useCallback(() => {
+      useSettingsStore.getState().fetchSettings();
+    }, []),
   });
 
   const {

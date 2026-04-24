@@ -14,7 +14,7 @@ from typing import Any
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from app.services.llm_service import llm_service, RAG_CHAT_SYSTEM_PROMPT, RAG_CHAT_WITH_SEARCH_SYSTEM_PROMPT
-from app.services.search.search_service import search_service
+from app.services.search.search_service import search_service as legacy_search_service
 from app.services.rag.rag_service import rag_service
 from app.services.core.event_bus import event_bus, Event, EventTypes
 from app.services.context_compressor import context_compressor
@@ -140,7 +140,23 @@ class RagChatHandler(ChatHandlerBase):
                 "type": "search_status",
                 "status": "searching"
             }))
-            web_results = await search_service.search(message, max_results=5)
+
+            # 优先使用 SearchDispatcher（多源），降级到旧 SearchService
+            search_dispatcher = getattr(getattr(websocket, "app", None), "state", None)
+            if search_dispatcher and hasattr(search_dispatcher, "search_dispatcher"):
+                dispatcher = search_dispatcher.search_dispatcher
+                raw_results = await dispatcher.search(query=message, max_results=5, search_type="general")
+                web_results = [
+                    {
+                        "title": r.title,
+                        "href": r.url,
+                        "body": r.snippet,
+                    }
+                    for r in raw_results
+                ]
+            else:
+                web_results = await legacy_search_service.search(message, max_results=5)
+
             await websocket.send_text(json.dumps({
                 "type": "search_status",
                 "status": "completed",
