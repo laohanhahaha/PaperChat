@@ -7,6 +7,89 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.0.0] - 2026-05-02
+
+### Added
+
+**多 Agent 系统**
+- 自定义子 Agent：创建、配置独立 Agent 角色与工具集
+- 子 Agent 管理 CRUD API 与前端管理面板
+- ReAct 推理引擎：思考-行动-观察循环
+- 任务规划器：复杂请求自动拆解为多步任务
+- 研究 Agent：自动搜索、阅读、分析、汇总多篇论文
+- 跨论文工具集：论文间对比、引用关联分析
+
+**模型配置与路由**
+- 多模型配置管理（前端/后端 CRUD）
+- 智能路由引擎：`local_only / smart_route / cloud_only` 三级策略
+- 预算控制与费用阈值确认
+- 按会话/模型统计 Token 消耗与费用
+
+**知识图谱**
+- 知识点与论文关联的可视化图谱
+- 图谱 CRUD API
+- 前端图谱交互组件（KnowledgeGraph）
+
+**批量操作**
+- 批量分析：对多篇论文一键批量分析
+- 文件夹导入：递归扫描目录批量导入 PDF
+- arXiv 预缓存：定时预抓取 arXiv 论文，可配置时间间隔与主题
+
+**导出与备份**
+- 论文/笔记/标注导出
+- 数据库备份/恢复 API
+
+**基础设施**
+- MCP 协议集成（Model Context Protocol 客户端、桥接、传输层）
+- 特性开关系统（Feature Flag）
+- 指标面板（Metrics Dashboard）
+- 隐私控制（论文可见性设�Z）
+- 离线队列：网络恢复后自动重试
+- 网络状态检测（OfflineBanner 组件）
+- 国际化支持（i18n 框架）
+- Mermaid 图表渲染支持
+- 上下文压缩器（长上下文优化）
+- 记忆中间件
+
+**前端组件**
+- SubAgentManager：子 Agent 管理界面
+- ModelManager：模型配置管理
+- CostConfirmDialog：费用确认弹窗
+- ModelIndicator：当前模型指示器
+- KnowledgeGraph：知识图谱可视化
+- BatchAnalysis：批量分析面板
+- MetricsDashboard：指标仪表盘
+- OfflineBanner：离线提示横幅
+- MermaidChart：Mermaid 图表渲染
+
+**后端服务模块**
+- `services/routing/`：智能路由引擎
+- `services/cost/`：成本计算服务
+- `services/export/`：导出服务
+- `services/privacy/`：隐私控制
+- `services/security/`：安全模块
+- `services/metrics/`：指标收集
+- `services/health/`：健康检查
+- `services/citation/`：引用管理
+- `services/precache_service.py`：arXiv 预缓存
+- `services/agent/config_agent.py`：配置 Agent
+
+### Changed
+- 后端架构模块化重构，服务层拆分为独立子模块
+- 四层配置体系：代码默认值 → `.env` → `paperchat.yaml` → 用户数据库设置
+- RAG 增强：集成 bge-reranker-v2-m3 重排序器
+- WebSocket 状态管理与认证分离
+- 启动脚本优化：带健康检查与依赖验证
+
+### Removed
+- 废弃的 `services/search/` 模块（用新版 `services/search/` 替代）
+- 废弃的 `services/agent/tools/` 独立工具文件（整合到 Agent 系统）
+- 旧版 `backend/main.py`（统一通过 `run.py` 启动）
+- 旧版 `backend/services/` 顶层服务
+- 开发计划文档（`优化计划.md`、`完成情况.md`、`当前情况.md`）
+
+---
+
 ## [4.0.0] - 2026-04-03
 
 ### Changed
