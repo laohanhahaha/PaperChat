@@ -4,10 +4,19 @@
 """
 from fastapi import APIRouter, Request
 
-router = APIRouter(prefix="/api/v1/health", tags=["health"])
+router = APIRouter(prefix="/api/v1", tags=["health"])
 
 
-@router.get("/services")
+@router.get("/health")
+async def health_check():
+    """基础健康检查端点"""
+    return {
+        "status": "ok",
+        "message": "ChatPDF API v3.1 (WebSocket + LangChain + SQLAlchemy)"
+    }
+
+
+@router.get("/health/services")
 async def get_service_health(request: Request):
     """返回所有服务健康状态（读取缓存，不发起新检查）
 
@@ -37,7 +46,7 @@ async def get_service_health(request: Request):
     }
 
 
-@router.post("/check")
+@router.post("/health/check")
 async def trigger_health_check(request: Request):
     """手动触发健康检查（并行检查所有服务）
 

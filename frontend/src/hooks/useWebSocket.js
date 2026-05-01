@@ -1,4 +1,5 @@
 import { useEffect, useCallback, useSyncExternalStore } from 'react';
+import offlineQueue from '../services/offlineQueue';
 
 const WS_URL = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws`;
 const MAX_RETRIES = 5;
@@ -27,6 +28,19 @@ function globalConnect() {
   ws.onopen = () => {
     globalRetryCount = 0;
     notifyStatusChange('connected');
+    // 网络恢复后重放离线队列中的消息
+    if (offlineQueue.size > 0) {
+      offlineQueue.replayAll(async (item) => {
+        if (globalWs?.readyState === WebSocket.OPEN) {
+          const { id, timestamp, ...payload } = item;
+          globalWs.send(JSON.stringify(payload));
+        }
+      }).then(results => {
+        console.log('离线队列重放完成:', results);
+      }).catch(err => {
+        console.error('离线队列重放出错:', err);
+      });
+    }
   };
 
   ws.onmessage = (event) => {
@@ -107,51 +121,63 @@ export default function useWebSocket() {
   }, []);
 
   const sendRagMessage = useCallback((message, paperId, sessionId = null, userId = null, enableSearch = false) => {
-    if (globalWs?.readyState === WebSocket.OPEN) {
-      globalWs.send(JSON.stringify({
-        type: 'rag_chat',
-        message,
-        paper_id: paperId,
-        session_id: sessionId,
-        user_id: userId || 1,
-        enable_search: enableSearch
-      }));
-      return true;
+    const payload = {
+      type: 'rag_chat',
+      message,
+      paper_id: paperId,
+      session_id: sessionId,
+      user_id: userId || 1,
+      enable_search: enableSearch
+    };
+    // 离线或 WS 断连时入离线队列
+    if (!navigator.onLine || globalWs?.readyState !== WebSocket.OPEN) {
+      offlineQueue.enqueue(payload);
+      console.warn(navigator.onLine ? 'WS 断连，消息已缓存' : '离线状态，消息已缓存到离线队列');
+      return false;
     }
-    console.warn('WebSocket not connected, cannot send message');
-    return false;
+    globalWs.send(JSON.stringify(payload));
+    return true;
   }, []);
 
   const sendCrossDocMessage = useCallback((message, paperIds, sessionId = null, userId = null) => {
-    if (globalWs?.readyState === WebSocket.OPEN) {
-      globalWs.send(JSON.stringify({
-        type: 'cross_doc_chat',
-        message,
-        paper_ids: paperIds,
-        session_id: sessionId,
-        user_id: userId || 1
-      }));
-      return true;
+    const payload = {
+      type: 'cross_doc_chat',
+      message,
+      paper_ids: paperIds,
+      session_id: sessionId,
+      user_id: userId || 1
+    };
+    // 离线或 WS 断连时入离线队列
+    if (!navigator.onLine || globalWs?.readyState !== WebSocket.OPEN) {
+      offlineQueue.enqueue(payload);
+      console.warn(navigator.onLine ? 'WS 断连，消息已缓存' : '离线状态，消息已缓存到离线队列');
+      return false;
     }
-    console.warn('WebSocket not connected, cannot send message');
-    return false;
+    globalWs.send(JSON.stringify(payload));
+    return true;
   }, []);
 
-  const sendUnifiedChatMessage = useCallback((message, paperId = null, paperIds = [], sessionId = null, enableSearch = false, images = []) => {
-    if (globalWs?.readyState === WebSocket.OPEN) {
-      globalWs.send(JSON.stringify({
-        type: 'unified_chat',
-        message,
-        paper_id: paperId,
-        paper_ids: paperIds || [],
-        session_id: sessionId,
-        enable_search: enableSearch,
-        images: images || []
-      }));
-      return true;
+  const sendUnifiedChatMessage = useCallback((message, paperId = null, paperIds = [], sessionId = null, enableSearch = false, images = [], functionTool = null) => {
+    const payload = {
+      type: 'unified_chat',
+      message,
+      paper_id: paperId,
+      paper_ids: paperIds || [],
+      session_id: sessionId,
+      enable_search: enableSearch,
+      images: images || [],
+    };
+    if (functionTool) {
+      payload.forced_tool = functionTool;
     }
-    console.warn('WebSocket not connected, cannot send message');
-    return false;
+    // 离线或 WS 断连时入离线队列
+    if (!navigator.onLine || globalWs?.readyState !== WebSocket.OPEN) {
+      offlineQueue.enqueue(payload);
+      console.warn(navigator.onLine ? 'WS 断连，消息已缓存' : '离线状态，消息已缓存到离线队列');
+      return false;
+    }
+    globalWs.send(JSON.stringify(payload));
+    return true;
   }, []);
 
   const sendCancel = useCallback(() => {
@@ -159,6 +185,15 @@ export default function useWebSocket() {
       globalWs.send(JSON.stringify({ type: 'cancel' }));
       return true;
     }
+    return false;
+  }, []);
+
+  const sendCostConfirm = useCallback((confirmed) => {
+    if (globalWs?.readyState === WebSocket.OPEN) {
+      globalWs.send(JSON.stringify({ type: 'cost_confirmed', confirmed }));
+      return true;
+    }
+    console.warn('WebSocket not connected, cannot send cost confirm');
     return false;
   }, []);
 
@@ -176,5 +211,5 @@ export default function useWebSocket() {
     };
   }, []);
 
-  return { status, sendMessage, sendRagMessage, sendCrossDocMessage, sendUnifiedChatMessage, sendCancel, onMessage, connect: globalConnect };
+  return { status, sendMessage, sendRagMessage, sendCrossDocMessage, sendUnifiedChatMessage, sendCostConfirm, sendCancel, onMessage, connect: globalConnect };
 }

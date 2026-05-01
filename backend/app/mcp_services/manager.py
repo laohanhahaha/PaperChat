@@ -77,20 +77,29 @@ class MCPManager:
     # 动态管理
     # ------------------------------------------------------------------
 
-    async def add_server(self, config: MCPServerConfig) -> None:
-        """动态添加并连接 Server"""
+    async def add_server(self, config: MCPServerConfig) -> bool:
+        """动态添加并连接 Server
+
+        Returns:
+            True 表示连接成功，False 表示失败（不抛出异常）
+        """
         if config.name in self._clients:
             logger.warning("[MCPManager] Server %s 已存在，跳过添加", config.name)
-            return
+            return True
 
         client = MCPClient(config)
         try:
             await client.connect()
             self._clients[config.name] = client
             logger.info("[MCPManager] Server %s 添加成功", config.name)
+            return True
         except Exception as exc:
-            logger.error("[MCPManager] 连接 Server %s 失败: %s", config.name, exc)
-            # 不抛出，确保其他 Server 不受影响
+            import traceback
+            logger.error(
+                "[MCPManager] 启动 Server %s 失败: %s\n%s",
+                config.name, repr(exc), traceback.format_exc()
+            )
+            return False
 
     async def remove_server(self, name: str) -> None:
         """断开并移除 Server"""

@@ -37,6 +37,7 @@ class PaperResponse(BaseModel):
     tags: Optional[str]
     category: Optional[str]
     reading_status: str
+    is_private: bool = False
     last_read_page: int
     last_read_at: Optional[datetime] = None
     created_at: datetime

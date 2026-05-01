@@ -534,4 +534,313 @@
   .dropzone {
     padding: 32px 20px;
   }
+
+  .scanTableColSize,
+  .scanTableColStatus {
+    display: none;
+  }
+}
+
+/* ========== 扫描文件夹 Tab ========== */
+.scanHint {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  background: rgba(184, 134, 11, 0.08);
+  border-radius: 0.375rem;
+  font-size: 13px;
+  color: var(--accent);
+}
+
+.scanInputGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.scanInput {
+  width: 100%;
+  padding: 12px 16px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 0.375rem;
+  font-size: 14px;
+  color: var(--text-h);
+  box-sizing: border-box;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.scanInput:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(184, 134, 11, 0.15);
+}
+
+.scanInput::placeholder {
+  color: var(--text-l);
+}
+
+.scanInput:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.scanCheckbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+  user-select: none;
+}
+
+.scanCheckbox input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.scanBtnLoading {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.scanErrorBox {
+  padding: 12px 16px;
+  background: rgba(220, 38, 38, 0.08);
+  border: 1px solid rgba(220, 38, 38, 0.2);
+  border-radius: 0.375rem;
+  font-size: 13px;
+  color: #dc2626;
+}
+
+/* 扫描结果统计 */
+.scanStats {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  font-size: 13px;
+  color: var(--text);
+  padding: 12px 16px;
+  background: var(--code-bg);
+  border-radius: 0.375rem;
+}
+
+.scanStatNew {
+  color: #4A7C59;
+  font-weight: 500;
+}
+
+.scanStatExists {
+  color: var(--text-l);
+  font-weight: 500;
+}
+
+/* 扫描结果表格 */
+.scanTable {
+  border: 1px solid var(--border);
+  border-radius: 0.375rem;
+  overflow: hidden;
+}
+
+.scanTableHeader {
+  display: flex;
+  align-items: center;
+  padding: 10px 16px;
+  background: var(--code-bg);
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-l);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.scanTableBody {
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.scanTableRow {
+  display: flex;
+  align-items: center;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+  transition: background 0.15s ease;
+}
+
+.scanTableRow:last-child {
+  border-bottom: none;
+}
+
+.scanTableRow:hover {
+  background: rgba(184, 134, 11, 0.04);
+}
+
+.scanRowDisabled {
+  opacity: 0.5;
+}
+
+.scanTableCheck {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.scanTableCheck input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.scanTableColName {
+  flex: 1;
+  min-width: 0;
+  color: var(--text-h);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding-right: 12px;
+}
+
+.scanTableColSize {
+  width: 72px;
+  flex-shrink: 0;
+  text-align: right;
+  color: var(--text-l);
+  font-size: 12px;
+  padding-right: 12px;
+}
+
+.scanTableColStatus {
+  width: 64px;
+  flex-shrink: 0;
+  text-align: center;
+}
+
+.statusTagNew {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 500;
+  background: rgba(74, 124, 89, 0.15);
+  color: #4A7C59;
+}
+
+.statusTagExists {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 500;
+  background: var(--code-bg);
+  color: var(--text-l);
+}
+
+/* 扫描操作按钮组 */
+.scanActions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.scanBackBtn {
+  padding: 14px 24px;
+  background: var(--code-bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 0.375rem;
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.scanBackBtn:hover {
+  background: var(--border);
+}
+
+/* 导入详情 */
+.scanDetailsToggle {
+  display: flex;
+  justify-content: center;
+}
+
+.scanDetailsList {
+  border: 1px solid var(--border);
+  border-radius: 0.375rem;
+  overflow: hidden;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.scanDetailItem {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+
+.scanDetailItem:last-child {
+  border-bottom: none;
+}
+
+.scanDetailName {
+  flex: 1;
+  min-width: 0;
+  color: var(--text-h);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.scanDetailSuccess {
+  color: #4A7C59;
+  font-weight: 500;
+  font-size: 12px;
+}
+
+.scanDetailSkipped {
+  color: var(--accent);
+  font-weight: 500;
+  font-size: 12px;
+}
+
+.scanDetailError {
+  color: #dc2626;
+  font-weight: 500;
+  font-size: 12px;
+}
+
+.scanDetailMsg {
+  color: var(--text-l);
+  font-size: 12px;
+  max-width: 200px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 不确定进度条动画 */
+.progressIndeterminate {
+  width: 40% !important;
+  animation: indeterminate 1.5s ease-in-out infinite;
+}
+
+@keyframes indeterminate {
+  0% { transform: translateX(-100%); }
+  50% { transform: translateX(150%); }
+  100% { transform: translateX(-100%); }
 }

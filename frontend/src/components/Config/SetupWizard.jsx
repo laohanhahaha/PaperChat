@@ -4,18 +4,13 @@ import styles from './SetupWizard.module.css';
 
 // 免费服务列表
 const FREE_SERVICES = [
-  { name: 'arxiv', display: 'arXiv', icon: '📄', desc: '预印本论文搜索，无需 API Key' },
-  { name: 'semantic_scholar', display: 'Semantic Scholar', icon: '🎓', desc: '学术论文搜索与引用分析，可选 API Key' },
-  { name: 'crossref', display: 'CrossRef', icon: '🔗', desc: 'DOI 解析与学术元数据，无需 API Key' },
-  { name: 'dblp', display: 'DBLP', icon: '💻', desc: '计算机科学文献数据库，无需 API Key' },
+  { name: 'academic_mcp', display: 'Academic MCP', icon: '🎓', desc: '学术论文搜索、下载与阅读，覆盖 arXiv、PubMed、Google Scholar 等 18 个平台' },
+  { name: 'open_websearch', display: 'Open WebSearch', icon: '🔍', desc: '通用网络搜索，支持 9 个搜索引擎' },
 ];
 
 // 付费/需要 API Key 的服务
 const PAID_SERVICES = [
   { name: 'zotero', display: 'Zotero', icon: '📚', desc: '个人文献管理', keyLabel: 'Zotero API Key', extraFields: [{ key: 'library_id', label: 'Library ID', placeholder: '输入 Zotero 用户 ID' }] },
-  { name: 'bing', display: 'Bing 搜索', icon: '🔍', desc: '通用网络搜索', keyLabel: 'Bing Search API Key' },
-  { name: 'tavily', display: 'Tavily 搜索', icon: '🤖', desc: 'AI 优化搜索', keyLabel: 'Tavily API Key' },
-  { name: 'brave', display: 'Brave 搜索', icon: '🦁', desc: '隐私优先搜索', keyLabel: 'Brave Search API Key' },
 ];
 
 const STEPS = ['welcome', 'free', 'paid', 'done'];

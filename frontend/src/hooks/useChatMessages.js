@@ -48,6 +48,8 @@ export function useChatMessages({
 
   useEffect(() => {
     const shouldAccept = () => !isChattingRef || isChattingRef.current;
+    // 跟踪最近一次 agent_action 的工具名，用于 observation 时判断是否需要清除 loading
+    let lastAgentActionTool = null;
 
     const unsubs = [
       onMessage('rag_chat_chunk', (msg) => {
@@ -97,9 +99,37 @@ export function useChatMessages({
       }),
       onMessage('agent_action', (msg) => {
         if (addAgentStep) addAgentStep({ type: 'agent_action', step: msg.step || 0, tool: msg.tool, input: msg.input, subAgent: msg.sub_agent || msg.subAgent });
+        lastAgentActionTool = msg.tool || null;
+        // 搜索论文工具触发时，先设置 loading 态的 toolResult
+        if (msg.tool === 'search_papers' && setLastMessageToolResult) {
+          setLastMessageToolResult({
+            tool: 'search_papers',
+            resultType: 'papers',
+            content: JSON.stringify({ _loading: true }),
+          });
+        }
       }),
       onMessage('agent_observation', (msg) => {
         if (addAgentStep) addAgentStep({ type: 'agent_observation', step: msg.step || 0, content: msg.content, subAgent: msg.sub_agent || msg.subAgent });
+        // Agent 模式下 search_papers 不会发送 tool_result 事件，
+        // 需要在 observation 到达时清除 loading 态
+        if (lastAgentActionTool === 'search_papers' && setLastMessageToolResult) {
+          // 解析 observation 内容，尝试提取论文数量用于展示
+          const content = msg.content || '';
+          const countMatch = content.match(/找到\s*(\d+)\s*篇/);
+          const count = countMatch ? parseInt(countMatch[1], 10) : 0;
+          setLastMessageToolResult({
+            tool: 'search_papers',
+            resultType: 'papers',
+            content: JSON.stringify({
+              papers: [],
+              source: 'agent',
+              summary: content,
+              count,
+            }),
+          });
+          lastAgentActionTool = null;
+        }
       }),
       onMessage('agent_reflection', (msg) => {
         if (addAgentStep) addAgentStep({ type: 'reflection', content: msg.content, subAgent: msg.sub_agent || msg.subAgent });

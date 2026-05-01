@@ -14,7 +14,7 @@ from app.models.knowledge import KnowledgeCard, KnowledgeRelation
 from app.models.highlight import Highlight
 from app.models.paper import Paper
 from app.services.llm_service import llm_service
-from app.services.rag.rag_service import rag_service
+from app.services.rag_service import rag_service
 from langchain_core.messages import SystemMessage, HumanMessage
 from app.prompts.service import (  # 从 app.prompts 统一导入
     AUTO_TAG_PROMPT,
@@ -327,7 +327,7 @@ class KnowledgeService:
         # 1. 向量检索
         try:
             collection_name = f"knowledge_{user_id}"
-            from app.services.rag.rag_service import rag_service
+            from app.services.rag_service import rag_service
             
             # 获取 collection
             try:
@@ -424,7 +424,7 @@ class KnowledgeService:
             card: 知识卡片对象
         """
         try:
-            from app.services.rag.rag_service import rag_service
+            from app.services.rag_service import rag_service
             
             collection_name = f"knowledge_{card.user_id}"
             collection = rag_service.chroma_client.get_or_create_collection(
@@ -470,7 +470,7 @@ class KnowledgeService:
             card_id: 卡片 ID
         """
         try:
-            from app.services.rag.rag_service import rag_service
+            from app.services.rag_service import rag_service
             collection_name = f"knowledge_{user_id}"
             collection = rag_service.chroma_client.get_collection(name=collection_name)
             collection.delete(ids=[f"card_{card_id}"])

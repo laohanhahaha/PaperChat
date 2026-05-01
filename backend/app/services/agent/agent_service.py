@@ -66,6 +66,22 @@ class _RegistryDictView:
     def __len__(self) -> int:
         return len(self._registry)
 
+    def keys(self):
+        """返回所有已注册工具的名称列表"""
+        return [tool.name for tool in self._registry.list_tools()]
+
+    def items(self):
+        """返回 (name, tool) 元组列表，与字典.items()兼容"""
+        return [(tool.name, tool) for tool in self._registry.list_tools()]
+
+    def __iter__(self):
+        """支持 for name in self.tools 迭代"""
+        return iter(self.keys())
+
+    def __contains__(self, name: str) -> bool:
+        """支持 'tool_name' in self.tools 检查"""
+        return self.get(name) is not None
+
 
 class AgentService:
     """Agent 核心服务"""
@@ -110,7 +126,6 @@ class AgentService:
             FindResearchGapsTool,
             CrossPaperReasonTool,
             # multimodal_tools
-            AnalyzeChartTool,
             MultimodalSearchTool,
         )
         tools = [
@@ -140,7 +155,6 @@ class AgentService:
             FindResearchGapsTool(),
             CrossPaperReasonTool(),
             # 多模态工具
-            AnalyzeChartTool(),
             MultimodalSearchTool(),
         ]
         self.tool_registry.register_many(tools)

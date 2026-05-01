@@ -31,7 +31,7 @@ async def _fetch_paper_evidence(
     Returns:
         {paper_id: [rag_result, ...]}
     """
-    from app.services.rag.rag_service import rag_service
+    from app.services.rag_service import rag_service
 
     tasks = [rag_service.search(pid, query, top_k=top_k) for pid in paper_ids]
     results_list = await asyncio.gather(*tasks, return_exceptions=True)

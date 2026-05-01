@@ -480,6 +480,7 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  position: relative;
 }
 
 .intentBar {
@@ -591,12 +592,14 @@
   box-shadow: 0 1px 3px rgba(92, 64, 51, 0.06);
 }
 
-/* hover 时显示保存按钮 */
-.messageBubble:hover .saveNoteBtn {
+/* hover 时显示保存按钮和转为编辑按钮 */
+.messageBubble:hover .saveNoteBtn,
+.messageBubble:hover .convertEditBtn {
   opacity: 1 !important;
 }
 
-.saveNoteBtn {
+.saveNoteBtn,
+.convertEditBtn {
   transition: opacity 0.15s, background 0.15s;
 }
 
@@ -966,4 +969,26 @@
   .sourcesBlock {
     padding-left: 16px;
   }
+}
+
+/* 回到底部按钮 */
+.scrollToBottomBtn {
+  position: absolute;
+  bottom: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 6px 16px;
+  border-radius: 20px;
+  background: var(--primary-color, #4a9eff);
+  color: white;
+  border: none;
+  cursor: pointer;
+  font-size: 13px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  z-index: 10;
+  transition: opacity 0.2s;
+}
+
+.scrollToBottomBtn:hover {
+  opacity: 0.9;
 }

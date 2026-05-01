@@ -6,7 +6,7 @@
 - smart_chunk_text 分块逻辑
 - index_paper 调用 embedding + collection.add
 - search 返回格式
-- delete_index / invalidate_bm25_cache
+- delete_paper_index / invalidate_bm25_cache
 - BM25 缓存命中 / 失效
 """
 import json
@@ -14,7 +14,7 @@ import pytest
 import pytest_asyncio
 from unittest.mock import AsyncMock, MagicMock, patch, PropertyMock
 
-from app.services.rag.rag_service import RAGService
+from app.services.rag_service import RAGService
 
 
 # ── fixtures ─────────────────────────────────────────────────────────────────
@@ -29,7 +29,7 @@ def mock_chroma_client():
 @pytest.fixture
 def rag(mock_chroma_client):
     """创建 RAGService 实例，patch ChromaDB 初始化"""
-    with patch("app.services.rag.rag_service.chromadb.PersistentClient", return_value=mock_chroma_client):
+    with patch("app.services.rag_service.chromadb.PersistentClient", return_value=mock_chroma_client):
         with patch("os.makedirs"):
             service = RAGService()
     return service
@@ -105,10 +105,8 @@ async def test_index_paper_calls_embedding_and_add(rag):
     # 直接设置 _embedding_model，绕过 async property
     rag._embedding_model = mock_model
 
-    with patch("app.services.core.event_bus.event_bus") as mock_bus:
-        mock_bus.publish = AsyncMock()
-        text_blocks = [{"text": "测试文本内容，足够长的段落", "page_number": 1}]
-        result = await rag.index_paper(paper_id=1, text_blocks=text_blocks)
+    text_blocks = [{"text": "测试文本内容，足够长的段落", "page_number": 1}]
+    result = await rag.index_paper(paper_id=1, text_blocks=text_blocks)
 
     assert result is True
     assert mock_collection.add.called
@@ -122,9 +120,7 @@ async def test_index_paper_skips_if_already_indexed(rag):
 
     rag.chroma_client.get_or_create_collection.return_value = mock_collection
 
-    with patch("app.services.core.event_bus.event_bus") as mock_bus:
-        mock_bus.publish = AsyncMock()
-        result = await rag.index_paper(paper_id=99, text_blocks=[])
+    result = await rag.index_paper(paper_id=99, text_blocks=[])
 
     assert result is True
     assert not mock_collection.add.called  # 不应调用 add
@@ -138,9 +134,7 @@ async def test_index_paper_returns_false_on_empty_chunks(rag):
 
     rag.chroma_client.get_or_create_collection.return_value = mock_collection
 
-    with patch("app.services.core.event_bus.event_bus") as mock_bus:
-        mock_bus.publish = AsyncMock()
-        result = await rag.index_paper(paper_id=2, text_blocks=[])
+    result = await rag.index_paper(paper_id=2, text_blocks=[])
 
     assert result is False
 
@@ -207,29 +201,29 @@ async def test_search_result_format(rag):
         assert "chunk_index" in r
 
 
-# ── 测试：delete_index ───────────────────────────────────────────────────────
+# ── 测试：delete_paper_index ──────────────────────────────────────────────────
 
 @pytest.mark.asyncio
-async def test_delete_index_calls_delete_collection(rag):
-    """delete_index 调用 chroma_client.delete_collection"""
-    await rag.delete_index(paper_id=5)
-    rag.chroma_client.delete_collection.assert_called_once_with("paper_5")
+async def test_delete_paper_index_calls_delete_collection(rag):
+    """delete_paper_index 调用 chroma_client.delete_collection"""
+    await rag.delete_paper_index(paper_id=5)
+    rag.chroma_client.delete_collection.assert_called_once_with(name="paper_5")
 
 
 @pytest.mark.asyncio
-async def test_delete_index_clears_bm25_cache(rag):
-    """delete_index 清除对应的 BM25 缓存"""
+async def test_delete_paper_index_clears_bm25_cache(rag):
+    """delete_paper_index 清除对应的 BM25 缓存"""
     rag._bm25_cache["5"] = (MagicMock(), MagicMock())
-    await rag.delete_index(paper_id=5)
+    await rag.delete_paper_index(paper_id=5)
     assert "5" not in rag._bm25_cache
 
 
 @pytest.mark.asyncio
-async def test_delete_index_handles_missing_collection(rag):
-    """collection 不存在时 delete_index 不应抛出异常"""
+async def test_delete_paper_index_handles_missing_collection(rag):
+    """collection 不存在时 delete_paper_index 不应抛出异常"""
     rag.chroma_client.delete_collection.side_effect = Exception("not found")
     # 不应抛出
-    await rag.delete_index(paper_id=999)
+    await rag.delete_paper_index(paper_id=999)
 
 
 # ── 测试：BM25 缓存命中 / 失效 ────────────────────────────────────────────────

@@ -1,5 +1,6 @@
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { useNavigationBlockerContext } from '../../contexts/NavigationBlockerContext';
 import styles from './Navbar.module.css';
 
 const NAV_ITEMS = [
@@ -14,8 +15,13 @@ function Navbar() {
     const location = useLocation();
     const navigate = useNavigate();
     const { t, i18n } = useTranslation();
+    const { tryNavigate } = useNavigationBlockerContext();
 
     const toggleLang = () => i18n.changeLanguage(i18n.language === 'zh' ? 'en' : 'zh');
+
+    const handleNavigate = (path) => {
+        tryNavigate(path, navigate);
+    };
 
     return (
         <nav className={styles.navbar}>
@@ -29,7 +35,7 @@ function Navbar() {
                     <div
                         key={item.path}
                         className={`${styles.navItem} ${location.pathname === item.path ? styles.active : ''}`}
-                        onClick={() => navigate(item.path)}
+                        onClick={() => handleNavigate(item.path)}
                         title={t(item.labelKey)}
                     >
                         <span className={styles.navIcon}>{item.icon}</span>
@@ -41,7 +47,7 @@ function Navbar() {
             <div className={styles.userSection}>
                 <div
                     className={`${styles.navItem} ${location.pathname === '/settings' ? styles.active : ''}`}
-                    onClick={() => navigate('/settings')}
+                    onClick={() => handleNavigate('/settings')}
                     title={t('nav.systemSettings')}
                 >
                     <span className={styles.navIcon}>⚙️</span>

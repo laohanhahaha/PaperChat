@@ -18,6 +18,7 @@ class AgentRole(str, Enum):
     RETRIEVER = "retriever"         # 检索器：从论文库定位信息
     ANALYZER = "analyzer"           # 分析器：评估论点、方法论
     RECOMMENDER = "recommender"     # 推荐器：发现研究空白、建议方向
+    CUSTOM = "custom"               # 动态创建的自定义角色
 
 
 @dataclass
@@ -26,16 +27,22 @@ class ResearchTask:
 
     Attributes:
         task_id: 任务唯一标识符（由协调器分配）
-        task_type: 任务类型，取值 "retrieve" | "analyze" | "recommend"
+        task_type: 任务类型，取值 "retrieve" | "analyze" | "recommend" | "custom"
         query: 子任务的具体问题或指令
         required_tools: 限制该任务可使用的工具列表（空列表表示不限制）
         depends_on: 依赖的其他任务 ID 列表，依赖任务完成后才可执行
+        agent_name: 子智能体显示名称（如 "文献综述专家"）
+        agent_prompt: 自定义系统提示词（空 = 按 task_type 用预置）
+        agent_icon: 前端图标标识（可选）
     """
     task_id: str
-    task_type: str                          # "retrieve" | "analyze" | "recommend"
+    task_type: str                          # "retrieve" | "analyze" | "recommend" | "custom"
     query: str                              # 子任务的具体问题
     required_tools: List[str] = field(default_factory=list)   # 限制可用的工具列表
     depends_on: List[str] = field(default_factory=list)       # 依赖的其他任务 ID
+    agent_name: str = ""                    # 子智能体显示名称（如 "文献综述专家"）
+    agent_prompt: str = ""                  # 自定义系统提示词（空 = 按 task_type 用预置）
+    agent_icon: str = ""                    # 前端图标标识（可选）
 
 
 @dataclass

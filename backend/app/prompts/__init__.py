@@ -22,6 +22,8 @@ from app.prompts.analyze import (
     ANALYZE_SYSTEM_PROMPT,
     DEEP_ANALYZE_PROMPT,
     COMPARE_PAPERS_PROMPT,
+    COMPARE_CONTENT_PROMPT,
+    EXTRACT_KEY_POINTS_PROMPT,
 )
 
 # ── chat ─────────────────────────────────────────────────────────────────────
@@ -101,6 +103,8 @@ __all__ = [
     "ANALYZE_SYSTEM_PROMPT",
     "DEEP_ANALYZE_PROMPT",
     "COMPARE_PAPERS_PROMPT",
+    "COMPARE_CONTENT_PROMPT",
+    "EXTRACT_KEY_POINTS_PROMPT",
     # chat
     "CHAT_SYSTEM_PROMPT",
     "GENERAL_CHAT_SYSTEM_PROMPT",

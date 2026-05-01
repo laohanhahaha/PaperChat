@@ -193,3 +193,39 @@ async def zotero_status(
         return {"configured": True, "connected": connected}
     finally:
         await client.close()
+
+
+@router.get("/{paper_id}")
+async def get_paper_citation(
+    paper_id: int,
+    format: str = "apa",
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """获取单篇论文的格式化引用"""
+    supported = ["bibtex", "ris", "apa", "mla", "chicago", "gbt7714", "gbt"]
+    if format.lower().strip() not in supported:
+        raise HTTPException(
+            status_code=400,
+            detail=f"不支持的引用格式: {format}。支持: {supported}",
+        )
+    result = await db.execute(
+        select(Paper).where(Paper.id == paper_id, Paper.user_id == current_user.id)
+    )
+    paper = result.scalar_one_or_none()
+    if not paper:
+        raise HTTPException(status_code=404, detail="论文不存在")
+    paper_info = {
+        "title": paper.title,
+        "authors": paper.authors or "未知作者",
+        "year": paper.created_at.year if paper.created_at else "n.d.",
+        "journal": "",
+        "doi": paper.doi or "",
+    }
+    citation = formatter.format(paper_info, format)
+    return {
+        "paper_id": paper_id,
+        "citation": citation,
+        "format": format,
+        "paper_title": paper.title,
+    }

@@ -37,7 +37,6 @@ from app.tools.cross_doc_tools import (
     CrossPaperReasonTool,
 )
 from app.tools.multimodal_tools import (
-    AnalyzeChartTool,
     MultimodalSearchTool,
 )
 
@@ -70,6 +69,5 @@ __all__ = [
     "FindResearchGapsTool",
     "CrossPaperReasonTool",
     # multimodal_tools
-    "AnalyzeChartTool",
     "MultimodalSearchTool",
 ]

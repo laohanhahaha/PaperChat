@@ -18,6 +18,12 @@ from app.routers.health import router as health_router
 from app.routers.citations import router as citations_router
 from app.routers.config import router as config_router
 from app.routers.upload import router as upload_router
+from app.routers.precache import router as precache_router
+from app.routers.model_config import router as model_config_router
+from app.routers.routing import router as routing_router
+from app.routers.export import router as export_router
+from app.routers.folder_import import router as folder_import_router
+from app.routers.subagent import router as subagent_router
 
 __all__ = [
     "papers_router",
@@ -39,4 +45,10 @@ __all__ = [
     "citations_router",
     "config_router",
     "upload_router",
+    "precache_router",
+    "model_config_router",
+    "routing_router",
+    "export_router",
+    "folder_import_router",
+    "subagent_router",
 ]

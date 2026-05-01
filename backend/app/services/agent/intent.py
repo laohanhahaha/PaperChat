@@ -21,146 +21,313 @@ from app.prompts.intent import (
 logger = logging.getLogger(__name__)
 
 
+# ============ 论文上下文关键词 ============
+# 当消息包含这些词时，说明用户在谈论论文/文档，辅助触发工具意图
+_PAPER_CONTEXT_WORDS = [
+    "论文", "文章", "paper", "文献", "这篇", "全文", "原文",
+    "pdf", "文档", "manuscript", "article",
+]
+
+
 # ============ 意图关键词映射 ============
+# 设计原则：
+# - 强关键词（权重2）：精确的、不会出现在日常对话中的组合词
+# - 弱关键词（权重1）：需要搭配论文上下文才有意义的泛用词
+# - threshold 统一为 3：单个泛用词（1）+ 上下文（1）= 2 不够；
+#   需要精确关键词（2）+ 上下文（1），或多个弱词组合
+# - 极精确的关键词可给权重 3 直接触发
 
 INTENT_KEYWORDS: dict[str, dict] = {
     "chapter_overview": {
-        "keywords": ["章节概述", "概述", "章节总结", "文章结构", "目录", " outline ", "章节内容", "各章节", "章节介绍", "结构分析"],
+        "keywords": [
+            ("章节概述", 3), ("章节总结", 3), ("文章结构", 3), ("章节内容", 3),
+            ("各章节", 3), ("章节介绍", 3), ("论文结构", 3), ("论文目录", 3),
+            ("章节结构", 3),
+            ("paper outline", 3), ("paper structure", 3),
+            ("结构分析", 2),
+            # 已移除："目录"、"概述" — 日常对话中太常见
+        ],
+        "threshold": 3,
         "intent": "chapter_overview",
         "tool": "analyze_paper"
     },
     "deep_analysis": {
-        "keywords": ["深度分析", "深入分析", "详细分析", "深层分析", "分析", "研究分析", "学术分析", "critical analysis", "detailed analysis"],
+        "keywords": [
+            ("深度分析论文", 3), ("深入分析论文", 3), ("详细分析论文", 3),
+            ("深度分析这篇", 3), ("深入分析这篇", 3),
+            ("分析这篇论文", 3), ("分析这篇文章", 3),
+            ("研究方法分析", 3), ("方法论分析", 3),
+            ("critical analysis", 2), ("detailed analysis", 2),
+            ("深度分析", 2), ("深入分析", 2), ("详细分析", 2),
+            ("学术分析", 2),
+            # 已移除："分析"、"分析一下"、"帮我分析" — 日常对话中极其常见
+        ],
+        "threshold": 3,
         "intent": "deep_analysis",
         "tool": "deep_analyze_paper"
     },
     "key_points": {
-        "keywords": ["核心知识点", "关键点", "重点", "核心要点", "主要观点", "关键概念", "核心概念", "知识点", "key points", "main points", "核心思想"],
+        "keywords": [
+            ("核心知识点", 3), ("关键要点", 3), ("核心要点", 3),
+            ("主要观点", 2), ("关键概念", 2), ("核心概念", 2), ("核心思想", 2),
+            ("key points", 2), ("main points", 2),
+            ("知识点", 1),
+            # 已移除："重点"、"关键点" — 日常对话中太常见
+        ],
+        "threshold": 3,
         "intent": "key_points",
         "tool": "extract_key_points"
     },
     "compare": {
-        "keywords": ["对比", "比较", "差异", "异同", "对照", "compare", "comparison", "versus", "vs "],
+        "keywords": [
+            ("对比分析论文", 3), ("比较这两篇", 3), ("论文对比", 3),
+            ("对比分析", 2), ("异同点", 2), ("有何差异", 2),
+            ("compare papers", 2), ("comparison", 2),
+            # 已移除："对比"、"比较"、"差异"、"异同"、"对照" — 日常对话中常见
+        ],
+        "threshold": 3,
         "intent": "comparison",
         "tool": "compare_content"
     },
     "summary": {
-        "keywords": ["摘要", "总结", "概括", "提炼", "summarize", "summary", "概括"],
+        "keywords": [
+            ("全文总结", 3), ("论文总结", 3), ("论文摘要", 3),
+            ("总结这篇论文", 3), ("总结这篇文章", 3),
+            ("概括全文", 3), ("总结全文", 3),
+            ("summarize paper", 3), ("paper summary", 3),
+            ("summarize", 2), ("summary", 2),
+            # 已移除："总结"、"摘要"、"概括"、"提炼"、"帮我总结"、"总结一下"、"概括一下"
+            # — 日常对话中极其常见
+        ],
+        "threshold": 3,
         "intent": "summary",
         "tool": "summarize"
     },
     "translate": {
-        "keywords": ["翻译", "译成", "translate", "中译", "英译"],
+        "keywords": [
+            ("翻译论文", 3), ("翻译这篇", 3), ("翻译这段", 3),
+            ("中译英", 3), ("英译中", 3),
+            ("帮我翻译", 2), ("翻译", 2), ("译成", 2), ("translate", 2),
+        ],
+        "threshold": 3,
         "intent": "translate",
         "tool": "translate"
     },
     "explain": {
-        "keywords": ["解释", "说明", "什么是", "含义", "定义", "explain", "definition", "definition of"],
+        "keywords": [
+            ("名词解释", 3), ("术语解释", 3), ("概念解释", 3),
+            ("是什么意思", 2), ("explain", 2), ("definition of", 2),
+            ("什么是", 1), ("请解释", 1),
+            # 已移除："解释"、"含义"、"定义"、"解释一下"、"帮我解释" — 日常对话中常见
+        ],
+        "threshold": 3,
         "intent": "explain",
         "tool": "explain_term"
     },
     "cross_doc": {
-        "keywords": ["跨文档", "跨论文", "多篇论文", "多文档", "across papers", "multiple papers"],
+        "keywords": [
+            ("跨文档", 3), ("多篇论文", 3), ("多文档", 3),
+            ("跨论文对比", 3), ("跨论文分析", 3),
+            ("across papers", 3), ("multiple papers", 3),
+        ],
+        "threshold": 3,
         "intent": "cross_doc",
         "tool": "cross_doc_chat"
     },
     "quality_assessment": {
-        "keywords": ["质量评估", "评估", "好不好", "优缺点", "优劣势", "assess", "quality", "评估质量"],
+        "keywords": [
+            ("质量评估", 3), ("评估质量", 3), ("论文优缺点", 3),
+            ("assess quality", 3),
+            ("优缺点", 2), ("优劣势", 2),
+            # 已移除："评估" — 日常对话中常见
+        ],
+        "threshold": 3,
         "intent": "quality_assessment",
         "tool": "assess_quality"
     },
     "outline": {
-        "keywords": ["提纲", "大纲", "结构", "写报告", "写综述", "outline", "structure", "报告大纲"],
+        "keywords": [
+            ("写提纲", 3), ("生成大纲", 3), ("报告大纲", 3),
+            ("generate outline", 3),
+            ("写报告", 2),
+            # 已移除："提纲"、"大纲" — 可能出现在日常对话中
+        ],
+        "threshold": 3,
         "intent": "outline",
         "tool": "generate_outline"
     },
     # 写作类
     "literature_review": {
-        "keywords": ["文献综述", "综述", "写综述", "literature review"],
+        "keywords": [
+            ("文献综述", 3), ("写综述", 3), ("literature review", 3),
+            # 已移除："综述" — 可能出现在日常对话中
+        ],
+        "threshold": 3,
         "intent": "literature_review",
         "tool": "literature_review"
     },
     "cite_paper": {
-        "keywords": ["引用格式", "格式化引用", "APA", "MLA", "Chicago", "citation", "cite"],
+        "keywords": [
+            ("引用格式", 3), ("格式化引用", 3), ("citation format", 3),
+            ("APA格式", 3), ("MLA格式", 3),
+            # 已移除："APA"、"MLA"、"Chicago"、"citation" — 单字母缩写太容易误触发
+        ],
+        "threshold": 3,
         "intent": "cite_paper",
         "tool": "cite_paper"
     },
     "polish_text": {
-        "keywords": ["润色", "改写", "优化文本", "polish", "rewrite"],
+        "keywords": [
+            ("润色论文", 3), ("润色文章", 3), ("优化文本", 3),
+            ("帮我润色", 3), ("帮我改写", 3),
+            ("polish", 2), ("rewrite", 2), ("润色", 2),
+            # 已移除："改写" — 日常对话中可能出现
+        ],
+        "threshold": 3,
         "intent": "polish_text",
         "tool": "polish_text"
     },
     # 知识库类
     "save_card": {
-        "keywords": ["保存知识", "记下来", "保存卡片", "save knowledge", "save card"],
+        "keywords": [
+            ("保存知识", 3), ("保存卡片", 3), ("保存笔记", 3),
+            ("save knowledge", 3), ("save card", 3),
+            # 已移除："记下来" — 日常对话中太常见
+        ],
+        "threshold": 3,
         "intent": "save_card",
         "tool": "save_card"
     },
     "search_cards": {
-        "keywords": ["搜索知识", "查找笔记", "知识库搜索", "search knowledge", "search cards"],
+        "keywords": [
+            ("搜索知识", 3), ("查找笔记", 3), ("知识库搜索", 3),
+            ("search knowledge", 3), ("search cards", 3),
+        ],
+        "threshold": 3,
         "intent": "search_cards",
         "tool": "search_cards"
     },
     # 论文查询类
     "recent_papers": {
-        "keywords": ["最近论文", "最近读了", "论文列表", "recent papers"],
+        "keywords": [
+            ("最近上传", 3), ("最近读的", 3), ("论文库列表", 3),
+            ("列出论文", 3), ("所有论文", 3), ("论文列表", 3),
+            ("最近的论文", 3), ("上传的论文", 3),
+            ("recent papers", 3), ("paper list", 3), ("list papers", 3),
+        ],
+        "threshold": 3,
         "intent": "recent_papers",
         "tool": "recent_papers"
     },
     "search_papers": {
-        "keywords": ["搜索论文", "查找论文", "找论文", "search papers"],
+        "keywords": [
+            ("搜索论文", 3), ("查找论文", 3), ("找论文", 3),
+            ("搜索关于", 2), ("搜索有关", 2),
+            ("search papers", 3), ("find papers", 3),
+        ],
+        "threshold": 3,
         "intent": "search_papers",
         "tool": "search_papers"
     },
     # 跨论文推理类
     "detect_contradiction": {
-        "keywords": ["矛盾", "冲突", "不一致", "contradiction", "conflict"],
+        "keywords": [
+            ("检测矛盾", 3), ("发现冲突", 3), ("观点不一致", 3),
+            ("观点矛盾", 3), ("论点冲突", 3),
+            ("contradiction", 2), ("detect conflict", 2),
+            # 已移除："矛盾"、"冲突"、"不一致" — 日常对话中常见
+        ],
+        "threshold": 3,
         "intent": "detect_contradiction",
         "tool": "detect_contradiction"
     },
     "trace_evolution": {
-        "keywords": ["演进", "发展历程", "变化趋势", "方法演变", "evolution", "evolution of method"],
+        "keywords": [
+            ("方法演进", 3), ("发展历程", 3), ("变化趋势", 3), ("方法演变", 3),
+            ("技术演进", 3),
+            ("evolution of", 2), ("trace evolution", 2),
+            # 已移除："演进" — 日常对话中可能出现
+        ],
+        "threshold": 3,
         "intent": "trace_evolution",
         "tool": "trace_evolution"
     },
     "verify_consistency": {
-        "keywords": ["一致性", "验证结论", "是否一致", "consistency", "verify"],
+        "keywords": [
+            ("验证一致性", 3), ("验证结论", 3), ("结论是否一致", 3),
+            ("verify consistency", 3),
+            # 已移除："一致性"、"是否一致" — 日常对话中可能出现
+        ],
+        "threshold": 3,
         "intent": "verify_consistency",
         "tool": "verify_consistency"
     },
     "find_research_gaps": {
-        "keywords": ["研究空白", "未解决", "局限性", "研究缺口", "research gap", "gaps"],
+        "keywords": [
+            ("研究空白", 3), ("研究缺口", 3), ("未解决问题", 3),
+            ("research gap", 3), ("find gaps", 3),
+            # 已移除："局限性" — 日常对话中常见
+        ],
+        "threshold": 3,
         "intent": "find_research_gaps",
         "tool": "find_research_gaps"
     },
     "cross_paper_reason": {
-        "keywords": ["跨论文推理", "假设验证", "假设推理", "cross-paper reason", "hypothesis"],
+        "keywords": [
+            ("跨论文推理", 3), ("假设验证", 3), ("假设推理", 3),
+            ("跨论文", 2),
+            ("cross-paper reason", 3), ("cross paper reasoning", 3),
+            # 已移除："hypothesis" — 日常对话中可能出现
+        ],
+        "threshold": 3,
         "intent": "cross_paper_reason",
         "tool": "cross_paper_reason"
     },
     # 多模态类
     "image_analysis": {
-        "keywords": ["图片分析", "分析图片", "描述图片", "图像识别", "image analysis", "analyze image", "describe image"],
+        "keywords": [
+            ("图片分析", 3), ("分析图片", 3), ("描述图片", 3), ("图像识别", 3),
+            ("论文的图片", 3), ("论文的图", 3), ("文章的图", 3),
+            ("分析图", 2),
+            ("image analysis", 3), ("analyze image", 3), ("describe image", 3),
+        ],
+        "threshold": 3,
         "intent": "image_analysis",
         "tool": "analyze_chart"
     },
     "chart_extraction": {
-        "keywords": ["提取图表", "图表数据", "读取图表", "表格提取", "chart data", "extract chart", "read table"],
+        "keywords": [
+            ("提取图表", 3), ("图表数据", 3), ("读取图表", 3), ("表格提取", 3),
+            ("chart data", 3), ("extract chart", 3), ("read table", 3),
+        ],
+        "threshold": 3,
         "intent": "chart_extraction",
         "tool": "analyze_chart"
     },
     "visual_comparison": {
-        "keywords": ["图表对比", "视觉对比", "比较图表", "图像比较", "visual comparison", "compare charts", "compare figures"],
+        "keywords": [
+            ("图表对比", 3), ("视觉对比", 3), ("比较图表", 3), ("图像比较", 3),
+            ("visual comparison", 3), ("compare charts", 3), ("compare figures", 3),
+        ],
+        "threshold": 3,
         "intent": "visual_comparison",
         "tool": "analyze_chart"
     },
     "multimodal_search": {
-        "keywords": ["图片搜索", "以图搜文", "图文搜索", "视觉搜索", "image search", "visual search", "search by image"],
+        "keywords": [
+            ("图片搜索", 3), ("以图搜文", 3), ("图文搜索", 3), ("视觉搜索", 3),
+            ("image search", 3), ("visual search", 3), ("search by image", 3),
+        ],
+        "threshold": 3,
         "intent": "multimodal_search",
         "tool": "multimodal_search"
     },
     "cross_modal_reasoning": {
-        "keywords": ["图文推理", "跨模态", "图表推理", "图像推理", "cross modal", "visual reasoning", "multimodal reasoning"],
+        "keywords": [
+            ("图文推理", 3), ("跨模态推理", 3), ("图表推理", 3), ("图像推理", 3),
+            ("cross modal", 3), ("visual reasoning", 3), ("multimodal reasoning", 3),
+        ],
+        "threshold": 3,
         "intent": "cross_modal_reasoning",
         "tool": "analyze_chart"
     }
@@ -173,10 +340,25 @@ INTENT_KEYWORDS: dict[str, dict] = {
 
 # ============ 意图识别函数 ============
 
+def _has_paper_context(message_lower: str) -> bool:
+    """检测消息中是否包含论文/文档上下文词"""
+    return any(w in message_lower for w in _PAPER_CONTEXT_WORDS)
+
+
 def classify_by_keywords(message: str) -> dict:
-    """基于关键词的意图识别（快速识别，用于直接功能触发）
+    """基于关键词权重的意图识别（快速识别，用于直接功能触发）
 
     无 LLM 调用，< 1ms。
+
+    关键词格式：(keyword, weight) 元组
+    - 精确关键词（权重3）：非常精确的组合词，单独命中即可触发
+    - 强关键词（权重2）：较精确的词，需搭配论文上下文才能触发
+    - 弱关键词（权重1）：泛用词，需要多个组合或论文上下文才有意义
+
+    论文上下文加成：当消息包含论文相关词（论文/文章/paper等）时，+1 加成。
+    每个意图有 threshold=3 阈值，累计权重 >= threshold 才算匹配。
+
+    设计原则：宁可漏掉（交给 LLM 判断），也不要误触发。
 
     Args:
         message: 用户消息
@@ -187,22 +369,32 @@ def classify_by_keywords(message: str) -> dict:
         {"matched": False}
     """
     message_lower = message.lower()
+    has_paper_ctx = _has_paper_context(message_lower)
 
     best_match = None
     best_score = 0
 
     for intent_name, config in INTENT_KEYWORDS.items():
         score = 0
-        for keyword in config["keywords"]:
+        threshold = config.get("threshold", 3)
+        for kw_item in config["keywords"]:
+            if isinstance(kw_item, tuple):
+                keyword, weight = kw_item
+            else:
+                keyword, weight = kw_item, 1
             if keyword.lower() in message_lower:
-                score += 1
+                score += weight
 
-        if score > 0 and score > best_score:
+        # 论文上下文加成：当消息包含论文相关词时 +1
+        if score > 0 and has_paper_ctx:
+            score += 1
+
+        if score >= threshold and score > best_score:
             best_score = score
             best_match = {
                 "intent": config["intent"],
                 "tool": config["tool"],
-                "confidence": "high" if score >= 2 else "medium"
+                "confidence": "high" if score >= threshold + 2 else "medium"
             }
 
     if best_match:

@@ -1,10 +1,11 @@
-"""LLM 服务 - 基于 LangChain 的 DeepSeek 大模型交互"""
-import asyncio
+﻿"""LLM 服务 - 基于 LangChain 的 DeepSeek 大模型交互"""
 import asyncio
 import base64
+import contextvars
 import logging
+import os
 import time
-from typing import AsyncGenerator, Optional, Optional
+from typing import AsyncGenerator, List, Optional
 
 import httpx
 from langchain_openai import ChatOpenAI
@@ -33,26 +34,60 @@ from app.prompts import (
 
 logger = logging.getLogger(__name__)
 
+# Per-request 模型覆盖（避免全局单例并发串扰）
+_request_model = contextvars.ContextVar('request_model', default=None)
+
 
 class LLMService:
     """基于LangChain的DeepSeek大模型交互服务"""
     
     def __init__(self):
-        # 存储当前配置
-        self._model = "deepseek-chat"
+        # 存储当前配置（从环境变量读取，不再硬编码）
+        self._model = os.getenv("DEFAULT_LLM_MODEL", "deepseek-v4-flash")
         self._temperature = 0.3
         self._max_tokens = 4096
         self._api_key = settings.DEEPSEEK_API_KEY
-        self._api_base_url = "https://api.deepseek.com"
-        
-        self.llm = ChatOpenAI(
+        self._api_base_url = os.getenv("DEFAULT_LLM_BASE_URL", "https://api.deepseek.com")
+
+        self._default_llm = ChatOpenAI(
             model=self._model,
             api_key=self._api_key,
             base_url=self._api_base_url,
             temperature=self._temperature,
             max_tokens=self._max_tokens,
             streaming=True,
+            request_timeout=120,
         )
+        self._model_instances = {}
+
+    @property
+    def llm(self):
+        """获取当前 LLM 实例，支持 per-request 模型覆盖"""
+        model_override = _request_model.get()
+        if model_override and model_override != self._model:
+            # 安全过滤：本地 Ollama 模型（含 ':'）不使用云端 base_url
+            if ":" in model_override:
+                logger.warning(
+                    f"本地模型 {model_override} 被请求，但当前未配置本地 Ollama 端点，"
+                    f"回退到默认模型 {self._model}"
+                )
+                return self._default_llm
+            if model_override not in self._model_instances:
+                self._model_instances[model_override] = ChatOpenAI(
+                    model=model_override,
+                    api_key=self._api_key,
+                    base_url=self._api_base_url,
+                    temperature=self._temperature,
+                    max_tokens=self._max_tokens,
+                    streaming=True,
+                    request_timeout=120,
+                )
+            return self._model_instances[model_override]
+        return self._default_llm
+
+    @llm.setter
+    def llm(self, value):
+        self._default_llm = value
     
     def _is_masked_api_key(self, api_key: str) -> bool:
         """检查是否为脱敏后的 API Key
@@ -117,15 +152,16 @@ class LLMService:
         if api_base_url is not None:
             self._api_base_url = api_base_url
         
-        # 重新创建 LLM 实例
+        # 重新创建默认 LLM 实例
         try:
-            self.llm = ChatOpenAI(
+            self._default_llm = ChatOpenAI(
                 model=self._model,
                 api_key=self._api_key,
                 base_url=self._api_base_url,
                 temperature=self._temperature,
                 max_tokens=self._max_tokens,
                 streaming=True,
+                request_timeout=120,
             )
         except Exception as e:
             # 如果创建失败，保持原实例，记录错误
@@ -695,111 +731,47 @@ class LLMService:
         image_data: str,
         prompt: str = "请详细描述这张图片的内容",
         image_type: str = "base64",
-        use_cloud: bool = True,
     ) -> str:
-        """多模态图片理解（支持云端 Qwen-3.6-Plus 和本地 Ollama）
+        """多模态图片理解 — 使用统一 LLM
 
         Args:
             image_data: 图片数据（base64 编码字符串或 URL）
             prompt: 对图片的提问
             image_type: "base64" | "url"
-            use_cloud: True=云端 Qwen-3.6-Plus API, False=本地 Ollama
 
         Returns:
             模型返回的文本描述
 
-        性能：云端 2-5s，本地 10-30s；大图自动压缩到 2MB 以下
+        图片以 base64 通过 image_url content block 发送给用户配置的模型。
+        模型有视觉能力就能理解，没有则返回错误提示。
         """
         # 大尺寸图片自动压缩到 2MB 以下
-        if image_type == "base64" and len(image_data) > 2 * 1024 * 1024 * 4 / 3:  # base64 膨胀系数
+        if image_type == "base64" and len(image_data) > 2 * 1024 * 1024 * 4 / 3:
             image_data = self._compress_image(image_data, max_size_mb=2)
 
+        image_url = (
+            f"data:image/png;base64,{image_data}"
+            if image_type == "base64"
+            else image_data
+        )
+
         try:
-            if use_cloud:
-                return await self._chat_with_image_qwen_cloud(image_data, prompt, image_type)
-            else:
-                return await self._chat_with_image_ollama(image_data, prompt, image_type)
+            from langchain_core.messages import HumanMessage
+
+            message = HumanMessage(content=[
+                {"type": "text", "text": prompt},
+                {"type": "image_url", "image_url": {"url": image_url}},
+            ])
+            response = await self._default_llm.ainvoke([message])
+            return response.content
         except Exception as e:
-            logger.error(f"多模态图片理解失败: {e}")
-            # 云端失败时自动降级到本地
-            if use_cloud:
-                logger.info("云端多模态失败，降级到本地 Ollama...")
-                try:
-                    return await self._chat_with_image_ollama(image_data, prompt, image_type)
-                except Exception as e2:
-                    return f"[多模态分析失败: 云端和本地均不可用。{str(e2)}]"
+            err_str = str(e).lower()
+            if "image" in err_str or "vision" in err_str or "multimodal" in err_str:
+                return (
+                    "当前模型不支持图像/视觉分析。"
+                    "请使用支持多模态的模型（如 gpt-4o, claude-3-sonnet 等）。"
+                )
             return f"[多模态分析失败: {str(e)}]"
-
-    async def _chat_with_image_qwen_cloud(
-        self, image_data: str, prompt: str, image_type: str
-    ) -> str:
-        """通过阿里云 DashScope API 调用 Qwen-3.6-Plus 多模态"""
-        api_key = settings.QWEN_API_KEY
-        if not api_key:
-            raise ValueError("QWEN_API_KEY 未配置，请在 .env 中设置")
-
-        url = f"{settings.QWEN_API_BASE_URL}/chat/completions"
-
-        # 构建消息内容
-        if image_type == "base64":
-            image_url_content = {"image": f"data:image/png;base64,{image_data}"}
-        else:
-            image_url_content = {"image": image_data}
-
-        messages = [
-            {
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": prompt},
-                    {"type": "image_url", "image_url": image_url_content},
-                ],
-            }
-        ]
-
-        payload = {
-            "model": settings.QWEN_MODEL_CLOUD,
-            "messages": messages,
-            "max_tokens": settings.QWEN_MULTIMODAL_MAX_TOKENS,
-            "temperature": settings.QWEN_MULTIMODAL_TEMPERATURE,
-        }
-
-        headers = {
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
-        }
-
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.post(url, json=payload, headers=headers)
-            response.raise_for_status()
-            result = response.json()
-            return result["choices"][0]["message"]["content"]
-
-    async def _chat_with_image_ollama(
-        self, image_data: str, prompt: str, image_type: str
-    ) -> str:
-        """通过 Ollama API 调用本地 Qwen-VL 多模态
-
-        Ollama 支持 base64 图片输入，需先拉取模型:
-          ollama pull qwen-vl:7b  # 或 qwen2.5-vl:7b
-        """
-        if image_type != "base64":
-            # 本地模式只支持 base64
-            raise ValueError("本地 Ollama 多模态仅支持 base64 编码图片")
-
-        ollama_url = "http://localhost:11434/api/generate"
-        payload = {
-            "model": settings.QWEN_MODEL_LOCAL,
-            "prompt": prompt,
-            "images": [image_data],
-            "stream": False,
-            "options": {"num_predict": settings.QWEN_MULTIMODAL_MAX_TOKENS},
-        }
-
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            response = await client.post(ollama_url, json=payload)
-            response.raise_for_status()
-            result = response.json()
-            return result.get("response", "")
 
     def _compress_image(self, image_data: str, max_size_mb: float = 2.0) -> str:
         """压缩 base64 编码图片到指定大小以下（使用 PIL）
@@ -870,7 +842,7 @@ class LLMService:
         Returns:
             结构化分析结果 dict，包含 chart_type / data_summary / key_findings / raw_description
 
-        性能：云端 2-5s，本地 10-30s
+        性能：2-5s，取决于 LLM 响应速度
         """
         prompt = f"""请分析这张图表并返回 JSON 格式结果：
 "chart_type": "图表类型", "data_summary": "数据摘要", "key_findings": ["关键发现1", "关键发现2"], "raw_description": "详细描述"
@@ -896,7 +868,7 @@ class LLMService:
         Returns:
             与输入等长的结果列表；若某张图片分析失败，对应位置为异常对象
 
-        性能：N张图片耗时 ≈ max(单张) 而非 sum(单张)，云端并行有效
+        性能：N张图片耗时 ≈ max(单张) 而非 sum(单张)，并发执行有效
         """
         tasks = [self.chat_with_image(img.get("data", ""), prompt) for img in images]
         return await asyncio.gather(*tasks, return_exceptions=True)
@@ -921,7 +893,7 @@ class LLMService:
                 "raw_text": "原始识别文本"
             }
 
-        性能：云端 2-5s，本地 10-30s（与 analyze_chart 相同）
+        性能：2-5s，取决于 LLM 响应速度
         """
         prompt = """请识别图片中的数学公式并返回 JSON 格式结果：
 {"latex": "完整的 LaTeX 表达式", "formula_type": "公式类型(equation|inequality|integral|derivative|matrix|system|other)", "description": "公式含义的自然语言解释", "variables": {"变量名": "含义"}, "raw_text": "原始文本形式"}
@@ -947,6 +919,77 @@ class LLMService:
                 "description": result,
                 "variables": {},
                 "raw_text": result
+            }
+
+    async def extract_table(
+        self, image_data: str, context: str = "", output_format: str = "markdown"
+    ) -> dict:
+        """表格结构化提取
+
+        Args:
+            image_data: base64 编码的表格图片
+            context: 可选的上下文信息（论文标题、章节）
+            output_format: 输出格式 "markdown" | "csv" | "json"
+
+        Returns:
+            结构化结果 dict：
+            {
+                "headers": ["列名1", "列名2", ...],
+                "rows": [["值1", "值2", ...], ...],
+                "markdown": "| 列名1 | 列名2 |\\n|---|---|\\n| 值1 | 值2 |",
+                "csv": "列名1,列名2\\n值1,值2",
+                "caption": "表格标题/说明",
+                "table_type": "comparison|results|statistics|configuration|other"
+            }
+
+        性能：云端 2-5s，本地 10-30s
+        """
+        prompt = f"""请识别图片中的表格并返回严格的 JSON 格式结果，不要包含 markdown 代码块标记：
+{{
+  "headers": ["列名1", "列名2"],
+  "rows": [["行1列1", "行1列2"], ["行2列1", "行2列2"]],
+  "markdown": "| 列名1 | 列名2 |\\n|---|---|\\n| 行1列1 | 行1列2 |\\n| 行2列1 | 行2列2 |",
+  "csv": "列名1,列名2\\n行1列1,行1列2\\n行2列1,行2列2",
+  "caption": "表格标题或说明",
+  "table_type": "comparison|results|statistics|configuration|other"
+}}
+要求：
+1. 识别表格所有行列，保持原始结构
+2. 合并单元格需展开（重复值填充）
+3. 数值保持原始精度，不要四舍五入
+4. 空单元格用空字符串表示
+5. 表头放在 headers 中，数据放在 rows 中
+6. markdown 使用标准 GFM 表格格式
+7. csv 使用英文逗号分隔，若内容含逗号则用双引号包裹"""
+
+        if context:
+            prompt += f"\n上下文: {context}"
+        if output_format and output_format != "markdown":
+            prompt += f"\n用户优先格式: {output_format}"
+
+        result = await self.chat_with_image(image_data, prompt)
+
+        import json as _json
+        try:
+            parsed = _json.loads(result)
+            # 确保所有必需字段存在
+            return {
+                "headers": parsed.get("headers", []),
+                "rows": parsed.get("rows", []),
+                "markdown": parsed.get("markdown", ""),
+                "csv": parsed.get("csv", ""),
+                "caption": parsed.get("caption", ""),
+                "table_type": parsed.get("table_type", "other"),
+            }
+        except Exception:
+            return {
+                "headers": [],
+                "rows": [],
+                "markdown": "",
+                "csv": "",
+                "caption": "",
+                "table_type": "other",
+                "raw_text": result,
             }
 
     async def extract_keywords(self, text: str, title: str = "", max_keywords: int = 5) -> list:
@@ -1031,5 +1074,8 @@ class LLMService:
             logger.debug(f"Token 用量记录失败（非阻塞）: {e}")
 
 
-# 全局单例
+# Module-level singleton instance
 llm_service = LLMService()
+
+# ModelRouter 已提取到 app.services.routing.route_engine
+from app.services.routing.route_engine import ModelRouter, model_router  # noqa: E402

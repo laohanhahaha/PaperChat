@@ -7,6 +7,7 @@ import Toast from './components/Toast/Toast';
 import ErrorBoundary from './components/ErrorBoundary/ErrorBoundary';
 import AppLayout from './components/AppLayout/AppLayout';
 import SetupWizard from './components/Config/SetupWizard';
+import OfflineBanner from './components/common/OfflineBanner';
 import './App.css';
 
 // 初始化主题（在应用启动时立即应用，避免闪烁）
@@ -72,6 +73,7 @@ function App() {
 
   return (
     <ErrorBoundary>
+      <OfflineBanner />
       <Toast />
       {/* 新用户引导向导 */}
       {!setupCompleted && (

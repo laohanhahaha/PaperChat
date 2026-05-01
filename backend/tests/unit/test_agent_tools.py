@@ -38,7 +38,6 @@ from app.services.agent.tools import (
     FindResearchGapsTool,
     CrossPaperReasonTool,
     # multimodal_tools
-    AnalyzeChartTool,
     MultimodalSearchTool,
 )
 
@@ -64,7 +63,6 @@ ALL_TOOL_CLASSES = [
     VerifyConsistencyTool,
     FindResearchGapsTool,
     CrossPaperReasonTool,
-    AnalyzeChartTool,
     MultimodalSearchTool,
 ]
 

@@ -37,10 +37,6 @@ def _get_mcp_manager(request: Request):
     return request.app.state.mcp_manager
 
 
-def _get_search_dispatcher(request: Request):
-    """从 app.state 获取 SearchDispatcher"""
-    return request.app.state.search_dispatcher
-
 
 @router.get("/services/status")
 async def get_service_status(request: Request):
@@ -52,12 +48,10 @@ async def get_service_status(request: Request):
     from app.tools.config_tools import GetServiceStatusTool
 
     mcp_manager = _get_mcp_manager(request)
-    search_dispatcher = _get_search_dispatcher(request)
     health_service = getattr(request.app.state, "health_service", None)
 
     tool = GetServiceStatusTool(
         mcp_manager=mcp_manager,
-        search_dispatcher=search_dispatcher,
         health_service=health_service,
     )
 
@@ -84,11 +78,9 @@ async def configure_service(
     from app.tools.config_tools import ConfigureServiceTool
 
     mcp_manager = _get_mcp_manager(request)
-    search_dispatcher = _get_search_dispatcher(request)
 
     tool = ConfigureServiceTool(
         mcp_manager=mcp_manager,
-        search_dispatcher=search_dispatcher,
     )
 
     from app.tools.base import ToolContext
@@ -108,22 +100,20 @@ async def configure_service(
 
 @router.post("/services/auto-setup")
 async def auto_setup_free_services(request: Request):
-    """一键配置所有免费服务（arXiv/CrossRef/DBLP/Semantic Scholar）
+    """一键配置所有免费服务（Academic MCP / Open WebSearch）
 
     自动配置无需 API Key 的 MCP Server。
-    性能影响：并发启动 4 个 MCP Server 子进程，约 2-4s。
+    性能影响：并发启动 2 个 MCP Server 子进程，约 2-4s。
     """
     from app.tools.config_tools import ConfigureServiceTool
 
     mcp_manager = _get_mcp_manager(request)
-    search_dispatcher = _get_search_dispatcher(request)
 
     tool = ConfigureServiceTool(
         mcp_manager=mcp_manager,
-        search_dispatcher=search_dispatcher,
     )
 
-    free_services = ["arxiv", "crossref", "dblp", "semantic_scholar"]
+    free_services = ["academic_mcp", "open_websearch"]
     configured = []
     failed = []
 

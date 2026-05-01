@@ -32,6 +32,7 @@ async def run_retriever_agent(
     性能说明：quick 模式约 1-3 次 LLM 调用（1-6s），比普通 ReAct 多约 15% 开销（sub_agent 注入）。
     """
     tool_subset = ["search_text", "search_papers", "get_paper_info", "recent_papers"]
+    logger.warning(f"[DIAG] run_retriever_agent 启动: query={query[:80]}, tool_subset={tool_subset}")
     try:
         async for event in react_agent.run(
             query=query,
@@ -68,6 +69,7 @@ async def run_analyzer_agent(
     性能说明：quick 模式约 1-3 次 LLM 调用，分析工具本身含 LLM 调用，总耗时约 3-10s。
     """
     tool_subset = ["summarize", "compare_content", "extract_key_points", "assess_quality", "explain_term"]
+    logger.warning(f"[DIAG] run_analyzer_agent 启动: query={query[:80]}, tool_subset={tool_subset}")
     try:
         async for event in react_agent.run(
             query=query,
@@ -98,12 +100,13 @@ async def run_recommender_agent(
 ) -> AsyncGenerator[dict, None]:
     """推荐专家 — 研究方向和关联发现
 
-    工具限制: search_papers, search_cards, find_research_gaps
+    工具限制: search_papers, search_cards
     每个事件注入 sub_agent="recommender"
 
     性能说明：quick 模式约 1-3 次 LLM 调用，总耗时约 2-8s。
     """
-    tool_subset = ["search_papers", "search_cards", "find_research_gaps"]
+    tool_subset = ["search_papers", "search_cards"]
+    logger.warning(f"[DIAG] run_recommender_agent 启动: query={query[:80]}, tool_subset={tool_subset}")
     try:
         async for event in react_agent.run(
             query=query,
@@ -122,5 +125,52 @@ async def run_recommender_agent(
             "type": "agent_final",
             "sub_agent": "recommender",
             "content": f"推荐阶段遇到错误：{str(e)}",
+            "error": True,
+        }
+
+
+async def run_dynamic_agent(
+    react_agent,
+    query: str,
+    ctx,
+    chat_history: str = "",
+    agent_name: str = "custom_agent",
+    system_prompt: str = "",
+    tool_subset: list = None,
+) -> AsyncGenerator[dict, None]:
+    """通用动态子智能体工厂 — 接受任意名称、提示词和工具集
+
+    Args:
+        react_agent: ReActAgent 实例
+        query: 子任务查询
+        ctx: ToolContext
+        chat_history: 对话历史
+        agent_name: 子智能体显示名称（注入到事件的 sub_agent 字段）
+        system_prompt: 自定义系统提示词
+        tool_subset: 工具限制列表（None = 不限制）
+    """
+    if not system_prompt:
+        system_prompt = f"你是 PaperChat 学术研究助手「{agent_name}」，请根据任务要求完成工作。"
+
+    logger.warning(f"[DIAG] run_dynamic_agent:{agent_name} 启动: query={query[:80]}, tool_subset={tool_subset}, prompt长度={len(system_prompt)}")
+
+    try:
+        async for event in react_agent.run(
+            query=query,
+            ctx=ctx,
+            chat_history=chat_history,
+            thinking_mode="quick",
+            mode="normal",
+            system_prompt_override=system_prompt,
+            tool_subset=tool_subset,
+        ):
+            event["sub_agent"] = agent_name
+            yield event
+    except Exception as e:
+        logger.error(f"Dynamic Agent '{agent_name}' 执行失败: {e}")
+        yield {
+            "type": "agent_final",
+            "sub_agent": agent_name,
+            "content": f"「{agent_name}」执行遇到错误：{str(e)}",
             "error": True,
         }

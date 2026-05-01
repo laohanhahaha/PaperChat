@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(../chatpdf_venv/Scripts/python -m pytest tests/integration/test_rag_enhanced.py tests/integration/test_multimodal_integration.py -xvs)"
+    ]
+  }
+}

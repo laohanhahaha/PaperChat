@@ -1,4 +1,4 @@
-"""设置服务
+﻿"""设置服务
 
 提供用户个性化配置的管理功能，包括获取、更新、重置和运行时应用
 """
@@ -22,9 +22,9 @@ logger = logging.getLogger(__name__)
 DEFAULT_SETTINGS: Dict[str, Dict[str, Dict[str, Any]]] = {
     "llm": {
         "model": {
-            "value": "deepseek-chat",
+            "value": "deepseek-v4-flash",
             "type": "select",
-            "options": ["deepseek-chat", "deepseek-reasoner", "gpt-3.5-turbo", "gpt-4"],
+            "options": ["deepseek-v4-flash", "deepseek-v4-pro"],
             "label": "AI 模型",
             "description": "选择用于问答的AI模型"
         },
@@ -491,7 +491,7 @@ class SettingsService:
             
             # 应用 RAG 配置
             if "rag" in settings_values:
-                from app.services.rag.rag_service import rag_service
+                from app.services.rag_service import rag_service
                 rag_config = settings_values["rag"]
                 await rag_service.update_config(
                     top_k=rag_config.get("top_k"),
@@ -499,16 +499,6 @@ class SettingsService:
                     chunk_overlap=rag_config.get("chunk_overlap")
                 )
                 logger.info(f"RAG 配置已更新: top_k={rag_config.get('top_k')}")
-            
-            # 应用搜索配置
-            if "search" in settings_values:
-                from app.services.search.search_service import search_service
-                search_config = settings_values["search"]
-                await search_service.update_config(
-                    timeout=search_config.get("timeout"),
-                    max_results=search_config.get("max_results")
-                )
-                logger.info(f"搜索配置已更新: timeout={search_config.get('timeout')}, max_results={search_config.get('max_results')}")
             
             # 应用推荐配置
             if "recommendation" in settings_values:

@@ -1,10 +1,39 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useLocation } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
+import { marked } from 'marked';
 import MarkdownContent from '../utils/MarkdownRenderer';
 import useWritingStore from '../stores/writingStore';
 import usePaperStore from '../stores/paperStore';
+import useToastStore from '../stores/toastStore';
 import styles from './WritingPage.module.css';
+
+// ---- 通用：File System Access API 保存 ----
+const saveFileWithPicker = async (blob, suggestedName, fileType) => {
+  if ('showSaveFilePicker' in window) {
+    try {
+      const handle = await window.showSaveFilePicker({
+        suggestedName,
+        types: [fileType]
+      });
+      const writable = await handle.createWritable();
+      await writable.write(blob);
+      await writable.close();
+      return true;
+    } catch (err) {
+      if (err.name === 'AbortError') return false; // 用户取消
+      throw err;
+    }
+  }
+  // 回退：传统下载
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = suggestedName;
+  a.click();
+  URL.revokeObjectURL(url);
+  return true;
+};
 
 // 解析对比分析的 JSON 流
 const parseCompareChunks = (chunks) => {
@@ -1056,6 +1085,169 @@ function ReviewTab() {
   );
 }
 
+// 文档编辑 Tab
+function EditorTab() {
+  const [content, setContent] = useState('');
+  const [title, setTitle] = useState('');
+  const [isEditing, setIsEditing] = useState(true);
+  const location = useLocation();
+
+  useEffect(() => {
+    // 优先从路由 state 读取
+    if (location.state?.content) {
+      setContent(location.state.content);
+      setTitle(`文档_${new Date().toLocaleDateString()}`);
+    } else {
+      // 备用：从 sessionStorage 读取
+      const draft = sessionStorage.getItem('editor_draft_content');
+      if (draft) {
+        setContent(draft);
+        setTitle(`文档_${new Date().toLocaleDateString()}`);
+        sessionStorage.removeItem('editor_draft_content');
+      }
+    }
+  }, []);
+
+  const toast = useToastStore();
+
+  const handleExportMd = async () => {
+    if (!content.trim()) return;
+    try {
+      const blob = new Blob([content], { type: 'text/markdown' });
+      const saved = await saveFileWithPicker(blob, `${title || '未命名文档'}.md`, {
+        description: 'Markdown 文件',
+        accept: { 'text/markdown': ['.md'] }
+      });
+      if (saved) toast.success('Markdown 导出成功');
+    } catch (error) {
+      console.error('Markdown 导出失败:', error);
+      toast.error('Markdown 导出失败: ' + error.message);
+    }
+  };
+
+  const handleExportDocx = async () => {
+    if (!content.trim()) return;
+    try {
+      const response = await fetch('/api/v1/export/docx', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: title || '未命名文档',
+          content: content
+        })
+      });
+      if (!response.ok) throw new Error('服务端返回错误');
+      const blob = await response.blob();
+      const saved = await saveFileWithPicker(blob, `${title || '未命名文档'}.docx`, {
+        description: 'Word 文档',
+        accept: { 'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'] }
+      });
+      if (saved) toast.success('DOCX 导出成功');
+    } catch (error) {
+      console.error('DOCX 导出失败:', error);
+      toast.error('DOCX 导出失败: ' + error.message);
+    }
+  };
+
+  const handleExportPdf = async () => {
+    if (!content.trim()) return;
+    let container = null;
+    try {
+      const html2pdf = (await import('html2pdf.js')).default;
+      const htmlContent = marked.parse(content);
+      container = document.createElement('div');
+      container.innerHTML = htmlContent;
+      container.style.padding = '20px';
+      container.style.fontFamily = 'serif';
+      container.style.lineHeight = '1.6';
+      container.style.color = '#222';
+      container.style.background = '#fff';
+      document.body.appendChild(container);
+
+      const fileName = `${title || '未命名文档'}.pdf`;
+      const opt = {
+        margin: [15, 15, 15, 15],
+        filename: fileName,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2, useCORS: true },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+      };
+
+      if ('showSaveFilePicker' in window) {
+        const pdfBlob = await html2pdf().set(opt).from(container).outputPdf('blob');
+        const saved = await saveFileWithPicker(pdfBlob, fileName, {
+          description: 'PDF 文件',
+          accept: { 'application/pdf': ['.pdf'] }
+        });
+        if (saved) toast.success('PDF 导出成功');
+      } else {
+        await html2pdf().set(opt).from(container).save();
+        toast.success('PDF 导出成功');
+      }
+    } catch (error) {
+      console.error('PDF 导出失败:', error);
+      toast.error('PDF 导出失败: ' + error.message);
+    } finally {
+      if (container && document.body.contains(container)) {
+        document.body.removeChild(container);
+      }
+    }
+  };
+
+  return (
+    <div className={styles.editorTabContainer}>
+      <div className={styles.editorToolbar}>
+        <input
+          type="text"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          placeholder="输入文档标题..."
+          className={styles.editorTitleInput}
+        />
+        <button
+          onClick={() => setIsEditing(true)}
+          className={`${styles.toggleBtn} ${isEditing ? styles.toggleBtnActive : ''}`}
+        >
+          编辑
+        </button>
+        <button
+          onClick={() => setIsEditing(false)}
+          className={`${styles.toggleBtn} ${!isEditing ? styles.toggleBtnActive : ''}`}
+        >
+          预览
+        </button>
+        <button onClick={handleExportMd} className={styles.exportBtn} disabled={!content.trim()}>
+          导出 Markdown
+        </button>
+        <button onClick={handleExportDocx} className={styles.exportBtn} disabled={!content.trim()}>
+          导出 DOCX
+        </button>
+        <button onClick={handleExportPdf} className={styles.exportBtn} disabled={!content.trim()}>
+          导出 PDF
+        </button>
+      </div>
+
+      <div className={styles.editorContent}>
+        {isEditing ? (
+          <textarea
+            value={content}
+            onChange={(e) => setContent(e.target.value)}
+            placeholder="在此输入 Markdown 内容..."
+            className={styles.editorTextarea}
+          />
+        ) : null}
+        <div className={`${styles.editorPreview} ${!isEditing ? styles.editorPreviewFull : ''}`}>
+          {content ? (
+            <MarkdownContent content={content} />
+          ) : (
+            <p className={styles.placeholder}>预览区域...</p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // 主页面组件
 function WritingPage() {
   const [searchParams] = useSearchParams();
@@ -1064,11 +1256,19 @@ function WritingPage() {
   // 从 URL 参数获取初始 Tab
   const getInitialTab = () => {
     const tabParam = searchParams.get('tab');
-    const validTabs = ['outline', 'draft', 'polish', 'citation', 'compare', 'review'];
+    const validTabs = ['outline', 'draft', 'polish', 'citation', 'compare', 'review', 'editor'];
     return validTabs.includes(tabParam) ? tabParam : 'outline';
   };
   
   const [activeTab, setActiveTab] = useState(getInitialTab);
+  const location = useLocation();
+
+  // 路由 state 自动切换到 editor Tab
+  useEffect(() => {
+    if (location.state?.tab === 'editor') {
+      setActiveTab('editor');
+    }
+  }, [location.state]);
   
   // 切换 Tab 时重置状态
   const handleTabChange = useCallback((tab) => {
@@ -1083,6 +1283,7 @@ function WritingPage() {
     { id: 'citation', label: '引用格式', icon: '📚' },
     { id: 'compare', label: '文章对比', icon: '📊' },
     { id: 'review', label: '文献综述', icon: '📑' },
+    { id: 'editor', label: '文档编辑', icon: '📝' },
   ];
   
   return (
@@ -1127,6 +1328,7 @@ function WritingPage() {
           {activeTab === 'citation' && <CitationTab />}
           {activeTab === 'compare' && <CompareTab />}
           {activeTab === 'review' && <ReviewTab />}
+          {activeTab === 'editor' && <EditorTab />}
         </main>
       </div>
     </div>

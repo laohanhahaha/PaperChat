@@ -496,7 +496,7 @@ class RecommendationService:
             self._embedding_cache.clear()
     
     async def search_web_recommendations(self, paper_id: int, db: AsyncSession, max_results: int = 8) -> List[Dict[str, Any]]:
-        """从网络搜索相关学术文献
+        """从网络搜索相关学术文献（通过 open-webSearch MCP 服务）
         
         Args:
             paper_id: 当前论文 ID
@@ -506,7 +506,7 @@ class RecommendationService:
         Returns:
             网络学术文献推荐列表
         """
-        from app.services.search.search_service import search_service
+        import json as _json
         
         # 获取论文信息
         result = await db.execute(
@@ -522,21 +522,33 @@ class RecommendationService:
         if not title:
             return []
         
-        # 构建学术搜索查询（限定学术网站）
         academic_query = f"{title} site:arxiv.org OR site:scholar.google.com OR site:researchgate.net OR site:semanticscholar.org"
         
         try:
-            results = await search_service.search(
-                query=academic_query,
-                max_results=max_results,
-                region="wt-wt",
-                timelimit="y"  # 最近一年
-            )
+            from app.mcp_services import MCPManager
+            # 尝试获取全局 mcp_manager 实例
+            from app.dependencies import service_container
+            try:
+                mcp_manager = service_container.resolve("mcp_manager")
+            except Exception:
+                logger.warning("无法获取 MCPManager，跳过网络搜索推荐")
+                return []
             
-            # 分类来源并格式化
+            raw_result = await mcp_manager.call_tool(
+                server_name="open_websearch",
+                tool_name="search",
+                arguments={"query": academic_query, "limit": max_results}
+            )
+            if isinstance(raw_result, str):
+                search_data = _json.loads(raw_result)
+            else:
+                search_data = raw_result
+            
+            results_list = search_data.get("results", []) if isinstance(search_data, dict) else []
+            
             formatted = []
-            for r in results:
-                url = r.get('href', '')
+            for r in results_list:
+                url = r.get('url', '')
                 source = 'Academic'
                 if 'arxiv.org' in url:
                     source = 'arXiv'
@@ -550,7 +562,7 @@ class RecommendationService:
                 formatted.append({
                     'title': r.get('title', '未知标题'),
                     'url': url,
-                    'abstract': r.get('body', ''),
+                    'abstract': r.get('description', ''),
                     'source': source,
                 })
             

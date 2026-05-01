@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 """应用配置管理
 
 配置优先级（低 → 高）:
@@ -41,21 +41,32 @@ class Settings(BaseSettings):
     
     # DeepSeek API
     DEEPSEEK_API_KEY: str = ""
+
+    # 默认 LLM 模型配置
+    DEFAULT_LLM_MODEL: str = "deepseek-v4-flash"
+    DEFAULT_LLM_BASE_URL: str = "https://api.deepseek.com"
     
     # JWT
     JWT_SECRET_KEY: str = "your-secret-key-change-in-production"
     JWT_ALGORITHM: str = "HS256"
     JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440
     
-    # Qwen 多模态 API
-    QWEN_API_KEY: str = ""
-    QWEN_API_BASE_URL: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
-    QWEN_MODEL_CLOUD: str = "qwen2.5-vl-plus"
-    QWEN_MODEL_LOCAL: str = "qwen2.5-vl:7b"
-    QWEN_MULTIMODAL_MAX_TOKENS: int = 2048
-    QWEN_MULTIMODAL_TEMPERATURE: float = 0.7
+    # 图片处理
     MAX_IMAGE_SIZE_MB: int = 10
     IMAGE_CACHE_ENABLED: bool = True
+
+    # RAG 增强
+    RAG_RERANKER_ENABLED: bool = True
+    RAG_RERANKER_MODEL: str = "BAAI/bge-reranker-v2-m3"
+    RAG_HYDE_ENABLED: bool = False  # 默认关闭，增加 500-1000ms 延迟
+    RAG_RERANKER_TOP_K: int = 5
+
+    # 预缓存
+    PRECACHE_ENABLED: bool = False  # 默认关闭
+    PRECACHE_INTERVAL_HOURS: int = 1  # 预缓存检查间隔
+    PRECACHE_TTL_HOURS: int = 24  # 预缓存有效期
+    PRECACHE_DEFAULT_TOPICS: str = "cs.AI,cs.CL,cs.CV"  # 默认关注领域
+
 
     # CORS
     CORS_ORIGINS: list[str] = ["http://localhost:5173", "http://localhost:5174"]
@@ -63,6 +74,11 @@ class Settings(BaseSettings):
     # Upload
     UPLOAD_DIR: str = "./uploads"
     MAX_FILE_SIZE: int = 52428800  # 50MB
+
+    # 智能路由
+    MODEL_ROUTE_MODE: str = "smart_route"  # local_only | smart_route | cloud_only
+    MODEL_BUDGET_LIMIT: float = 10.0  # 月度预算上限（元）
+    MODEL_CONFIRM_THRESHOLD: float = 0.5  # 单次费用确认阈值（元）
     
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 

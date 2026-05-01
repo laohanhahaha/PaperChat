@@ -20,6 +20,9 @@ import InputBar from '../components/ChatPage/InputBar';
 import SessionSidebar from '../components/ChatPage/SessionSidebar';
 import ModelSelector from '../components/Cost/ModelSelector';
 import CostIndicator from '../components/Cost/CostIndicator';
+import ModelIndicator from '../components/ChatPage/ModelIndicator';
+import CostConfirmDialog from '../components/ChatPage/CostConfirmDialog';
+import { paperApi } from '../api/paperApi';
 import styles from './ChatPage.module.css';
 
 let msgIdCounter = 0;
@@ -80,12 +83,48 @@ function ChatPage() {
   const [showPaperSelector, setShowPaperSelector] = useState(false);
   const [isChatting, setIsChatting] = useState(false);
   const [images, setImages] = useState([]);
+  const [userHasScrolledUp, setUserHasScrolledUp] = useState(false);
+  const isAutoScrollingRef = useRef(false);
+
+  // 功能芯片状态
+  const [activeFunction, setActiveFunction] = useState(null);
+  const [thinkingMode, setThinkingMode] = useState('quick');
+
+  // 智能路由状态
+  const [modelChoice, setModelChoice] = useState(null);
+  const [costConfirm, setCostConfirm] = useState(null);
+
+  // 隐私论文状态
+  const [privatePaperIds, setPrivatePaperIds] = useState([]);
 
   // WebView 状态
   const [webViewUrl, setWebViewUrl] = useState(null);
   const [showWebView, setShowWebView] = useState(false);
   const [webViewPlacement, setWebViewPlacement] = useState('bottom');
-  const { status: wsStatus, sendUnifiedChatMessage, sendCancel, onMessage } = useWebSocket();
+  const { status: wsStatus, sendUnifiedChatMessage, sendCancel, sendMessage, onMessage } = useWebSocket();
+
+  // ---- 智能路由消息监听 ----
+  useEffect(() => {
+    const unsubs = [
+      onMessage('model_choice', (data) => {
+        setModelChoice({
+          model: data.model,
+          tier: data.tier,
+          estimatedCost: data.estimated_cost,
+          reason: data.reason,
+          privacyEnforced: data.privacy_enforced || false,
+        });
+      }),
+      onMessage('cost_confirm_request', (data) => {
+        setCostConfirm({
+          model: data.model,
+          estimatedCost: data.estimated_cost,
+          message: data.message,
+        });
+      }),
+    ];
+    return () => unsubs.forEach(fn => fn());
+  }, [onMessage]);
 
   const textareaRef = useRef(null);
   const currentSessionIdRef = useRef(null);
@@ -97,6 +136,35 @@ function ChatPage() {
     fetchPapers({ page: 1, page_size: 100 });
     fetchSessions();
   }, [fetchPapers, fetchSessions]);
+
+  // 同步论文隐私状态
+  useEffect(() => {
+    if (papers?.length) {
+      const privIds = papers.filter(p => p.is_private).map(p => p.id);
+      setPrivatePaperIds(prev => {
+        if (JSON.stringify(prev) === JSON.stringify(privIds)) return prev;
+        return privIds;
+      });
+    }
+  }, [papers]);
+
+  // 切换论文隐私标记
+  const togglePrivacy = useCallback(async (paperId, forceValue) => {
+    const currentValue = privatePaperIds.includes(paperId);
+    const newValue = forceValue !== undefined ? forceValue : !currentValue;
+    try {
+      await paperApi.updatePrivacy(paperId, newValue);
+      setPrivatePaperIds(prev =>
+        newValue
+          ? [...new Set([...prev, paperId])]
+          : prev.filter(id => id !== paperId)
+      );
+      // 同步 paperStore 中的 is_private 字段
+      fetchPapers({ page: 1, page_size: 100 });
+    } catch (err) {
+      console.error('隐私标记更新失败:', err);
+    }
+  }, [privatePaperIds, fetchPapers]);
 
   useEffect(() => {
     currentSessionIdRef.current = currentSessionId;
@@ -199,25 +267,41 @@ function ChatPage() {
   const virtualizer = useVirtualizer({
     count: messages.length,
     getScrollElement: () => messageListRef.current,
-    estimateSize: () => 120,
-    overscan: 5,
+    estimateSize: () => 200,
+    overscan: 8,
     measureElement: (el) => {
-      // 使用 getBoundingClientRect 获取精确高度
       return el.getBoundingClientRect().height;
     },
   });
 
-  // 自动滚动到底部（仅在非加载更多时）
+  // 自动滚动到底部（仅在非加载更多且用户未主动上滚时）
   const lastMessageContent = messages[messages.length - 1]?.content;
   useEffect(() => {
-    if (messages.length > 0 && !loadingMore) {
+    if (messages.length > 0 && !loadingMore && !userHasScrolledUp) {
+      isAutoScrollingRef.current = true;
       virtualizer.scrollToIndex(messages.length - 1, { align: 'end', behavior: 'smooth' });
+      requestAnimationFrame(() => {
+        setTimeout(() => {
+          isAutoScrollingRef.current = false;
+        }, 300);
+      });
     }
-  }, [messages.length, lastMessageContent, virtualizer, loadingMore]);
+  }, [messages.length, lastMessageContent, virtualizer, loadingMore, userHasScrolledUp]);
 
-  // ---- 滚动加载更多 ----
+  // ---- 滚动加载更多 & 用户滚动检测 ----
   const handleScroll = useCallback((e) => {
-    const { scrollTop } = e.target;
+    const { scrollTop, scrollHeight, clientHeight } = e.target;
+    const distFromBottom = scrollHeight - scrollTop - clientHeight;
+
+    // 用户主动向上滚动检测（排除自动滚动触发）
+    if (!isAutoScrollingRef.current && distFromBottom > 100) {
+      setUserHasScrolledUp(true);
+    }
+    // 用户滚动回底部附近，恢复自动滚动
+    if (distFromBottom < 50) {
+      setUserHasScrolledUp(false);
+    }
+
     // 滚动到顶部且还有更多消息时加载更多
     if (scrollTop === 0 && hasMore && !loadingMore && currentSessionId) {
       loadMoreMessages(currentSessionId);
@@ -243,12 +327,14 @@ function ChatPage() {
     addMessage({ id: genMsgId(), role: 'assistant', content: '' });
 
     setInput('');
+    setUserHasScrolledUp(false);
     setIsChatting(true);
     isChattingRef.current = true;
     setSources([]);
     setCrossDocSources([]);
     clearSearchState();
     setCurrentIntent(null);
+    setModelChoice(null);
     typewriter.reset();
     typewriter.start();
 
@@ -260,8 +346,9 @@ function ChatPage() {
         name: i.file?.name,
       }));
 
-    sendUnifiedChatMessage(trimmed, selectedPaperId, selectedPaperIds, sessionId, enableSearch, readyImages);
+    sendUnifiedChatMessage(trimmed, selectedPaperId, selectedPaperIds, sessionId, enableSearch, readyImages, activeFunction?.tool || null);
     setImages([]);
+    setActiveFunction(null);
   };
 
   const handleKeyDown = (e) => {
@@ -411,19 +498,21 @@ function ChatPage() {
               removePaperFromCrossDoc={removePaperFromCrossDoc}
               onOpenSelector={() => setShowPaperSelector(true)}
               styles={styles}
+              privatePaperIds={privatePaperIds}
+              onTogglePrivacy={togglePrivacy}
             />
             <div className={styles.welcomeCenter}>
               <h1 className={styles.welcomeTitle}>有什么我能帮你的吗？</h1>
               {!hasPapers && (
-                <p className={styles.welcomeSubtitle}>请先选择论文，然后开始智能问答</p>
+                <p className={styles.welcomeSubtitle}>选择论文可获得更精准的回答，也可直接提问</p>
               )}
               <div className={styles.suggestions}>
                 {SUGGESTIONS.map((s, i) => (
                   <button
                     key={i}
                     className={styles.suggestionChip}
-                    onClick={() => hasPapers && handleSend(s.text)}
-                    disabled={!hasPapers || isChatting || wsStatus !== 'connected'}
+                    onClick={() => handleSend(s.text)}
+                    disabled={isChatting || wsStatus !== 'connected'}
                   >
                     {s.text}
                   </button>
@@ -450,6 +539,11 @@ function ChatPage() {
               images={images}
               onAddImage={handleAddImage}
               onRemoveImage={handleRemoveImage}
+              activeFunction={activeFunction}
+              onSelectFunction={(chip) => setActiveFunction(chip)}
+              onClearFunction={() => setActiveFunction(null)}
+              thinkingMode={thinkingMode}
+              onThinkingModeChange={setThinkingMode}
             />
           </div>
         ) : (
@@ -460,6 +554,8 @@ function ChatPage() {
               removePaperFromCrossDoc={removePaperFromCrossDoc}
               onOpenSelector={() => setShowPaperSelector(true)}
               styles={styles}
+              privatePaperIds={privatePaperIds}
+              onTogglePrivacy={togglePrivacy}
             />
             {currentIntent && currentIntent.matched && (
               <div className={styles.intentBar}>
@@ -503,6 +599,14 @@ function ChatPage() {
                         styles={styles}
                         paperId={selectedPaperId || (selectedPaperIds.length === 1 ? selectedPaperIds[0] : null)}
                       />
+                      {msg.role === 'assistant' && modelChoice && isLast && (
+                        <ModelIndicator
+                          model={modelChoice.model}
+                          tier={modelChoice.tier}
+                          estimatedCost={modelChoice.estimatedCost}
+                          privacyEnforced={modelChoice.privacyEnforced}
+                        />
+                      )}
                     </div>
                   );
                 })}
@@ -555,6 +659,19 @@ function ChatPage() {
               )}
             </div>
 
+            {/* 回到底部按钮 */}
+            {userHasScrolledUp && isChatting && (
+              <button
+                className={styles.scrollToBottomBtn}
+                onClick={() => {
+                  setUserHasScrolledUp(false);
+                  virtualizer.scrollToIndex(messages.length - 1, { align: 'end', behavior: 'smooth' });
+                }}
+              >
+                ↓ 回到最新
+              </button>
+            )}
+
             <InputBar
               input={input}
               setInput={setInput}
@@ -575,6 +692,11 @@ function ChatPage() {
               images={images}
               onAddImage={handleAddImage}
               onRemoveImage={handleRemoveImage}
+              activeFunction={activeFunction}
+              onSelectFunction={(chip) => setActiveFunction(chip)}
+              onClearFunction={() => setActiveFunction(null)}
+              thinkingMode={thinkingMode}
+              onThinkingModeChange={setThinkingMode}
             />
           </div>
         )}
@@ -596,6 +718,22 @@ function ChatPage() {
           onClose={handleCloseWebView}
         />
       )}
+
+      {/* 智能路由费用确认弹窗 */}
+      <CostConfirmDialog
+        open={!!costConfirm}
+        model={costConfirm?.model}
+        estimatedCost={costConfirm?.estimatedCost}
+        message={costConfirm?.message}
+        onConfirm={() => {
+          sendMessage('cost_confirmed', { confirmed: true });
+          setCostConfirm(null);
+        }}
+        onCancel={() => {
+          sendMessage('cost_confirmed', { confirmed: false });
+          setCostConfirm(null);
+        }}
+      />
     </div>
   );
 }

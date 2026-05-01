@@ -181,7 +181,7 @@ class GetPaperInfoTool(Tool):
     name = "get_paper_info"
     description = "获取论文的元数据信息（标题、作者、摘要等）"
     
-    async def execute(self, ctx: ToolContext, paper_id: int = None) -> ToolResult:
+    async def execute(self, ctx: ToolContext, paper_id: int = None, **kwargs) -> ToolResult:
         """从数据库查询论文信息"""
         db = ctx.db
         if db is None:
@@ -248,7 +248,7 @@ class GenerateOutlineTool(Tool):
     name = "generate_outline"
     description = "基于论文内容生成研究报告或文献综述的提纲"
     
-    async def execute(self, ctx: ToolContext, topic: str, context: str = "", paper_ids: list[int] = None) -> ToolResult:
+    async def execute(self, ctx: ToolContext, topic: str, context: str = "", paper_ids: list[int] = None, **kwargs) -> ToolResult:
         """使用 LLM 生成提纲"""
         # 优先使用传入的paper_ids，否则从ctx获取
         pids = paper_ids if paper_ids is not None else ctx.paper_ids
@@ -454,39 +454,13 @@ INTENT_KEYWORDS = {
 
 
 def classify_by_keywords(message: str) -> dict:
-    """基于关键词的意图识别（快速识别，用于直接功能触发）
-    
-    Args:
-        message: 用户消息
-        
-    Returns:
-        {"matched": True, "intent": "...", "tool": "...", "confidence": "high|medium|low"}
-        或
-        {"matched": False}
+    """基于关键词的意图识别（已弃用，委托给 intent.py 的新版本）
+
+    此函数保留仅为向后兼容。实际逻辑已迁移至
+    app.services.agent.intent.classify_by_keywords（带权重 + 论文上下文检测）。
     """
-    message_lower = message.lower()
-    
-    best_match = None
-    best_score = 0
-    
-    for intent_name, config in INTENT_KEYWORDS.items():
-        score = 0
-        for keyword in config["keywords"]:
-            if keyword.lower() in message_lower:
-                score += 1
-        
-        if score > 0 and score > best_score:
-            best_score = score
-            best_match = {
-                "intent": config["intent"],
-                "tool": config["tool"],
-                "confidence": "high" if score >= 2 else "medium"
-            }
-    
-    if best_match:
-        return {"matched": True, **best_match}
-    
-    return {"matched": False}
+    from app.services.agent.intent import classify_by_keywords as _new_classify
+    return _new_classify(message)
 
 
 TASK_PLANNING_PROMPT = """你是任务规划专家。请将用户的复杂请求拆解为有序的子任务。

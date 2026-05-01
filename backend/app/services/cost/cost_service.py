@@ -1,4 +1,4 @@
-"""费用追踪与预算管理服务"""
+﻿"""费用追踪与预算管理服务"""
 import logging
 from datetime import datetime, date
 from typing import Optional
@@ -13,25 +13,20 @@ logger = logging.getLogger(__name__)
 # ─── 模型定价表（美元 / 1000 tokens）──────────────────────────────────────────
 # 来源：DeepSeek 官方定价（2025年）
 MODEL_PRICING: dict[str, dict[str, float]] = {
-    "deepseek-chat": {
+    "deepseek-v4-flash": {
         "input": 0.00027,   # $0.27 / 1M tokens (cache miss)
         "output": 0.00110,  # $1.10 / 1M tokens
         "description": "DeepSeek-V3（通用对话）",
     },
-    "deepseek-reasoner": {
+    "deepseek-v4-pro": {
         "input": 0.00055,   # $0.55 / 1M tokens (cache miss)
         "output": 0.00219,  # $2.19 / 1M tokens
-        "description": "DeepSeek-R1（深度推理）",
-    },
-    "deepseek-coder": {
-        "input": 0.00027,
-        "output": 0.00110,
-        "description": "DeepSeek-Coder（代码生成）",
+        "description": "DeepSeek-V4-Pro（深度推理）",
     },
 }
 
 # 当前使用的模型（全局状态，持久化在内存中）
-_current_model: str = "deepseek-chat"
+_current_model: str = "deepseek-v4-flash"
 
 
 def get_current_model() -> str:
@@ -47,7 +42,7 @@ def set_current_model(model: str) -> None:
 
 def calculate_cost(model: str, input_tokens: int, output_tokens: int) -> float:
     """计算单次调用费用（美元）"""
-    pricing = MODEL_PRICING.get(model, MODEL_PRICING["deepseek-chat"])
+    pricing = MODEL_PRICING.get(model, MODEL_PRICING["deepseek-v4-flash"])
     # 定价单位：美元/1000 tokens
     cost = (input_tokens * pricing["input"] + output_tokens * pricing["output"]) / 1000
     return round(cost, 8)
@@ -216,6 +211,15 @@ class CostService:
         """检查是否已超出本月预算，True 表示未超出（可继续使用）"""
         status = await self.get_budget_status(db)
         return not status["over_budget"]
+
+    async def get_budget_status_by_user_id(self, db: AsyncSession, user_id: int) -> dict:
+        """按用户查询当前月预算使用状态（当前系统为单用户模式，user_id 预留扩展）"""
+        return await self.get_budget_status(db)
+
+    async def check_budget_exceeded(self, db: AsyncSession, user_id: int, budget_limit: float) -> bool:
+        """检查用户月度预算是否超限"""
+        status = await self.get_budget_status_by_user_id(db, user_id)
+        return status.get("used", 0) >= budget_limit
 
     # ── 内部工具 ──────────────────────────────────────────────────────────────
 

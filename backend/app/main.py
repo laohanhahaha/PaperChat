@@ -2,8 +2,15 @@
 
 创建 FastAPI 应用实例，配置中间件、路由和生命周期事件
 """
-from contextlib import asynccontextmanager
+import sys
 import asyncio
+
+# Windows 下强制 ProactorEventLoop（支持 asyncio.create_subprocess_exec）
+# 必须在任何 asyncio 事件循环创建前设置
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -25,7 +32,7 @@ logger = logging.getLogger(__name__)
 from app.routers.feedback import router as feedback_router
 from app.routers.backup import router as backup_router
 from app.routers.feature_flags import router as feature_flags_router
-from app.routers import papers_router, highlights_router, notes_router, ws_router, reading_router, analysis_router, chat_router, knowledge_router, writing_router, recommendations_router, settings_router, batch_analysis_router, cost_router, health_router, citations_router, config_router, upload_router
+from app.routers import papers_router, highlights_router, notes_router, ws_router, reading_router, analysis_router, chat_router, knowledge_router, writing_router, recommendations_router, settings_router, batch_analysis_router, cost_router, health_router, citations_router, config_router, upload_router, precache_router, model_config_router, routing_router, export_router, folder_import_router, subagent_router
 
 
 
@@ -40,15 +47,26 @@ async def _load_mcp_config_from_db(app: FastAPI):
     mcp_manager = getattr(app.state, "mcp_manager", None)
     tool_registry = getattr(app.state, "tool_registry", None)
 
-    if not mcp_manager or not tool_registry:
-        logger.warning("[lifespan] MCPManager 或 ToolRegistry 未就绪，跳过 MCP 配置加载")
+    # 诊断日志：打印 app.state 中关键属性的类型
+    state_attrs = [a for a in dir(app.state) if not a.startswith('_')]
+    logger.info(f"[lifespan] _load_mcp_config_from_db 入口: state attrs={state_attrs}")
+    logger.info(f"[lifespan] mcp_manager type={type(mcp_manager).__name__}, is None={mcp_manager is None}")
+    logger.info(f"[lifespan] tool_registry type={type(tool_registry).__name__}, is None={tool_registry is None}, len={len(tool_registry) if tool_registry is not None else 'N/A'}")
+
+    if mcp_manager is None:
+        logger.warning("[lifespan] MCPManager 未就绪（None），跳过 MCP 配置加载")
         return
+    if tool_registry is None:
+        logger.warning("[lifespan] ToolRegistry 未就绪（None），跳过 MCP 配置加载")
+        return
+
+    logger.info("[lifespan] 开始加载 MCP 配置...")
 
     try:
         from app.database import AsyncSessionLocal
         from app.services.settings_service import settings_service
         from app.config import settings as app_settings
-        from app.mcp_services.academic_config import get_academic_server_configs
+        from app.mcp_services.academic_config import get_mcp_server_configs
         from app.mcp_services.bridge import MCPToolBridge
 
         # 获取用户存储的 mcp 配置值
@@ -58,9 +76,22 @@ async def _load_mcp_config_from_db(app: FastAPI):
             )
 
         mcp_values = settings_values.get("mcp", {})
+        logger.info(f"[lifespan] DB 中 MCP 配置: {bool(mcp_values)}, keys={list(mcp_values.keys())}")
+
         if not mcp_values:
-            logger.info("[lifespan] 未找到用户 MCP 配置，跳过自动启动")
-            return
+            # 首次使用：自动启用免费 MCP 服务并持久化
+            free_services = ["academic_mcp", "open_websearch"]
+            logger.info(f"[lifespan] 自动启用免费 MCP 服务: {', '.join(free_services)}")
+
+            import json
+            mcp_config = {"enabled_services": free_services}
+            async with AsyncSessionLocal() as db_write:
+                await settings_service.update_setting_values(
+                    user_id=app_settings.DEFAULT_USER_ID,
+                    db=db_write,
+                    values={"mcp": {"status": json.dumps(mcp_config)}},
+                )
+            mcp_values = {"status": json.dumps(mcp_config)}
 
         # 解析已启用服务列表（mcp.status 字段存储 JSON 格式配置）
         import json
@@ -70,6 +101,7 @@ async def _load_mcp_config_from_db(app: FastAPI):
             try:
                 mcp_config = json.loads(status_str) if isinstance(status_str, str) else status_str
                 enabled_services = mcp_config.get("enabled_services", [])
+                logger.info(f"[lifespan] 已启用 MCP 服务: {enabled_services}")
             except (json.JSONDecodeError, TypeError):
                 logger.warning(f"[lifespan] MCP 配置解析失败: {status_str[:100]}")
                 return
@@ -79,24 +111,76 @@ async def _load_mcp_config_from_db(app: FastAPI):
             return
 
         # 从 academic_config 中匹配已启用服务并启动
-        all_configs = get_academic_server_configs()
+        all_configs = get_mcp_server_configs()
+        known_names = {cfg.name for cfg in all_configs}
+        # 过滤掉数据库中残留的已废弃服务名称
+        stale = [s for s in enabled_services if s not in known_names]
+        if stale:
+            logger.warning("[lifespan] DB 中包含已废弃的 MCP 服务名称 %s，将被忽略", stale)
+
+        # 如果所有已启用的服务名称都已废弃，自动重置为默认免费服务
+        valid_services = [s for s in enabled_services if s in known_names]
+        if not valid_services and stale:
+            logger.warning("[lifespan] 所有已启用服务均已废弃，自动重置为默认免费服务")
+            valid_services = ["academic_mcp", "open_websearch"]
+            # 持久化修正后的配置
+            try:
+                import json as _json
+                corrected_config = {"enabled_services": valid_services}
+                async with AsyncSessionLocal() as db_fix:
+                    await settings_service.update_setting_values(
+                        user_id=app_settings.DEFAULT_USER_ID,
+                        db=db_fix,
+                        values={"mcp": {"status": _json.dumps(corrected_config)}},
+                    )
+                logger.info("[lifespan] 已将 MCP 配置重置为: %s", valid_services)
+            except Exception as e:
+                logger.warning("[lifespan] 持久化修正配置失败: %s", e)
+
         started = []
         for cfg in all_configs:
-            if cfg.name in enabled_services:
+            if cfg.name in valid_services:
                 cfg.enabled = True
+                logger.info(
+                    "[lifespan] 正在启动 MCP Server: %s (cmd=%s, args=%s)",
+                    cfg.name, cfg.command, cfg.args,
+                )
                 # 注入环境变量（如 API Key）
                 import os
                 for env_key in cfg.env:
                     if env_key in os.environ and os.environ[env_key]:
                         cfg.env[env_key] = os.environ[env_key]
                 try:
-                    await mcp_manager.add_server(cfg)
-                    started.append(cfg.name)
+                    success = await mcp_manager.add_server(cfg)
+                    if success:
+                        started.append(cfg.name)
+                        logger.info(f"[lifespan] MCP Server {cfg.name} 启动成功")
+                    else:
+                        logger.warning(f"[lifespan] MCP Server {cfg.name} 启动失败")
                 except Exception as e:
-                    logger.error(f"[lifespan] 启动 MCP Server {cfg.name} 失败: {e}")
+                    logger.error(f"[lifespan] 启动 MCP Server {cfg.name} 异常: {e}")
+
+        logger.info(f"[lifespan] MCP 启动结果: {started} (成功 {len(started)}/{len(valid_services)} 个)")
+
+        # 对失败的服务重试一次（延迟 2s 后，给子进程更多启动时间）
+        failed_services = [s for s in valid_services if s not in started]
+        if failed_services:
+            logger.info(f"[lifespan] 尝试重连失败的 MCP 服务: {failed_services}")
+            await asyncio.sleep(2)
+            for cfg in all_configs:
+                if cfg.name in failed_services:
+                    try:
+                        success = await mcp_manager.add_server(cfg)
+                        if success:
+                            started.append(cfg.name)
+                            logger.info(f"[lifespan] MCP Server {cfg.name} 重连成功")
+                    except Exception as e:
+                        logger.error(f"[lifespan] MCP Server {cfg.name} 重连失败: {e}")
+            if len(started) > len(started) - len(failed_services):
+                logger.info(f"[lifespan] 重连后结果: {started}")
 
         # 桥接 MCP 工具到 ToolRegistry
-        if started and tool_registry:
+        if started and tool_registry is not None:
             try:
                 bridge = MCPToolBridge(mcp_manager)
                 mcp_tools = await bridge.bridge_all()
@@ -104,6 +188,8 @@ async def _load_mcp_config_from_db(app: FastAPI):
                 logger.info(f"[lifespan] MCP 配置加载完成：已启动 {started}，桥接 {len(mcp_tools)} 个工具")
             except Exception as e:
                 logger.error(f"[lifespan] MCP 工具桥接失败: {e}")
+        elif not started:
+            logger.warning("[lifespan] 没有成功启动任何 MCP Server，跳过工具桥接")
 
     except Exception as e:
         logger.error(f"[lifespan] 加载 MCP 配置失败（非阻断）: {e}")
@@ -132,6 +218,13 @@ async def lifespan(app: FastAPI):
     # 将 ConfigService 挂载到 app.state（供 get_config_service 依赖使用）
     app.state.config_service = config_service
     service_container.register_instance("config_service", config_service)
+
+    # --- 初始化预置子智能体 ---
+    from app.routers.subagent import init_preset_subagents
+    from app.database import AsyncSessionLocal as _SubAgentSessionLocal
+    async with _SubAgentSessionLocal() as _sa_db:
+        await init_preset_subagents(_sa_db)
+    logger.info("[lifespan] 预置子智能体初始化完成")
 
     # --- 启动时加载用户 MCP 配置并桥接工具 ---
     await _load_mcp_config_from_db(app)
@@ -184,38 +277,14 @@ async def lifespan(app: FastAPI):
     await key_rotation_svc.start()
     logger.info("[lifespan] KeyRotationService 已启动")
 
-    # 初始化并注册多源搜索调度器
-    from app.services.search import (
-        SearchDispatcher, DuckDuckGoAdapter, BingAdapter,
-        TavilyAdapter, BraveAdapter, BaiduAdapter, WigoloAdapter,
-    )
-    search_dispatcher = SearchDispatcher()
-    search_dispatcher.register_adapter(DuckDuckGoAdapter())
-    # API Key 优先从 ConfigService（含环境变量/.env）读取，再降级到 os.environ
-    search_dispatcher.register_adapter(BingAdapter(
-        api_key=config_service.get("BING_SEARCH_API_KEY")
-    ))
-    search_dispatcher.register_adapter(TavilyAdapter(
-        api_key=config_service.get("TAVILY_API_KEY")
-    ))
-    search_dispatcher.register_adapter(BraveAdapter(
-        api_key=config_service.get("BRAVE_SEARCH_API_KEY")
-    ))
-    search_dispatcher.register_adapter(BaiduAdapter(
-        api_key=config_service.get("BAIDU_SEARCH_API_KEY")
-    ))
-    search_dispatcher.register_adapter(WigoloAdapter(
-        api_key=config_service.get("WIGOLO_API_KEY")
-    ))
-    app.state.search_dispatcher = search_dispatcher
-    service_container.register_instance("search_dispatcher", search_dispatcher)
-    logger.info("[lifespan] 多源搜索调度器已初始化")
+    # 启动预缓存后台任务
+    from app.services.precache_service import precache_service
+    await precache_service.start()
 
     # 将核心服务同步注册到 ServiceContainer（便于后续按名解析）
     for _name in (
         "rag_service", "llm_service", "agent_service", "event_bus",
         "tool_registry", "tool_executor", "mcp_manager", "skill_registry",
-        "search_dispatcher",
     ):
         _instance = getattr(app.state, _name, None)
         if _instance is not None:
@@ -248,6 +317,14 @@ async def lifespan(app: FastAPI):
             logger.info("KeyRotationService 已停止")
     except Exception as e:
         logger.error(f"停止 KeyRotationService 失败: {e}")
+
+    # 停止预缓存后台任务
+    try:
+        from app.services.precache_service import precache_service
+        await precache_service.stop()
+        logger.info("预缓存服务已停止")
+    except Exception as e:
+        logger.error(f"停止预缓存服务失败: {e}")
 
     # 关闭 RAG 线程池 + Worker
     try:
@@ -340,6 +417,12 @@ def create_app() -> FastAPI:
     app.include_router(citations_router)
     app.include_router(config_router)
     app.include_router(upload_router)
+    app.include_router(precache_router)
+    app.include_router(model_config_router)
+    app.include_router(routing_router)
+    app.include_router(export_router)
+    app.include_router(folder_import_router)
+    app.include_router(subagent_router)
 
     # 旧路径向后兼容重定向：/api/xxx → /api/v1/xxx
     _LEGACY_PREFIXES = [
@@ -366,23 +449,9 @@ def create_app() -> FastAPI:
 app = create_app()
 
 
-@app.get("/api/v1/health")
-async def health_check():
-    """
-    健康检查端点
-
-    返回:
-        - 应用状态信息
-    """
-    return {
-        "status": "ok",
-        "message": f"{settings.APP_NAME} API v3.1 (WebSocket + LangChain + SQLAlchemy)"
-    }
-
-
 @app.get("/api/health")
 async def health_check_legacy():
-    """旧版健康检查端点（向后兼容，重定向到 /api/v1/health）"""
+    """旧版健康检查端点（向后兼容）"""
     return {
         "status": "ok",
         "message": f"{settings.APP_NAME} API v3.1 (WebSocket + LangChain + SQLAlchemy)",

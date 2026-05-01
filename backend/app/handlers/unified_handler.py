@@ -6,6 +6,7 @@ import json
 import asyncio
 import logging
 import re
+import time
 
 from langchain_core.messages import SystemMessage, HumanMessage
 
@@ -38,6 +39,7 @@ from app.services.security.security_service import security_service
 from app.services.security.clarification_service import clarification_service
 from app.services.user.profile_service import profile_service
 from app.prompts.chat import GENERAL_CHAT_SYSTEM_PROMPT, THINKING_PROMPT
+from app.prompts.analyze import COMPARE_CONTENT_PROMPT, EXTRACT_KEY_POINTS_PROMPT
 
 logger = logging.getLogger(__name__)
 
@@ -54,6 +56,10 @@ CROSS_PAPER_TOOLS = {
     "verify_consistency", "find_research_gaps",
     "cross_paper_reason",
 }
+
+# === 费用确认阻断式缓存 ===
+_pending_confirmations = {}
+CONFIRMATION_TIMEOUT = 60  # seconds
 
 # 配置意图关键词
 CONFIG_INTENT_KEYWORDS = [
@@ -84,8 +90,8 @@ def _is_multi_agent_research(intent: str, message: str) -> bool:
     """
     multi_agent_keywords = ["综合研究", "系统分析", "全面调研", "深入研究", "多角度", "全方位"]
 
-    # 条件1：特定意图
-    if intent in ("literature_review", "deep_analysis"):
+    # 条件1：特定意图（含前端功能芯片显式触发）
+    if intent in ("literature_review", "deep_analysis", "multi_agent_research"):
         return True
 
     # 条件2：关键词匹配
@@ -185,22 +191,10 @@ _search_papers_tool = SearchPapersTool()
 
 # MCP 工具依赖的服务映射（工具名 -> 所需 MCP 服务名）
 _MCP_TOOL_SERVICE_MAP = {
-    # arXiv 工具
-    "search_arxiv_papers": "arxiv",
-    "get_arxiv_paper": "arxiv",
-    # Semantic Scholar 工具
-    "search_s2_papers": "semantic_scholar",
-    "get_s2_paper": "semantic_scholar",
-    "get_s2_citations": "semantic_scholar",
-    # CrossRef 工具
-    "search_crossref": "crossref",
-    "get_doi_metadata": "crossref",
-    # DBLP 工具
-    "search_dblp": "dblp",
-    "get_dblp_author": "dblp",
-    # Zotero 工具
-    "search_zotero": "zotero",
-    "get_zotero_collections": "zotero",
+    # academic-mcp 工具
+    "paper_search": "academic_mcp",
+    "paper_download": "academic_mcp",
+    "paper_read": "academic_mcp",
 }
 
 
@@ -215,7 +209,7 @@ def _check_mcp_service_available(tool_name: str, state) -> tuple[bool, str]:
         return True, ""  # 非依赖 MCP 服务的工具
 
     mcp_manager = getattr(state, "mcp_manager", None)
-    if not mcp_manager:
+    if mcp_manager is None:
         return False, service_name
 
     if service_name in mcp_manager._clients:
@@ -250,7 +244,7 @@ async def _handle_multimodal(websocket, db, state, message, message_data, paper_
     """多模态请求完整处理
     
     四条路径:
-    1. 有图片 + 有论文 → AnalyzeChartTool（图表分析）
+    1. 有图片 + 有论文 → llm_service.analyze_chart（图表分析）
     2. 有图片 + 无论文 → chat_with_image 直接分析
     3. 有图片 + 搜索意图 → MultimodalSearchTool
     4. 纯文本多模态意图 → 从当前论文提取图片后分析
@@ -276,6 +270,8 @@ async def _handle_multimodal(websocket, db, state, message, message_data, paper_
                 paper_ids=paper_ids or [],
                 user_id=user_id,
                 session_id=session_id,
+                mcp_manager=getattr(websocket.app.state, 'mcp_manager', None),
+                enable_search=False,
             )
             result = await tool.execute(ctx, query=message, image_data=images[0]["data"], search_mode="text_with_visual")
             await websocket.send_text(json.dumps({
@@ -438,6 +434,8 @@ async def _handle_config_agent(websocket, db, state, message, session_id, user_i
         db=db,
         user_id=user_id,
         session_id=session.id,
+        mcp_manager=getattr(websocket.app.state, 'mcp_manager', None),
+        enable_search=False,
     )
 
     # 从 app.state 创建 ConfigAgent
@@ -522,7 +520,7 @@ async def _handle_config_agent(websocket, db, state, message, session_id, user_i
 
 
 async def _handle_react_agent(websocket, db, state, message, session_id, user_id,
-                               paper_id, paper_ids, chat_history, thinking_mode="quick", mode="normal"):
+                               paper_id, paper_ids, chat_history, thinking_mode="quick", mode="normal", enable_search=False):
     """使用 ReAct Agent 处理需要多步推理的请求
 
     Args:
@@ -551,7 +549,9 @@ async def _handle_react_agent(websocket, db, state, message, session_id, user_id
         paper_id=paper_id,
         paper_ids=effective_paper_ids,
         user_id=user_id,
-        session_id=session.id
+        session_id=session.id,
+        mcp_manager=getattr(websocket.app.state, 'mcp_manager', None),
+        enable_search=enable_search,
     )
 
     full_response = ""
@@ -587,7 +587,7 @@ async def _handle_react_agent(websocket, db, state, message, session_id, user_id
                 continue
 
             # MCP 服务可用性检查：工具依赖的服务未配置时，返回引导信息
-            available, svc_name = _check_mcp_service_available(event["tool"], state)
+            available, svc_name = _check_mcp_service_available(event["tool"], websocket.app.state)
             if not available:
                 from app.tools.config_tools import _SERVICE_REGISTRY
                 display = _SERVICE_REGISTRY.get(svc_name, {}).get("display_name", svc_name)
@@ -627,6 +627,9 @@ async def _handle_react_agent(websocket, db, state, message, session_id, user_id
                 "type": "agent_final",
                 "content": ""
             }))
+            # 兜底：如果 Agent 返回空内容，生成默认消息
+            if not full_response or not full_response.strip():
+                full_response = "抱歉，未能生成有效回答，请重试。"
             # 流式发送最终回答
             chunk_buffer = ChunkBuffer(websocket, interval_ms=50)
             try:
@@ -645,6 +648,30 @@ async def _handle_react_agent(websocket, db, state, message, session_id, user_id
                 "session_id": session.id
             }))
 
+    # 兜底：如果 Agent 完成但未产生任何 agent_final 事件
+    if not full_response:
+        full_response = "抱歉，未能生成有效回答，请重试。"
+        logger.warning(f"Agent completed without producing agent_final event for session {session.id}")
+        # 发送兜底消息
+        await websocket.send_text(json.dumps({
+            "type": "agent_final",
+            "content": ""
+        }))
+        chunk_buffer = ChunkBuffer(websocket, interval_ms=50)
+        try:
+            chunk_size = 20
+            for i in range(0, len(full_response), chunk_size):
+                chunk = full_response[i:i+chunk_size]
+                await chunk_buffer.add(chunk, "rag_chat_chunk")
+            await chunk_buffer.flush("rag_chat_chunk")
+        finally:
+            chunk_buffer.close()
+        await websocket.send_text(json.dumps({
+            "type": "done",
+            "channel": "agent_chat",
+            "session_id": session.id
+        }))
+
     # 保存 AI 回复
     await save_message(db, session.id, "assistant", full_response)
 
@@ -662,7 +689,7 @@ async def _handle_react_agent(websocket, db, state, message, session_id, user_id
 async def _handle_simple_tool(websocket, db, state, tool_name, message, session_id, user_id,
                                paper_id, paper_ids, thinking_mode="quick", chat_history=""):
     """直通单步工具调用（用于阅读辅助等简单场景，避免 ReAct 开销）"""
-    from app.services.agent.agent_service import (
+    from app.services.agent import (
         ToolContext, ExplainTermTool, SummarizeTool, TranslateTool
     )
 
@@ -688,7 +715,9 @@ async def _handle_simple_tool(websocket, db, state, tool_name, message, session_
         paper_id=paper_id,
         paper_ids=paper_ids or [],
         user_id=user_id,
-        session_id=session.id
+        session_id=session.id,
+        mcp_manager=getattr(websocket.app.state, 'mcp_manager', None),
+        enable_search=False,
     )
 
     try:
@@ -739,6 +768,89 @@ async def _handle_simple_tool(websocket, db, state, tool_name, message, session_
         }))
 
 
+async def _handle_prompted_tool(websocket, db, state, tool_name, system_prompt, message, session_id, user_id,
+                                paper_id=None, paper_ids=None, thinking_mode="quick", chat_history=""):
+    """通用 Prompt 驱动工具处理器
+
+    用于 compare_content、extract_key_points 等没有独立 Tool 类、
+    但需要专有 system prompt 的功能芯片。
+    流程：加载论文上下文 → 注入专有 system prompt → 流式调用 LLM。
+    """
+    try:
+        # 1. 获取或创建会话
+        session = await get_or_create_session(db, session_id, user_id, paper_id=paper_id)
+
+        # 2. 保存用户消息
+        await save_message(db, session.id, "user", message)
+
+        # 3. 构建论文上下文
+        paper_context = ""
+        if paper_id:
+            paper_context = await get_paper_text_preview(db, paper_id) or ""
+        elif paper_ids:
+            # 多论文场景：拼接所有论文文本
+            parts = []
+            for pid in paper_ids[:5]:  # 最多5篇
+                text = await get_paper_text_preview(db, pid)
+                if text:
+                    parts.append(f"【论文 ID: {pid}】\n{text[:5000]}")
+            paper_context = "\n\n---\n\n".join(parts)
+
+        # 4. 深度思考模式
+        await _run_thinking(websocket, message, paper_text=paper_context[:2000], thinking_mode=thinking_mode)
+
+        # 5. 构建系统 prompt：注入论文上下文
+        if paper_context:
+            full_system = (
+                f"{system_prompt}\n\n"
+                f"【论文内容】\n{paper_context[:12000]}"
+            )
+        else:
+            full_system = system_prompt
+
+        # 6. 构建消息
+        user_content = message
+        if chat_history:
+            user_content = f"{chat_history}\n\n当前问题：{message}"
+
+        messages = [
+            SystemMessage(content=full_system),
+            HumanMessage(content=user_content),
+        ]
+
+        # 7. 流式调用 LLM
+        chunk_buffer = ChunkBuffer(websocket, interval_ms=50)
+        full_response = ""
+        try:
+            async for chunk in llm_service.llm.astream(messages):
+                if chunk.content:
+                    full_response += chunk.content
+                    await chunk_buffer.add(chunk.content, "rag_chat_chunk")
+            await chunk_buffer.flush("rag_chat_chunk")
+        finally:
+            chunk_buffer.close()
+
+        # 8. 保存 AI 回复
+        await save_message(db, session.id, "assistant", full_response)
+        await auto_title(db, session, message)
+
+        # 9. 发送完成信号
+        await websocket.send_text(json.dumps({
+            "type": "done",
+            "channel": "rag_chat",
+            "session_id": session.id
+        }))
+
+    except asyncio.CancelledError:
+        pass
+    except Exception as e:
+        logger.error(f"Prompted tool {tool_name} 执行失败: {e}")
+        await websocket.send_text(json.dumps({
+            "type": "error",
+            "message": f"工具调用失败: {str(e)}"
+        }))
+
+
 async def _run_thinking(websocket, message, paper_text="", thinking_mode="quick"):
     """在深度思考模式下，先执行思考过程并流式发送 thinking_chunk
 
@@ -769,11 +881,11 @@ async def _run_thinking(websocket, message, paper_text="", thinking_mode="quick"
     await websocket.send_text(json.dumps({"type": "thinking_done"}))
 
 
-async def _handle_general_chat(websocket, db, state, message, session_id, user_id, thinking_mode="quick", chat_history=""):
+async def _handle_general_chat(websocket, db, state, message, session_id, user_id, thinking_mode="quick", chat_history="", enable_search=False):
     """处理无论文的通用对话（闲聊、通用知识问答等）
 
     直接调用 LLM 进行对话，不使用 RAG 检索。
-    相比 RAG 问答省去向量检索 + BM25 约 500ms 开销，响应更快。
+    支持联网搜索：当 enable_search=True 时，会执行网络搜索并将结果注入 LLM 上下文。
     """
     try:
         # 1. 获取或创建会话（paper_id=None）
@@ -786,12 +898,74 @@ async def _handle_general_chat(websocket, db, state, message, session_id, user_i
         # 2.5 深度思考模式：在回答前先展示思考过程
         await _run_thinking(websocket, message, paper_text="", thinking_mode=thinking_mode)
 
-        # 3. 构建消息并流式调用 LLM
-        # 构建系统 prompt，加入指代消解指令
-        system_prompt = GENERAL_CHAT_SYSTEM_PROMPT
+        # 3. 网络搜索（如果启用）—— 通过 open-webSearch MCP 服务
+        web_results = []
+        if enable_search:
+            await websocket.send_text(json.dumps({
+                "type": "search_status",
+                "status": "searching"
+            }))
+
+            mcp_manager = websocket.app.state.mcp_manager
+            try:
+                raw_result = await mcp_manager.call_tool(
+                    server_name="open_websearch",
+                    tool_name="search",
+                    arguments={"query": message, "limit": 5}
+                )
+                if isinstance(raw_result, str):
+                    search_data = json.loads(raw_result)
+                else:
+                    search_data = raw_result
+
+                results_list = search_data.get("results", []) if isinstance(search_data, dict) else []
+                web_results = [
+                    {"title": r.get("title", ""), "href": r.get("url", ""), "body": r.get("description", "")}
+                    for r in results_list
+                ]
+            except Exception as e:
+                logger.warning(f"open-webSearch 搜索失败: {e}")
+                web_results = []
+
+            if web_results:
+                await websocket.send_text(json.dumps({
+                    "type": "search_status",
+                    "status": "completed",
+                    "results_count": len(web_results)
+                }))
+            else:
+                await websocket.send_text(json.dumps({
+                    "type": "search_status",
+                    "status": "failed",
+                    "message": "搜索暂时不可用"
+                }))
+
+        # 4. 构建系统 prompt，注入当前日期时间
+        from datetime import datetime
+        now = datetime.now()
+        WEEKDAYS = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"]
+        date_str = f"{now.strftime('%Y年%m月%d日 %H:%M')} {WEEKDAYS[now.weekday()]}"
+        system_prompt = (
+            f"当前时间：{date_str}。\n"
+            f"当用户询问时间、日期、星期几时，请直接使用上述当前时间回答。\n\n"
+            f"{GENERAL_CHAT_SYSTEM_PROMPT}"
+        )
         if chat_history:
             context_instruction = context_service.build_context_instruction()
             system_prompt = f"{system_prompt}\n\n{context_instruction}"
+
+        # 如果有搜索结果，注入到 system prompt 中
+        if enable_search and web_results:
+            web_context_parts = []
+            for i, wr in enumerate(web_results, 1):
+                web_context_parts.append(f"[{i}] {wr.get('title', '未知标题')}\n{wr.get('body', '')}\n来源: {wr.get('href', '')}")
+            web_context = "\n\n---\n\n".join(web_context_parts)
+            system_prompt += (
+                "\n\n【系统提示：你拥有联网搜索能力】\n"
+                "以下是根据用户问题从互联网搜索到的最新信息，请结合这些信息回答用户的问题。"
+                "如果搜索结果包含相关论文或学术信息，请优先引用。"
+                "\n\n【网络搜索结果】\n" + web_context
+            )
 
         # 构建用户消息，加入对话历史
         user_content = message
@@ -879,14 +1053,26 @@ def _format_tool_result_text(tool: str, result) -> str:
     elif tool == "search_papers":
         papers = data.get("papers", [])
         query = data.get("query", "")
+        source = data.get("source", "local")
+        keywords = data.get("keywords", [])
         if not papers:
-            return f"未找到与「{query}」相关的论文"
-        lines = [f"找到 {len(papers)} 篇与「{query}」相关的论文：\n"]
+            msg = data.get("message", f"未找到与「{query}」相关的论文")
+            return msg
+        source_label = {"本地": "local", "网络": "web"}.get(source, source)
+        kw_str = f"（关键词: {', '.join(keywords)}）" if keywords else ""
+        header = f"找到 {len(papers)} 篇与「{query}」相关的论文{kw_str}"
+        if source == "web":
+            header += " — 来源：网络搜索"
+        lines = [header + "\n"]
         for i, p in enumerate(papers, 1):
             title = p.get("title", "无标题")
             authors = p.get("authors", "")
             abstract = p.get("abstract", "")[:100]
-            lines.append(f"{i}. **{title}** {f'({authors})' if authors else ''}")
+            url = p.get("url", "")
+            line = f"{i}. **{title}** {f'({authors})' if authors else ''}"
+            if url:
+                line += f" [\u94fe\u63a5]({url})"
+            lines.append(line)
             if abstract:
                 lines.append(f"   {abstract}")
         return "\n".join(lines)
@@ -1049,7 +1235,7 @@ async def _handle_knowledge_tool(websocket, db, state, tool_name, tool_instance,
         }))
 
 
-async def _handle_paper_query_tool(websocket, db, state, tool_name, tool_instance, ctx, message, session_id, user_id, paper_id, thinking_mode="quick"):
+async def _handle_paper_query_tool(websocket, db, state, tool_name, tool_instance, ctx, message, session_id, user_id, paper_id, thinking_mode="quick", chat_history="", mcp_manager=None):
     """处理论文查询工具（recent_papers, search_papers）
 
     流程：
@@ -1073,7 +1259,7 @@ async def _handle_paper_query_tool(websocket, db, state, tool_name, tool_instanc
         if tool_name == "recent_papers":
             result = await tool_instance.execute(ctx, limit=10)
         elif tool_name == "search_papers":
-            result = await tool_instance.execute(ctx, query=message)
+            result = await tool_instance.execute(ctx, query=message, chat_history=chat_history, mcp_manager=mcp_manager)
         else:
             result = ToolResult(success=False, error=f"未知论文查询工具: {tool_name}")
 
@@ -1127,7 +1313,7 @@ async def _handle_paper_query_tool(websocket, db, state, tool_name, tool_instanc
 
 async def _handle_multi_agent_research(
     websocket, db, state, message,
-    paper_id, paper_ids, chat_history, session, thinking_mode="quick"
+    paper_id, paper_ids, chat_history, session, thinking_mode="quick", enable_search=False
 ):
     """多 Agent 研究模式处理
 
@@ -1140,6 +1326,11 @@ async def _handle_multi_agent_research(
     性能说明：完整流程约 8-25s（比单 ReAct 深度模式多 30-60% 开销）。
     多角色协同可获得更深入、结构化的研究报告，适合复杂综合性问题。
     """
+    logger.warning("=" * 60)
+    logger.warning("[DIAG] _handle_multi_agent_research 入口被调用")
+    logger.warning(f"[DIAG] query: {message[:100] if message else 'None'}")
+    logger.warning(f"[DIAG] paper_id={paper_id}, paper_ids={paper_ids}, thinking_mode={thinking_mode}")
+    logger.warning("=" * 60)
     from app.services.agent.agent_service import ToolContext
 
     # 保存用户消息
@@ -1158,13 +1349,31 @@ async def _handle_multi_agent_research(
         paper_ids=effective_paper_ids,
         user_id=session.user_id if hasattr(session, 'user_id') else None,
         session_id=session.id,
+        mcp_manager=getattr(websocket.app.state, 'mcp_manager', None),
+        enable_search=enable_search,
     )
+
+    # 加载已保存的子智能体模板
+    saved_agents = []
+    try:
+        from sqlalchemy import select
+        from app.models.custom_subagent import CustomSubAgent
+
+        result = await db.execute(
+            select(CustomSubAgent)
+        )
+        agents = result.scalars().all()
+        saved_agents = [a.to_dict() for a in agents]
+    except Exception as e:
+        logger.warning(f"加载已保存子智能体失败: {e}")
+        saved_agents = []
 
     # 创建协调器
     coordinator = ResearchCoordinator(
         react_agent=react_agent,
         llm_service=llm_service,
         ctx=ctx,
+        saved_agents=saved_agents,
     )
 
     full_response = ""
@@ -1207,7 +1416,15 @@ async def _handle_multi_agent_research(
                 }))
 
             elif event_type == "agent_final":
+                # 只处理 orchestrator 的最终 agent_final，跳过子 Agent 的
+                if sub_agent != "orchestrator":
+                    # 子 Agent 的 agent_final 仅用于内部收集，不发送给前端
+                    logger.debug(f"Skipping sub-agent '{sub_agent}' agent_final (internal only)")
+                    continue
                 full_response = event.get("content", "")
+                # 兜底：如果返回空内容，生成默认消息
+                if not full_response or not full_response.strip():
+                    full_response = "抱歉，未能生成有效回答，请重试。"
                 # 通知前端 Agent 推理结束
                 await websocket.send_text(json.dumps({
                     "type": "agent_final",
@@ -1255,7 +1472,7 @@ async def _handle_multi_agent_research(
     }))
 
 
-async def handle_unified_chat(websocket, state, message, paper_id, paper_ids, session_id, user_id, enable_search, forced_tool=None, thinking_mode="quick", task_key="unified", message_data=None, images=None):
+async def handle_unified_chat(websocket, state, message, paper_id, paper_ids, session_id, user_id, enable_search, forced_tool=None, thinking_mode="quick", task_key="unified", message_data=None, images=None, route_override=None, intent_override=None):
     """统一聊天入口 - 根据意图自动路由到不同功能
 
     流程：
@@ -1319,7 +1536,10 @@ async def handle_unified_chat(websocket, state, message, paper_id, paper_ids, se
             return
 
         # 1. 意图识别
-        if forced_tool:
+        if intent_override:
+            # 确认后恢复执行：使用缓存的意图结果，跳过意图识别
+            intent_result = intent_override
+        elif forced_tool:
             intent_result = {
                 "matched": True,
                 "intent": forced_tool,
@@ -1333,14 +1553,77 @@ async def handle_unified_chat(websocket, state, message, paper_id, paper_ids, se
             except Exception:
                 intent_result = classify_by_keywords(message)
 
-        # 2. 发送意图识别结果给前端
-        await websocket.send_text(json.dumps({
-            "type": "intent_detected",
-            "intent": intent_result.get("intent", "simple_qa") if intent_result.get("matched") else "simple_qa",
-            "tool": intent_result.get("tool", "rag_chat") if intent_result.get("matched") else "rag_chat",
-            "confidence": intent_result.get("confidence", "low"),
-            "matched": intent_result.get("matched", False)
-        }))
+        # 2. 发送意图识别结果给前端（仅在非确认恢复时发送，避免重复）
+        if not intent_override:
+            await websocket.send_text(json.dumps({
+                "type": "intent_detected",
+                "intent": intent_result.get("intent", "simple_qa") if intent_result.get("matched") else "simple_qa",
+                "tool": intent_result.get("tool", "rag_chat") if intent_result.get("matched") else "rag_chat",
+                "confidence": intent_result.get("confidence", "low"),
+                "matched": intent_result.get("matched", False)
+            }))
+
+        # === 智能路由决策 ===
+        intent_type = intent_result.get("intent", "simple_qa") if intent_result and intent_result.get("matched") else "simple_qa"
+        try:
+            if route_override:
+                # 确认后恢复执行：使用缓存的路由结果，跳过路由决策
+                route_result = route_override
+            else:
+                async with AsyncSessionLocal() as db:
+                    from app.services.llm.llm_service import model_router, _request_model
+                    route_result = await model_router.route(message, intent_type, user_id, db, paper_id=paper_id, paper_ids=paper_ids)
+                    # 发送路由决策给前端
+                    model_choice_data = {
+                        "type": "model_choice",
+                        "model": route_result["model"],
+                        "tier": route_result["tier"],
+                        "estimated_cost": route_result["estimated_cost"],
+                        "reason": route_result["reason"],
+                        "privacy_enforced": route_result.get("privacy_enforced", False),
+                    }
+                    await websocket.send_text(json.dumps(model_choice_data))
+                    # 如果需要确认，发送确认请求并阻断执行
+                    if route_result.get("needs_confirmation"):
+                        await websocket.send_text(json.dumps({
+                            "type": "cost_confirm_request",
+                            "estimated_cost": route_result["estimated_cost"],
+                            "model": route_result["model"],
+                            "message": f"预估费用 ¥{route_result['estimated_cost']:.2f}，是否继续？"
+                        }))
+                        # 清理过期的待确认请求
+                        now = time.time()
+                        expired = [k for k, v in _pending_confirmations.items() if now - v["timestamp"] > CONFIRMATION_TIMEOUT]
+                        for k in expired:
+                            del _pending_confirmations[k]
+                        # 缓存待确认的请求上下文
+                        _pending_confirmations[id(state)] = {
+                            "query": message,
+                            "route_result": route_result,
+                            "intent_result": intent_result,
+                            "paper_id": paper_id,
+                            "paper_ids": paper_ids,
+                            "session_id": session_id,
+                            "user_id": user_id,
+                            "enable_search": enable_search,
+                            "forced_tool": forced_tool,
+                            "thinking_mode": thinking_mode,
+                            "task_key": task_key,
+                            "message_data": message_data,
+                            "images": images,
+                            "timestamp": time.time()
+                        }
+                        logger.info(f"费用确认请求已发送，阻断执行。session_id={session_id}")
+                        return  # 阻断，不继续执行
+                    # 使用 contextvars 设置 per-request 模型，避免全局状态并发串扰
+                    _request_model.set(route_result["model"])
+
+            if route_override:
+                # 确认恢复时设置模型
+                from app.services.llm.llm_service import _request_model
+                _request_model.set(route_result["model"])
+        except Exception as e:
+            logger.warning(f"智能路由决策失败（非阻塞）: {e}")
 
         # 2.3 主动澄清检查：意图模糊或缺少必要参数时，主动提问
         if intent_result.get("matched"):
@@ -1375,7 +1658,7 @@ async def handle_unified_chat(websocket, state, message, paper_id, paper_ids, se
                 await _handle_react_agent(
                     websocket, db, state, message, session_id, user_id,
                     paper_id, paper_ids, chat_history, thinking_mode,
-                    mode="deep_research"
+                    mode="deep_research", enable_search=enable_search
                 )
             return
 
@@ -1397,7 +1680,7 @@ async def handle_unified_chat(websocket, state, message, paper_id, paper_ids, se
                 session = await get_or_create_session(db, session_id, user_id, paper_id=paper_id)
                 await _handle_multi_agent_research(
                     websocket, db, state, message,
-                    paper_id, paper_ids, chat_history, session, thinking_mode
+                    paper_id, paper_ids, chat_history, session, thinking_mode, enable_search=enable_search
                 )
             return
 
@@ -1489,7 +1772,7 @@ async def handle_unified_chat(websocket, state, message, paper_id, paper_ids, se
                 async with AsyncSessionLocal() as db:
                     if paper_id:
                         paper_text = await get_paper_text_preview(db, paper_id)
-                    ctx = ToolContext(db=db, paper_id=paper_id, paper_ids=paper_ids, user_id=user_id, session_id=session_id)
+                    ctx = ToolContext(db=db, paper_id=paper_id, paper_ids=paper_ids, user_id=user_id, session_id=session_id, enable_search=False)
                     await _handle_writing_tool(
                         websocket, db, state, "literature_review", _literature_review_tool,
                         ctx, message, session_id, user_id, paper_id, paper_text,
@@ -1498,7 +1781,7 @@ async def handle_unified_chat(websocket, state, message, paper_id, paper_ids, se
 
             elif tool == "cite_paper":
                 async with AsyncSessionLocal() as db:
-                    ctx = ToolContext(db=db, paper_id=paper_id, paper_ids=paper_ids, user_id=user_id, session_id=session_id)
+                    ctx = ToolContext(db=db, paper_id=paper_id, paper_ids=paper_ids, user_id=user_id, session_id=session_id, enable_search=False)
                     await _handle_writing_tool(
                         websocket, db, state, "cite_paper", _cite_paper_tool,
                         ctx, message, session_id, user_id, paper_id,
@@ -1507,7 +1790,7 @@ async def handle_unified_chat(websocket, state, message, paper_id, paper_ids, se
 
             elif tool == "polish_text":
                 async with AsyncSessionLocal() as db:
-                    ctx = ToolContext(db=db, paper_id=paper_id, paper_ids=paper_ids, user_id=user_id, session_id=session_id)
+                    ctx = ToolContext(db=db, paper_id=paper_id, paper_ids=paper_ids, user_id=user_id, session_id=session_id, enable_search=False)
                     await _handle_writing_tool(
                         websocket, db, state, "polish_text", _polish_text_tool,
                         ctx, message, session_id, user_id, paper_id,
@@ -1517,7 +1800,7 @@ async def handle_unified_chat(websocket, state, message, paper_id, paper_ids, se
             # === 知识库工具 ===
             elif tool == "save_card":
                 async with AsyncSessionLocal() as db:
-                    ctx = ToolContext(db=db, paper_id=paper_id, paper_ids=paper_ids, user_id=user_id, session_id=session_id)
+                    ctx = ToolContext(db=db, paper_id=paper_id, paper_ids=paper_ids, user_id=user_id, session_id=session_id, enable_search=False)
                     await _handle_knowledge_tool(
                         websocket, db, state, "save_card", _save_card_tool,
                         ctx, message, session_id, user_id, paper_id,
@@ -1526,7 +1809,7 @@ async def handle_unified_chat(websocket, state, message, paper_id, paper_ids, se
 
             elif tool == "search_cards":
                 async with AsyncSessionLocal() as db:
-                    ctx = ToolContext(db=db, paper_id=paper_id, paper_ids=paper_ids, user_id=user_id, session_id=session_id)
+                    ctx = ToolContext(db=db, paper_id=paper_id, paper_ids=paper_ids, user_id=user_id, session_id=session_id, enable_search=False)
                     await _handle_knowledge_tool(
                         websocket, db, state, "search_cards", _search_cards_tool,
                         ctx, message, session_id, user_id, paper_id,
@@ -1536,7 +1819,7 @@ async def handle_unified_chat(websocket, state, message, paper_id, paper_ids, se
             # === 论文查询工具 ===
             elif tool == "recent_papers":
                 async with AsyncSessionLocal() as db:
-                    ctx = ToolContext(db=db, paper_id=paper_id, paper_ids=paper_ids, user_id=user_id, session_id=session_id)
+                    ctx = ToolContext(db=db, paper_id=paper_id, paper_ids=paper_ids, user_id=user_id, session_id=session_id, enable_search=False)
                     await _handle_paper_query_tool(
                         websocket, db, state, "recent_papers", _recent_papers_tool,
                         ctx, message, session_id, user_id, paper_id,
@@ -1545,11 +1828,15 @@ async def handle_unified_chat(websocket, state, message, paper_id, paper_ids, se
 
             elif tool == "search_papers":
                 async with AsyncSessionLocal() as db:
-                    ctx = ToolContext(db=db, paper_id=paper_id, paper_ids=paper_ids, user_id=user_id, session_id=session_id)
+                    ctx = ToolContext(db=db, paper_id=paper_id, paper_ids=paper_ids, user_id=user_id, session_id=session_id, enable_search=enable_search)
+                    mcp_manager = websocket.app.state.mcp_manager
+                    logger.info(f"[unified_handler] search_papers: mcp_manager type={type(mcp_manager).__name__}, is None={mcp_manager is None}, has_clients={bool(mcp_manager._clients) if mcp_manager and hasattr(mcp_manager, '_clients') else 'N/A'}")
                     await _handle_paper_query_tool(
                         websocket, db, state, "search_papers", _search_papers_tool,
                         ctx, message, session_id, user_id, paper_id,
-                        thinking_mode=thinking_mode
+                        thinking_mode=thinking_mode,
+                        chat_history=chat_history,
+                        mcp_manager=mcp_manager
                     )
 
             # === RAG 问答（含 search_text） ===
@@ -1557,7 +1844,7 @@ async def handle_unified_chat(websocket, state, message, paper_id, paper_ids, se
                 if not paper_id:
                     # RAG 问答需要论文，无论文时降级为通用对话
                     async with AsyncSessionLocal() as db:
-                        await _handle_general_chat(websocket, db, state, message, session_id, user_id, thinking_mode=thinking_mode, chat_history=chat_history)
+                        await _handle_general_chat(websocket, db, state, message, session_id, user_id, thinking_mode=thinking_mode, chat_history=chat_history, enable_search=enable_search)
                     return
 
                 async with AsyncSessionLocal() as db:
@@ -1574,12 +1861,34 @@ async def handle_unified_chat(websocket, state, message, paper_id, paper_ids, se
                     )
                 return
 
+            # === Prompt 驱动工具（对比分析、知识点提取等） ===
+            elif tool == "compare_content":
+                async with AsyncSessionLocal() as db:
+                    await _handle_prompted_tool(
+                        websocket, db, state, "compare_content", COMPARE_CONTENT_PROMPT,
+                        message, session_id, user_id,
+                        paper_id=paper_id, paper_ids=paper_ids,
+                        thinking_mode=thinking_mode, chat_history=chat_history
+                    )
+                return
+
+            elif tool == "extract_key_points":
+                async with AsyncSessionLocal() as db:
+                    await _handle_prompted_tool(
+                        websocket, db, state, "extract_key_points", EXTRACT_KEY_POINTS_PROMPT,
+                        message, session_id, user_id,
+                        paper_id=paper_id, paper_ids=paper_ids,
+                        thinking_mode=thinking_mode, chat_history=chat_history
+                    )
+                return
+
             # === ReAct Agent 兜底（匹配了意图但没有专用 handler） ===
             else:
                 async with AsyncSessionLocal() as db:
                     await _handle_react_agent(
                         websocket, db, state, message, session_id, user_id,
-                        paper_id, paper_ids, chat_history, thinking_mode
+                        paper_id, paper_ids, chat_history, thinking_mode,
+                        enable_search=enable_search
                     )
                 return
 
@@ -1594,7 +1903,7 @@ async def handle_unified_chat(websocket, state, message, paper_id, paper_ids, se
             else:
                 # 无论文时使用通用对话
                 async with AsyncSessionLocal() as db:
-                    await _handle_general_chat(websocket, db, state, message, session_id, user_id, thinking_mode=thinking_mode, chat_history=chat_history)
+                    await _handle_general_chat(websocket, db, state, message, session_id, user_id, thinking_mode=thinking_mode, chat_history=chat_history, enable_search=enable_search)
 
     except asyncio.CancelledError:
         pass
@@ -1621,3 +1930,66 @@ async def handle_unified_chat(websocket, state, message, paper_id, paper_ids, se
                 ))
             except Exception as e:
                 logger.warning(f"画像异步更新触发失败: {e}")
+
+
+async def handle_cost_confirmation(websocket, confirmed: bool, state):
+    """处理费用确认响应
+
+    当用户在前端点击"确认"或"取消"时，ws.py 调用此函数。
+    - 确认：使用原始路由结果中的模型继续执行
+    - 取消：切换到本地免费模型继续执行
+
+    Args:
+        websocket: WebSocket 连接
+        confirmed: 用户是否确认费用
+        state: 连接状态对象（用于查找缓存上下文）
+    """
+    pending = _pending_confirmations.pop(id(state), None)
+    if not pending:
+        await websocket.send_text(json.dumps({
+            "type": "error",
+            "message": "确认请求已过期或不存在，请重新发送消息"
+        }))
+        return
+
+    if confirmed:
+        # 用户确认：使用原始路由结果的模型
+        route_result = pending["route_result"]
+        logger.info(f"用户确认费用，继续使用模型: {route_result['model']}")
+    else:
+        # 用户取消：回退到默认模型（当前无本地 Ollama 环境）
+        route_result = dict(pending["route_result"])
+        route_result["model"] = llm_service._model
+        route_result["tier"] = "cloud_standard"
+        route_result["estimated_cost"] = 0.0
+        route_result["reason"] = "user_declined_cost"
+        route_result["needs_confirmation"] = False
+        # 发送模型切换通知给前端
+        await websocket.send_text(json.dumps({
+            "type": "model_choice",
+            "model": llm_service._model,
+            "tier": "cloud_standard",
+            "reason": "user_declined_cost",
+            "estimated_cost": 0.0,
+            "privacy_enforced": False,
+        }))
+        logger.info(f"用户拒绝费用，回退到默认模型: {llm_service._model}")
+
+    # 使用缓存的上下文重新调用处理流程，跳过路由决策和意图识别
+    await handle_unified_chat(
+        websocket=websocket,
+        state=state,
+        message=pending["query"],
+        paper_id=pending["paper_id"],
+        paper_ids=pending["paper_ids"],
+        session_id=pending["session_id"],
+        user_id=pending["user_id"],
+        enable_search=pending["enable_search"],
+        forced_tool=pending["forced_tool"],
+        thinking_mode=pending["thinking_mode"],
+        task_key=pending["task_key"],
+        message_data=pending["message_data"],
+        images=pending["images"],
+        route_override=route_result,
+        intent_override=pending["intent_result"],
+    )

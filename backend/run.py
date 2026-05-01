@@ -9,6 +9,12 @@
     uvicorn app.main:app --reload --host 0.0.0.0 --port 8000 --ws-per-message-deflate
 """
 import os
+import sys
+
+# Windows 下强制使用 ProactorEventLoop（支持 asyncio subprocess）
+if sys.platform == "win32":
+    import asyncio
+    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 
 # 设置 HuggingFace 镜像（国内下载加速）- 必须在导入任何 huggingface 相关库之前设置
 os.environ['HF_ENDPOINT'] = 'https://hf-mirror.com'

@@ -926,4 +926,121 @@
   .reviewContent {
     padding: 16px;
   }
+
+  .editorContent {
+    flex-direction: column;
+  }
+}
+
+/* ===== EditorTab 文档编辑样式 ===== */
+
+.editorTabContainer {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  gap: 12px;
+}
+
+.editorToolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+  flex-wrap: wrap;
+}
+
+.editorTitleInput {
+  flex: 1;
+  min-width: 180px;
+  padding: 8px 12px;
+  border: 1px solid var(--color-border, #333);
+  border-radius: 8px;
+  background: var(--color-bg-secondary, #1a1a2e);
+  color: var(--color-text-primary, #e0e0e0);
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.editorTitleInput:focus {
+  border-color: var(--color-accent, #4a9eff);
+}
+
+.editorContent {
+  display: flex;
+  flex: 1;
+  gap: 12px;
+  min-height: 0;
+}
+
+.editorTextarea {
+  flex: 1;
+  padding: 16px;
+  border: 1px solid var(--color-border, #333);
+  border-radius: 8px;
+  background: var(--color-bg-secondary, #1a1a2e);
+  color: var(--color-text-primary, #e0e0e0);
+  font-family: 'Consolas', 'Monaco', monospace;
+  font-size: 14px;
+  line-height: 1.6;
+  resize: none;
+  overflow-y: auto;
+  outline: none;
+}
+
+.editorTextarea:focus {
+  border-color: var(--color-accent, #4a9eff);
+}
+
+.editorPreview {
+  flex: 1;
+  padding: 16px;
+  border: 1px solid var(--color-border, #333);
+  border-radius: 8px;
+  background: var(--color-bg-secondary, #1a1a2e);
+  overflow-y: auto;
+}
+
+.editorPreviewFull {
+  flex: unset;
+  width: 100%;
+}
+
+.exportBtn {
+  padding: 6px 14px;
+  border-radius: 6px;
+  border: 1px solid var(--color-border, #444);
+  background: var(--color-bg-tertiary, #252540);
+  color: var(--color-text-primary, #e0e0e0);
+  cursor: pointer;
+  font-size: 13px;
+  transition: background 0.2s;
+  white-space: nowrap;
+}
+
+.exportBtn:hover:not(:disabled) {
+  background: var(--color-accent, #4a9eff);
+  color: white;
+}
+
+.exportBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.toggleBtn {
+  padding: 6px 14px;
+  border-radius: 6px;
+  border: 1px solid var(--color-border, #444);
+  background: var(--color-bg-tertiary, #252540);
+  color: var(--color-text-primary, #e0e0e0);
+  cursor: pointer;
+  font-size: 13px;
+  transition: background 0.2s, color 0.2s;
+}
+
+.toggleBtnActive {
+  background: var(--color-accent, #4a9eff);
+  color: white;
+  border-color: var(--color-accent, #4a9eff);
 }

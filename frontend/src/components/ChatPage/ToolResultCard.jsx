@@ -176,13 +176,113 @@ function KnowledgeCard({ tool, content }) {
   );
 }
 
+/* ===== 来源 Badge 颜色映射 ===== */
+const SOURCE_BADGE_COLORS = {
+  'arXiv': { bg: 'rgba(178, 34, 34, 0.10)', color: '#B22222', border: 'rgba(178, 34, 34, 0.25)' },
+  'Google Scholar': { bg: 'rgba(66, 133, 244, 0.10)', color: '#4285F4', border: 'rgba(66, 133, 244, 0.25)' },
+  'Semantic Scholar': { bg: 'rgba(138, 75, 175, 0.10)', color: '#8A4BAF', border: 'rgba(138, 75, 175, 0.25)' },
+  'Web': { bg: 'rgba(52, 168, 83, 0.10)', color: '#34A853', border: 'rgba(52, 168, 83, 0.25)' },
+};
+
+function SourceBadge({ source }) {
+  const colors = SOURCE_BADGE_COLORS[source] || SOURCE_BADGE_COLORS['Web'];
+  return (
+    <span
+      className={styles.sourceBadge}
+      style={{ background: colors.bg, color: colors.color, borderColor: colors.border }}
+    >
+      {source}
+    </span>
+  );
+}
+
+/* ===== 可展开摘要 ===== */
+function ExpandableAbstract({ text, limit = 100 }) {
+  const [expanded, setExpanded] = useState(false);
+  if (!text) return null;
+  const needsTruncate = text.length > limit;
+  return (
+    <div className={styles.paperAbstract}>
+      {expanded || !needsTruncate ? text : text.slice(0, limit) + '...'}
+      {needsTruncate && (
+        <button className={styles.expandBtn} onClick={() => setExpanded(v => !v)}>
+          {expanded ? '收起' : '展开'}
+        </button>
+      )}
+    </div>
+  );
+}
+
 /* ===== Papers 类型卡片 (recent_papers, search_papers) ===== */
 function PapersCard({ tool, content }) {
   const navigate = useNavigate();
   const parsed = parseContent(content);
+
+  // loading 状态
+  if (parsed && parsed._loading) {
+    return (
+      <div className={styles.card}>
+        <div className={styles.cardHeader}>
+          <span className={styles.cardTitle}>🔎 正在搜索论文...</span>
+          <span className={styles.searchingDots}><span></span><span></span><span></span></span>
+        </div>
+        <div className={styles.loadingBody}>
+          <div className={styles.loadingSkeleton}></div>
+          <div className={styles.loadingSkeleton} style={{ width: '70%' }}></div>
+          <div className={styles.loadingSkeleton} style={{ width: '50%' }}></div>
+        </div>
+      </div>
+    );
+  }
+
+  const source = parsed?.source || 'local'; // 向后兼容：无 source 字段视为 local
+  const keywords = parsed?.keywords || [];
   const papers = Array.isArray(parsed) ? parsed
     : (parsed?.papers ? parsed.papers : null);
 
+  // Agent 模式返回的摘要信息（无结构化 papers 数据，仅有文本摘要）
+  if (source === 'agent') {
+    const summary = parsed?.summary || '';
+    const count = parsed?.count || 0;
+    return (
+      <div className={styles.card}>
+        <div className={styles.cardHeader}>
+          <span className={styles.cardTitle}>
+            {count > 0 ? `🔎 Agent 检索到 ${count} 篇论文` : '🔎 Agent 检索完成'}
+          </span>
+        </div>
+        {summary && (
+          <div className={styles.writingBody}>
+            <span style={{ color: 'var(--color-text-secondary, #666)', fontSize: '13px' }}>{summary}</span>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // 无结果
+  if (source === 'none' || (papers && papers.length === 0)) {
+    return (
+      <div className={styles.card}>
+        <div className={styles.cardHeader}>
+          <span className={styles.cardTitle}>🔎 未找到相关论文</span>
+        </div>
+        <div className={styles.emptyBody}>
+          <span className={styles.emptyIcon}>📭</span>
+          <span className={styles.emptyText}>未找到相关论文</span>
+          {keywords.length > 0 && (
+            <div className={styles.keywordsRow}>
+              搜索关键词：{keywords.map((kw, i) => (
+                <span key={i} className={styles.keywordTag}>{kw}</span>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // 降级：无法解析的 papers
   if (!papers || !Array.isArray(papers)) {
     return (
       <div className={styles.card}>
@@ -197,36 +297,74 @@ function PapersCard({ tool, content }) {
   }
 
   const displayPapers = papers.slice(0, 10);
+  const isWeb = source === 'web';
+
+  // 标题文案
+  const titleText = isWeb
+    ? `🌐 网络搜索 ${papers.length} 篇论文`
+    : `📄 本地论文 ${papers.length} 篇`;
 
   return (
-    <div className={styles.card}>
+    <div className={`${styles.card} ${isWeb ? styles.webCard : ''}`}>
       <div className={styles.cardHeader}>
-        <span className={styles.cardTitle}>{INTENT_LABELS[tool] || tool}</span>
-        <span className={styles.cardCount}>{papers.length} 篇论文</span>
+        <span className={styles.cardTitle}>{titleText}</span>
+        {keywords.length > 0 && (
+          <div className={styles.headerKeywords}>
+            {keywords.slice(0, 3).map((kw, i) => (
+              <span key={i} className={styles.keywordTag}>{kw}</span>
+            ))}
+          </div>
+        )}
       </div>
       <div className={styles.cardList}>
         {displayPapers.map((paper, idx) => (
-          <div key={idx} className={styles.paperItem}>
+          <div key={idx} className={`${styles.paperItem} ${isWeb ? styles.webPaperItem : ''}`}>
             <div className={styles.paperItemContent}>
-              <div className={styles.paperTitle}>{paper.title || '无标题'}</div>
-              {(paper.authors || paper.author) && (
-                <div className={styles.paperMeta}>
-                  {paper.authors || paper.author}
-                </div>
-              )}
-              {paper.uploaded_at && (
+              <div className={styles.paperTitleRow}>
+                {isWeb && paper.url ? (
+                  <a
+                    className={styles.paperTitleLink}
+                    href={paper.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(e) => { e.stopPropagation(); }}
+                  >
+                    {paper.title || '无标题'}
+                  </a>
+                ) : (
+                  <div className={styles.paperTitle}>{paper.title || '无标题'}</div>
+                )}
+                {isWeb && paper.source && <SourceBadge source={paper.source} />}
+              </div>
+              <div className={styles.paperMeta}>
+                {(paper.authors || paper.author) && (
+                  <span>{typeof paper.authors === 'string' ? paper.authors : (Array.isArray(paper.authors) ? paper.authors.join(', ') : paper.author)}</span>
+                )}
+                {paper.year && <span className={styles.paperYear}>{paper.year}</span>}
+              </div>
+              {isWeb && paper.abstract && <ExpandableAbstract text={paper.abstract} />}
+              {!isWeb && paper.created_at && (
                 <div className={styles.paperTime}>
-                  {new Date(paper.uploaded_at).toLocaleDateString('zh-CN')}
+                  {new Date(paper.created_at).toLocaleDateString('zh-CN')}
                 </div>
               )}
             </div>
-            {paper.id && (
+            {!isWeb && paper.id && (
               <button
                 className={styles.openBtn}
                 onClick={() => navigate(`/reader/${paper.id}`)}
                 title="打开阅读"
               >
                 阅读
+              </button>
+            )}
+            {isWeb && paper.url && (
+              <button
+                className={styles.openBtn}
+                onClick={() => window.open(paper.url, '_blank')}
+                title="在新标签页打开"
+              >
+                打开
               </button>
             )}
           </div>

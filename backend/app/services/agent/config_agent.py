@@ -35,7 +35,7 @@ CONFIG_INTENT_KEYWORDS = [
     "服务", "API Key", "apikey", "api key",
     "configure", "setup", "connect", "enable", "disable",
     "arxiv", "semantic scholar", "crossref", "dblp", "zotero",
-    "bing", "tavily", "brave",
+    "websearch", "academic",
     "MCP", "mcp",
 ]
 
@@ -70,7 +70,6 @@ class ConfigAgent:
         mcp_manager=None,
         health_service=None,
         settings_service=None,
-        search_dispatcher=None,
         tool_registry=None,
         event_bus=None,
         max_iterations: int = 5,
@@ -78,7 +77,6 @@ class ConfigAgent:
         self.mcp_manager = mcp_manager
         self.health_service = health_service
         self.settings_service = settings_service
-        self.search_dispatcher = search_dispatcher
         self.tool_registry = tool_registry
         self.event_bus = event_bus
         self.max_iterations = max_iterations
@@ -101,7 +99,6 @@ class ConfigAgent:
             mcp_manager=getattr(app_state, "mcp_manager", None),
             health_service=getattr(app_state, "health_service", None),
             settings_service=getattr(app_state, "settings_service", None),
-            search_dispatcher=getattr(app_state, "search_dispatcher", None),
             tool_registry=getattr(app_state, "tool_registry", None),
             event_bus=getattr(app_state, "event_bus", None),
         )
@@ -111,11 +108,9 @@ class ConfigAgent:
         tool_instances = [
             ListAvailableServicesTool(
                 mcp_manager=self.mcp_manager,
-                search_dispatcher=self.search_dispatcher,
             ),
             ConfigureServiceTool(
                 mcp_manager=self.mcp_manager,
-                search_dispatcher=self.search_dispatcher,
                 tool_registry=self.tool_registry,
                 event_bus=self.event_bus,
             ),
@@ -126,7 +121,6 @@ class ConfigAgent:
             ),
             GetServiceStatusTool(
                 mcp_manager=self.mcp_manager,
-                search_dispatcher=self.search_dispatcher,
                 health_service=self.health_service,
             ),
             UpdateApiKeyTool(

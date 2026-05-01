@@ -152,15 +152,6 @@ def get_skill_registry(request: Request) -> SkillRegistry:
     return request.app.state.skill_registry
 
 
-def get_search_dispatcher(request: Request):
-    """从 app.state 获取多源搜索调度器"""
-    from app.services.search import SearchDispatcher
-    dispatcher = getattr(request.app.state, "search_dispatcher", None)
-    if dispatcher is None:
-        raise RuntimeError("SearchDispatcher 未初始化")
-    return dispatcher
-
-
 def get_config_service(request: Request):
     """从 app.state 获取 ConfigService（四层覆盖链配置服务）
 

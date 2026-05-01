@@ -65,6 +65,25 @@ class ReActAgent:
     实现 Thought-Action-Observation 循环，支持流式事件输出。
     """
     
+    # ReAct 输出格式指令（独立常量，供 system_prompt_override 路径复用）
+    REACT_FORMAT_INSTRUCTIONS = """回答格式（严格遵守）：
+
+如果需要使用工具：
+Thought: [你的推理过程，分析用户需求，决定下一步行动]
+Action: [工具名称]
+Action Input: [JSON 格式的参数]
+
+如果已经有足够信息回答用户：
+Thought: [总结推理过程]
+Final Answer: [最终回答]
+
+规则：
+1. 每次只能调用一个工具
+2. Action Input 必须是合法的 JSON
+3. 根据 Observation 结果决定下一步
+4. 工具执行失败时，尝试换一种方式
+5. 使用中文进行思考和回答"""
+
     # ReAct System Prompt 模板（中文，适配 DeepSeek/Qwen）
     REACT_SYSTEM_PROMPT = """你是 PaperChat 学术研究助手。你通过 Thought（思考）和 Action（行动）循环来解决用户问题。
 
@@ -163,9 +182,14 @@ Final Answer: [最终回答]
                                             tool_subset=tool_subset)
                 
                 # 2. 调用 LLM（非流式，需要完整解析）
+                logger.warning(f"[DIAG] ReActAgent 第{i+1}轮: system_prompt_len={len(prompt[0].content)}, has_override={system_prompt_override is not None}")
+                if system_prompt_override:
+                    logger.warning(f"[DIAG] 自定义系统提示词前100字: {prompt[0].content[:100]}")
                 response = await self._call_llm(prompt)
                 llm_call_count += 1
+                logger.warning(f"[DIAG] ReActAgent LLM响应: len={len(response)}, preview={response[:200]}")
                 parsed = self._parse_response(response)
+                logger.warning(f"[DIAG] 解析结果: is_final={parsed.is_final}, actions={len(parsed.actions)}, thought={bool(parsed.thought)}")
                 
                 # 3. yield thought
                 if parsed.thought:
@@ -180,6 +204,8 @@ Final Answer: [最终回答]
                 
                 # 5. 如果没有 action，强制结束
                 if not parsed.actions:
+                    logger.warning(f"[DIAG] 无Action! 第{i+1}轮 is_final={parsed.is_final}, thought长度={len(parsed.thought) if parsed.thought else 0}")
+                    logger.warning(f"[DIAG] LLM完整响应: {response[:500]}")
                     yield {"type": "agent_final", "content": parsed.thought or "抱歉，我无法处理这个请求。"}
                     return
                 
@@ -267,9 +293,10 @@ Final Answer: [最终回答]
             
         except Exception as e:
             error_message = str(e)
-            logger.error(f"Agent run failed: {e}")
+            logger.error(f"Agent run failed: {e}", exc_info=True)
             yield {"type": "agent_final", "content": f"抱歉，处理请求时发生错误：{error_message}"}
-            raise
+            # 不再 raise —— 否则 handler 的 async for 循环会崩溃，
+            # 导致 done 消息无法发送、前端卡住
         finally:
             # 记录指标（失败不应影响 Agent 返回结果）
             try:
@@ -304,41 +331,40 @@ Final Answer: [最终回答]
         """
         # 获取工具描述（可按 tool_subset 过滤）
         if tool_subset is not None:
-            all_tools_desc = agent_service.get_tools_description()
-            # 按行解析工具描述，过滤出 tool_subset 中的工具块
-            filtered_lines = []
-            current_tool_lines: List[str] = []
-            current_tool_name: Optional[str] = None
-            for line in all_tools_desc.splitlines():
-                # 工具描述块以 "工具名：" 或 "- 工具名" 开头（根据 get_tools_description 实现适配）
-                # 尝试匹配 "tool_name:" 或 "- tool_name" 格式
-                stripped = line.strip()
-                matched_name = None
-                for tname in (self.tools.keys() if self.tools else []):
-                    if stripped.startswith(tname + ":") or stripped.startswith("- " + tname):
-                        matched_name = tname
-                        break
-                if matched_name is not None:
-                    # 保存上一个工具块
-                    if current_tool_name is not None and current_tool_name in tool_subset:
-                        filtered_lines.extend(current_tool_lines)
-                    current_tool_name = matched_name
-                    current_tool_lines = [line]
-                elif current_tool_name is not None:
-                    current_tool_lines.append(line)
+            logger.info(f"[SubAgent] tool_subset 过滤请求: {tool_subset}")
+            logger.info(f"[SubAgent] 已注册工具: {list(self.tools.keys())}")
+
+            # 直接从工具注册表构建过滤后的描述（避免脆弱的文本解析）
+            filtered_descs = []
+            for tname in tool_subset:
+                tool = self.tools.get(tname)
+                if tool:
+                    # 获取工具 schema 构建描述（与 get_tools_description 格式一致）
+                    schema = tool.get_schema()
+                    params = schema.get("parameters", {}).get("properties", {})
+                    required = schema.get("parameters", {}).get("required", [])
+                    param_strs = []
+                    for pname, pinfo in params.items():
+                        req = " (required)" if pname in required else ""
+                        param_strs.append(f"{pname}: {pinfo.get('type', 'any')}{req}")
+                    params_desc = ", ".join(param_strs) if param_strs else "无参数"
+                    filtered_descs.append(f"- {schema['name']}: {schema['description']} | 参数: {params_desc}")
                 else:
-                    filtered_lines.append(line)
-            # 处理最后一个工具块
-            if current_tool_name is not None and current_tool_name in tool_subset:
-                filtered_lines.extend(current_tool_lines)
-            tools_description = "\n".join(filtered_lines) if filtered_lines else all_tools_desc
+                    logger.warning(f"[SubAgent] tool_subset 中的工具 '{tname}' 未在注册表中找到")
+
+            if filtered_descs:
+                tools_description = "\n".join(filtered_descs)
+                logger.info(f"[SubAgent] 过滤后工具数量: {len(filtered_descs)}, 工具: {[t.split(':')[0].strip('- ') for t in filtered_descs]}")
+            else:
+                logger.warning(f"[SubAgent] tool_subset 过滤后无匹配工具！fallback 到全部工具")
+                tools_description = agent_service.get_tools_description()
         else:
             tools_description = agent_service.get_tools_description()
 
         # 构建 System Prompt（优先使用 override）
         if system_prompt_override is not None:
-            # 子 Agent 角色覆盖：将工具描述注入到 override 提示词末尾
-            system_content = system_prompt_override + f"\n\n可用工具：\n{tools_description}"
+            # 子 Agent 角色覆盖：追加 ReAct 格式指令 + 工具描述，确保 LLM 输出可解析的格式
+            system_content = system_prompt_override + f"\n\n{self.REACT_FORMAT_INSTRUCTIONS}\n\n可用工具：\n{tools_description}"
         elif mode == "deep_research":
             format_instructions = """如果需要使用工具：
 Thought: [阶段标签] [你的推理过程，分析用户需求，决定下一步行动]
@@ -399,11 +425,26 @@ Final Answer: [最终回答]"""
             messages: LangChain Message 列表
             
         Returns:
-            LLM 响应文本
+            LLM 响应文本（纯字符串）
         """
         try:
             response = await llm_service.llm.ainvoke(messages)
-            return response.content
+            content = response.content
+            
+            # 处理 content 可能是列表的情况（某些 LangChain 版本中 streaming=True 时）
+            if isinstance(content, list):
+                text_parts = []
+                for block in content:
+                    if isinstance(block, dict):
+                        text_parts.append(block.get("text", str(block)))
+                    elif isinstance(block, str):
+                        text_parts.append(block)
+                    else:
+                        text_parts.append(str(block))
+                content = "\n".join(text_parts)
+                logger.warning(f"[DIAG] _call_llm: content 为列表，已拼接为字符串，长度={len(content)}")
+            
+            return content if isinstance(content, str) else str(content)
         except Exception as e:
             logger.error(f"LLM 调用失败: {e}")
             return f"Thought: 调用语言模型时出错\nFinal Answer: 抱歉，系统暂时无法处理您的请求，请稍后重试。"
@@ -426,50 +467,64 @@ Final Answer: [最终回答]"""
         if thought_match:
             parsed.thought = thought_match.group(1).strip()
         
-        # 检查是否有 Final Answer
-        final_match = re.search(r'Final Answer:\s*(.+)', response, re.DOTALL | re.IGNORECASE)
+        # 检查是否有 Final Answer（兼容 Final Answer: 后跟换行再跟内容）
+        final_match = re.search(r'Final\s*Answer:\s*\n?\s*(.+)', response, re.DOTALL | re.IGNORECASE)
         if final_match:
-            parsed.final_answer = final_match.group(1).strip()
-            parsed.is_final = True
-            return parsed
+            answer_text = final_match.group(1).strip()
+            if answer_text:  # 确保 Final Answer 非空
+                parsed.final_answer = answer_text
+                parsed.is_final = True
+                return parsed
         
-        # 提取多个 Action（支持分号或换行分隔的多个 Action）
-        # 首先尝试匹配多个 Action/Action Input 对
+        # 提取多个 Action（支持多种格式）
+        # 格式1: Action: tool_name\nAction Input: {...}
+        # 格式2: Action: tool_name\n{...}  (无 Action Input 前缀)
+        # 格式3: Action: tool_name\nAction Input:\n{...}  (换行后跟 JSON)
         action_blocks = re.findall(
-            r'Action:\s*(\w+)\s*\n+Action Input:\s*(\{.*?\})',
+            r'Action:\s*(\w+)\s*\n+Action\s*Input:\s*\n?\s*(\{.*?\})',
             response, 
             re.DOTALL | re.IGNORECASE
         )
         
+        # 若未匹配到标准格式，尝试 Action 后直接跟 JSON 的情况
+        if not action_blocks:
+            action_blocks = re.findall(
+                r'Action:\s*(\w+)\s*\n+\s*(\{.*?\})',
+                response, 
+                re.DOTALL | re.IGNORECASE
+            )
+        
         if action_blocks:
             for action_name, action_input_str in action_blocks:
-                try:
-                    action_input = json.loads(action_input_str)
-                except json.JSONDecodeError:
-                    try:
-                        action_input = json.loads(action_input_str.strip())
-                    except json.JSONDecodeError:
-                        logger.warning(f"无法解析 Action Input JSON: {action_input_str}")
-                        action_input = {}
+                action_input = self._parse_json_safe(action_input_str)
                 parsed.actions.append(ParsedAction(action=action_name.strip(), action_input=action_input))
         else:
             # 回退到单个 Action 匹配
             action_match = re.search(r'Action:\s*(\w+)', response, re.IGNORECASE)
             if action_match:
                 action_name = action_match.group(1).strip()
-                action_input_match = re.search(r'Action Input:\s*(\{.*?\})', response, re.DOTALL | re.IGNORECASE)
+                # 尝试多种 Action Input 匹配模式
                 action_input = {}
+                # 模式1: Action Input: {...}
+                action_input_match = re.search(r'Action\s*Input:\s*\n?\s*(\{.*?\})', response, re.DOTALL | re.IGNORECASE)
+                if not action_input_match:
+                    # 模式2: Action 行后直接跟 {...}
+                    action_input_match = re.search(r'Action:\s*\w+\s*\n+\s*(\{.*?\})', response, re.DOTALL | re.IGNORECASE)
                 if action_input_match:
-                    try:
-                        action_input = json.loads(action_input_match.group(1))
-                    except json.JSONDecodeError:
-                        try:
-                            action_input = json.loads(action_input_match.group(1).strip())
-                        except json.JSONDecodeError:
-                            logger.warning(f"无法解析 Action Input JSON: {action_input_match.group(1)}")
+                    action_input = self._parse_json_safe(action_input_match.group(1))
                 parsed.actions.append(ParsedAction(action=action_name, action_input=action_input))
         
         return parsed
+    
+    def _parse_json_safe(self, json_str: str) -> dict:
+        """安全解析 JSON 字符串，失败返回空字典"""
+        for s in [json_str, json_str.strip()]:
+            try:
+                return json.loads(s)
+            except json.JSONDecodeError:
+                continue
+        logger.warning(f"无法解析 Action Input JSON: {json_str[:200]}")
+        return {}
     
     async def _execute_tool(self, action: str, action_input: dict, ctx: ToolContext, 
                             tool_call_records: List[dict] = None) -> str:
@@ -516,7 +571,11 @@ Final Answer: [最终回答]"""
         
         tool_start = time.perf_counter()
         try:
-            result = await tool.execute(ctx, **action_input)
+            # 将 ctx 中的 mcp_manager 注入工具调用参数
+            extra_kwargs = {}
+            if hasattr(ctx, 'mcp_manager') and ctx.mcp_manager is not None:
+                extra_kwargs["mcp_manager"] = ctx.mcp_manager
+            result = await tool.execute(ctx, **action_input, **extra_kwargs)
             observation = self._format_observation(result)
             tool_duration = (time.perf_counter() - tool_start) * 1000
             
@@ -817,12 +876,39 @@ Final Answer: [最终回答]"""
         
         try:
             response = await llm_service.llm.ainvoke(messages)
-            return response.content
+            content = response.content
+            # 处理 content 可能是列表的情况
+            if isinstance(content, list):
+                text_parts = []
+                for block in content:
+                    if isinstance(block, dict):
+                        text_parts.append(block.get("text", str(block)))
+                    elif isinstance(block, str):
+                        text_parts.append(block)
+                    else:
+                        text_parts.append(str(block))
+                content = "\n".join(text_parts)
+            if not isinstance(content, str):
+                content = str(content)
+            # 防止 LLM 返回 None 或空字符串
+            if content and content.strip():
+                return content
+            raise ValueError("LLM 返回了空内容")
         except Exception as e:
             logger.error(f"强制总结失败: {e}")
-            # 返回最后一步的思考作为 fallback
+            # 收集所有有效 observation 作为 fallback 内容
+            fallback_parts = []
+            for thought, action, action_input, observation in scratchpad:
+                if action is None and thought is not None and thought.startswith("_"):
+                    continue
+                if observation and not observation.startswith("[ERROR]"):
+                    fallback_parts.append(observation[:200])
+            if fallback_parts:
+                return f"基于已收集到的信息：\n\n" + "\n\n".join(fallback_parts) + "\n\n（已达到最大迭代次数，以上为已收集的原始信息）"
             last_thought = scratchpad[-1][0] if scratchpad else ""
-            return f"{last_thought}\n\n（已达到最大迭代次数，部分任务可能未完成）"
+            if last_thought and not last_thought.startswith("_"):
+                return f"{last_thought}\n\n（已达到最大迭代次数，部分任务可能未完成）"
+            return "抱歉，在有限步骤内未能生成有效回答。请尝试简化问题或重新提问。"
 
 
 # 全局 ReAct Agent 实例

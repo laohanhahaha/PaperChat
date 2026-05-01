@@ -21,7 +21,7 @@ from app.handlers.chat_handler import handle_chat
 from app.handlers.rag_handler import handle_rag_chat
 from app.handlers.agent_handler import handle_agent_chat
 from app.handlers.cross_doc_handler import handle_cross_doc_chat
-from app.handlers.unified_handler import handle_unified_chat
+from app.handlers.unified_handler import handle_unified_chat, handle_cost_confirmation
 
 logger = logging.getLogger(__name__)
 
@@ -240,6 +240,18 @@ async def websocket_endpoint(websocket: WebSocket, token: str = Query(default=No
                     "message": "已取消当前任务"
                 }))
                 continue
+
+            elif msg_type == "cost_confirmed":
+                """费用确认响应 — 用户点击确认或取消"""
+                confirmed = data.get("confirmed", False)
+
+                if "unified" in state.running_tasks:
+                    state.running_tasks["unified"].cancel()
+                    del state.running_tasks["unified"]
+
+                state.running_tasks["unified"] = asyncio.create_task(
+                    handle_cost_confirmation(websocket, confirmed, state)
+                )
 
             elif msg_type == "unified_chat":
                 """统一聊天入口 - 路由到 unified_handler（21种意图 + ReAct + 安全检测）"""

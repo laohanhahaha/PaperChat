@@ -10,7 +10,7 @@ import json
 from typing import Any
 
 from app.services.llm_service import llm_service
-from app.services.rag.rag_service import rag_service
+from app.services.rag_service import rag_service
 from app.handlers.base import ChatHandlerBase
 from app.handlers.ws_utils import ChunkBuffer
 

@@ -3,7 +3,7 @@
 提供 Tool、ToolContext、ToolResult 三个基础类型。
 原始定义来自 services/core/tool_base.py，提升为顶层管理。
 """
-from typing import Optional, List
+from typing import Optional, List, Any
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 
@@ -16,6 +16,8 @@ class ToolContext:
     paper_ids: List[int] = field(default_factory=list)
     user_id: Optional[int] = None
     session_id: Optional[int] = None
+    mcp_manager: Optional[Any] = None
+    enable_search: bool = False
 
 
 @dataclass

@@ -3,7 +3,9 @@
 提供笔记的创建、查询、更新、删除等接口
 """
 from typing import List, Optional
+from pydantic import BaseModel
 from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi.responses import PlainTextResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, or_, func
 
@@ -328,9 +330,9 @@ async def search_notes(
             and_(*conditions)
         ).order_by(Note.updated_at.desc())
     )
-    
+
     notes_with_highlight = result.all()
-    
+
     # 构造响应数据
     response_data = []
     for note, highlight in notes_with_highlight:
@@ -345,5 +347,123 @@ async def search_notes(
             "highlight_text": highlight.selected_text if highlight else None
         }
         response_data.append(note_dict)
-    
+
     return response_data
+
+
+class ExportRequest(BaseModel):
+    paper_ids: List[int]
+    format: str = "md"
+
+
+@router.get("/export")
+async def export_notes(
+    paper_id: int = Query(..., description="论文 ID"),
+    format: str = Query("md", regex="^(md|json)$"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """导出单篇论文的笔记"""
+    result = await db.execute(
+        select(Paper).where(and_(Paper.id == paper_id, Paper.user_id == current_user.id))
+    )
+    paper = result.scalar_one_or_none()
+    if not paper:
+        raise HTTPException(status_code=404, detail="论文不存在或无权限访问")
+
+    result = await db.execute(
+        select(Note, Highlight).outerjoin(
+            Highlight, Note.highlight_id == Highlight.id
+        ).where(
+            and_(Note.paper_id == paper_id, Note.user_id == current_user.id)
+        ).order_by(Note.created_at.asc())
+    )
+    rows = result.all()
+
+    if format == "json":
+        notes_data = []
+        for note, highlight in rows:
+            notes_data.append({
+                "id": note.id,
+                "paper_id": note.paper_id,
+                "content": note.content,
+                "highlight_text": highlight.selected_text if highlight else None,
+                "created_at": note.created_at.isoformat() if note.created_at else None,
+                "updated_at": note.updated_at.isoformat() if note.updated_at else None,
+            })
+        return {"paper_id": paper_id, "paper_title": paper.title, "notes": notes_data, "count": len(notes_data)}
+
+    md_lines = [f"# 笔记 - {paper.title}\n"]
+    for i, (note, highlight) in enumerate(rows, 1):
+        md_lines.append(f"## 笔记 {i}")
+        if highlight and highlight.selected_text:
+            md_lines.append(f"> {highlight.selected_text}\n")
+        md_lines.append(f"{note.content}\n")
+    md_lines.append(f"---\n共 {len(rows)} 条笔记")
+
+    return PlainTextResponse("\n".join(md_lines), media_type="text/markdown")
+
+
+@router.post("/export/batch")
+async def batch_export_notes(
+    req: ExportRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """批量导出多篇论文的笔记"""
+    if not req.paper_ids:
+        return {"notes": [], "count": 0}
+
+    result = await db.execute(
+        select(Paper).where(
+            and_(Paper.id.in_(req.paper_ids), Paper.user_id == current_user.id)
+        )
+    )
+    papers = {p.id: p for p in result.scalars().all()}
+
+    result = await db.execute(
+        select(Note, Highlight).outerjoin(
+            Highlight, Note.highlight_id == Highlight.id
+        ).where(
+            and_(Note.paper_id.in_(req.paper_ids), Note.user_id == current_user.id)
+        ).order_by(Note.paper_id, Note.created_at.asc())
+    )
+    rows = result.all()
+
+    from collections import defaultdict
+    grouped = defaultdict(list)
+    for note, highlight in rows:
+        grouped[note.paper_id].append((note, highlight))
+
+    if req.format == "json":
+        papers_data = []
+        for pid, notes_list in grouped.items():
+            paper = papers.get(pid)
+            notes_data = []
+            for note, highlight in notes_list:
+                notes_data.append({
+                    "id": note.id,
+                    "content": note.content,
+                    "highlight_text": highlight.selected_text if highlight else None,
+                    "created_at": note.created_at.isoformat() if note.created_at else None,
+                })
+            papers_data.append({
+                "paper_id": pid,
+                "paper_title": paper.title if paper else "未知",
+                "notes": notes_data,
+                "count": len(notes_data),
+            })
+        return {"papers": papers_data, "total_count": len(rows)}
+
+    md_lines = ["# 笔记批量导出\n"]
+    for pid, notes_list in grouped.items():
+        paper = papers.get(pid)
+        md_lines.append(f"## {paper.title if paper else '未知论文'}")
+        for i, (note, highlight) in enumerate(notes_list, 1):
+            md_lines.append(f"### 笔记 {i}")
+            if highlight and highlight.selected_text:
+                md_lines.append(f"> {highlight.selected_text}\n")
+            md_lines.append(f"{note.content}\n")
+    md_lines.append(f"---\n共 {len(rows)} 条笔记")
+
+    return PlainTextResponse("\n".join(md_lines), media_type="text/markdown")

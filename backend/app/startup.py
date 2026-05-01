@@ -7,7 +7,9 @@
 """
 import asyncio
 import logging
+import shutil
 import time
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -55,8 +57,42 @@ class StartupManager:
         if settings.JWT_SECRET_KEY == "your-secret-key-change-in-production":
             logger.warning("⚠️  JWT_SECRET_KEY 使用默认值！请在 .env 中设置安全的密钥")
 
+        # 在数据库初始化之前自动备份
+        self._backup_database(settings)
+
         await init_db()
         logger.info(f"[Startup] Phase 1 完成，耗时 {time.monotonic() - t:.2f}s（DB 已就绪）")
+
+    # ------------------------------------------------------------------
+    # 数据库备份辅助
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _backup_database(settings) -> None:  # noqa: ANN001
+        """在数据库初始化之前备份现有数据库文件
+
+        如果 chatpdf.db 存在且大小 > 0，复制为 chatpdf.db.bak（覆盖旧备份）。
+        这样即使数据库被意外重建，也有前一次的备份可用。
+        """
+        db_url = settings.DATABASE_URL
+        # 从 aiosqlite URL 中提取文件路径：sqlite+aiosqlite:///./paperchat.db
+        if "sqlite" in db_url:
+            # 去掉协议前缀，提取路径部分
+            db_path_str = db_url.split("///")[-1]
+            db_path = Path(db_path_str)
+            if not db_path.is_absolute():
+                db_path = Path.cwd() / db_path
+
+            if db_path.exists() and db_path.stat().st_size > 0:
+                bak_path = db_path.with_suffix(db_path.suffix + ".bak")
+                try:
+                    shutil.copy2(str(db_path), str(bak_path))
+                    logger.info(f"Database backup created: {bak_path}")
+                except Exception as e:
+                    logger.warning(f"Database backup failed: {e}")
+            else:
+                logger.debug("Database file not found or empty, skip backup")
+
 
     # ------------------------------------------------------------------
     # Phase 2: 后台并行初始化
@@ -101,6 +137,43 @@ class StartupManager:
         t = time.monotonic()
         from app.services.llm.llm_service import llm_service
         self.app.state.llm_service = llm_service
+
+        # 从 model_configs 表加载激活模型配置，初始化 LLM 服务
+        try:
+            from app.database import AsyncSessionLocal
+            from app.models.model_config import ModelConfig
+            from sqlalchemy import select
+            from app.config import settings as app_settings
+
+            async with AsyncSessionLocal() as db:
+                result = await db.execute(
+                    select(ModelConfig).where(
+                        ModelConfig.user_id == app_settings.DEFAULT_USER_ID,
+                        ModelConfig.is_active == True,
+                    )
+                )
+                active_config = result.scalar_one_or_none()
+
+            if active_config:
+                await llm_service.update_config(
+                    model=active_config.model_name,
+                    api_key=active_config.api_key,
+                    api_base_url=active_config.api_base_url,
+                )
+                logger.info(
+                    f"[Startup]   LLM 模型已从 model_configs 加载: "
+                    f"model={active_config.model_name}, "
+                    f"base_url={active_config.api_base_url}"
+                )
+            else:
+                logger.info(
+                    "[Startup]   model_configs 中无激活模型，保持 config.py/.env 默认值"
+                )
+        except Exception as e:
+            logger.warning(
+                f"[Startup]   model_configs 加载失败，保持默认配置（非阻断）: {e}"
+            )
+
         logger.info(f"[Startup]   LLM Service 就绪，耗时 {time.monotonic() - t:.2f}s")
 
     async def _init_agent_service(self):
@@ -204,6 +277,28 @@ class StartupManager:
                 logger.warning(f"L3 预压缩触发失败（非阻塞）: {e}")
 
         core_event_bus.subscribe(CoreEventTypes.SESSION_UPDATED, _on_session_updated)
+
+        # PAPER_UPLOADED -> RAG 索引构建
+        from app.services.rag_service import rag_service as _rag_service
+
+        async def _on_paper_uploaded_index_rag(event: Event):
+            paper_id = event.data.get("paper_id")
+            text_blocks = event.data.get("text_blocks", [])
+            if not paper_id or not text_blocks:
+                return
+            try:
+                success = await _rag_service.index_paper(
+                    paper_id=paper_id,
+                    text_blocks=text_blocks,
+                )
+                if success:
+                    logger.info(f"[RAG] 论文 {paper_id} 索引完成 (blocks={len(text_blocks)})")
+                else:
+                    logger.warning(f"[RAG] 论文 {paper_id} 索引失败")
+            except Exception as e:
+                logger.warning(f"[RAG] 论文 {paper_id} 索引异常（非阻断）: {e}")
+
+        event_bus.subscribe(EventTypes.PAPER_UPLOADED, _on_paper_uploaded_index_rag)
 
         # PAPER_UPLOADED -> 知识图谱更新
         from app.services.knowledge.graph_service import GraphService as _GraphService

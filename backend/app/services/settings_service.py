@@ -22,13 +22,6 @@ logger = logging.getLogger(__name__)
 # 默认配置定义（含元数据供前端渲染表单）
 DEFAULT_SETTINGS: Dict[str, Dict[str, Dict[str, Any]]] = {
     "llm": {
-        "model": {
-            "value": "deepseek-chat",
-            "type": "select",
-            "options": ["deepseek-chat", "deepseek-reasoner", "gpt-3.5-turbo", "gpt-4"],
-            "label": "AI 模型",
-            "description": "选择用于问答的AI模型"
-        },
         "temperature": {
             "value": 0.3,
             "type": "slider",
@@ -45,18 +38,6 @@ DEFAULT_SETTINGS: Dict[str, Dict[str, Dict[str, Any]]] = {
             "max": 32000,
             "label": "最大Token数",
             "description": "控制回答长度上限"
-        },
-        "api_key": {
-            "value": "",
-            "type": "password",
-            "label": "API Key",
-            "description": "留空则使用环境变量中的默认Key"
-        },
-        "api_base_url": {
-            "value": "https://api.deepseek.com",
-            "type": "text",
-            "label": "API Base URL",
-            "description": "API服务地址"
         }
     },
     "rag": {
@@ -84,6 +65,24 @@ DEFAULT_SETTINGS: Dict[str, Dict[str, Dict[str, Any]]] = {
             "max": 500,
             "label": "块重叠",
             "description": "相邻文本块的重叠字符数"
+        },
+        "reranker_enabled": {
+            "value": True,
+            "type": "toggle",
+            "label": "Reranker 重排序",
+            "description": "启用 bge-reranker-v2-m3 对检索结果重排序（+50-100ms）"
+        },
+        "hyde_enabled": {
+            "value": False,
+            "type": "toggle",
+            "label": "HyDE 假设文档增强",
+            "description": "用 LLM 生成假设文档增强检索（+500-1000ms，默认关闭）"
+        },
+        "reranker_model": {
+            "value": "BAAI/bge-reranker-v2-m3",
+            "type": "text",
+            "label": "Reranker 模型",
+            "description": "重排序模型名称"
         }
     },
     "search": {
@@ -165,6 +164,23 @@ DEFAULT_SETTINGS: Dict[str, Dict[str, Dict[str, Any]]] = {
             "description": "每次问答时携带的历史消息数量"
         }
     },
+    "precache": {
+        "topics": {
+            "value": app_settings.PRECACHE_DEFAULT_TOPICS.split(","),
+            "type": "multi_select",
+            "options": [
+                {"value": "cs.AI", "label": "cs.AI (人工智能)"},
+                {"value": "cs.CL", "label": "cs.CL (计算语言学)"},
+                {"value": "cs.CV", "label": "cs.CV (计算机视觉)"},
+                {"value": "cs.LG", "label": "cs.LG (机器学习)"},
+                {"value": "cs.NE", "label": "cs.NE (神经与进化计算)"},
+                {"value": "cs.IR", "label": "cs.IR (信息检索)"},
+                {"value": "stat.ML", "label": "stat.ML (统计机器学习)"}
+            ],
+            "label": "预缓存主题",
+            "description": "选择关注的 arXiv 分类，后台将自动缓存相关领域最新论文"
+        }
+    },
     "zotero": {
         "api_key": {
             "value": "",
@@ -194,50 +210,30 @@ DEFAULT_SETTINGS: Dict[str, Dict[str, Dict[str, Any]]] = {
             "description": "MCP 学术服务配置状态（此分组由 ConfigAgentPanel 组件渲染）"
         }
     },
-    "multimodal": {
-        "qwen_model_cloud": {
-            "value": "qwen2.5-vl-plus",
+    "routing": {
+        "model_mode": {
+            "value": "smart_route",
             "type": "select",
-            "options": ["qwen2.5-vl-plus", "qwen-vl-plus", "qwen-vl-max"],
-            "label": "云端多模态模型",
-            "description": "用于图片理解的云端模型"
+            "options": ["smart_route", "local_only", "cloud_only"],
+            "label": "模型路由模式",
+            "description": "智能路由自动根据任务复杂度选择模型，仅本地模式不使用云端 API，仅云端模式始终使用云端模型"
         },
-        "qwen_model_local": {
-            "value": "qwen2.5-vl:7b",
-            "type": "text",
-            "label": "本地多模态模型",
-            "description": "Ollama 本地多模态模型名称"
-        },
-        "qwen_multimodal_max_tokens": {
-            "value": 2048,
+        "budget_limit": {
+            "value": 10.0,
             "type": "number",
-            "min": 256,
-            "max": 8192,
-            "label": "多模态最大Token数",
-            "description": "多模态模型回答长度上限"
+            "min": 0,
+            "max": 1000,
+            "label": "月度预算上限（元）",
+            "description": "月度 API 调用费用上限，超出后自动降级到本地模型"
         },
-        "qwen_multimodal_temperature": {
-            "value": 0.7,
+        "confirm_threshold": {
+            "value": 0.5,
             "type": "slider",
             "min": 0.0,
-            "max": 2.0,
+            "max": 5.0,
             "step": 0.1,
-            "label": "多模态温度",
-            "description": "多模态模型回答温度，越高越有创意"
-        },
-        "max_image_size_mb": {
-            "value": 10,
-            "type": "number",
-            "min": 1,
-            "max": 50,
-            "label": "最大图片大小(MB)",
-            "description": "上传图片的最大文件大小"
-        },
-        "image_cache_enabled": {
-            "value": True,
-            "type": "toggle",
-            "label": "图片缓存",
-            "description": "启用图片分析结果缓存"
+            "label": "单次费用确认阈值（元）",
+            "description": "预估费用超过此阈值时请求用户确认"
         }
     }
 }
@@ -304,7 +300,15 @@ class SettingsService:
         elif config_type == "toggle":
             if not isinstance(value, bool):
                 return False
-        
+        elif config_type == "multi_select":
+            if not isinstance(value, list):
+                return False
+            options = config.get("options", [])
+            option_values = [
+                opt["value"] if isinstance(opt, dict) else opt for opt in options
+            ]
+            return all(v in option_values for v in value)
+
         return True
     
     def _mask_api_key(self, api_key: str) -> str:
@@ -356,12 +360,6 @@ class SettingsService:
             except json.JSONDecodeError:
                 logger.warning(f"用户 {user_id} 的配置 JSON 解析失败")
         
-        # 脱敏 API Key
-        if mask_sensitive and "llm" in result and "api_key" in result["llm"]:
-            api_key = result["llm"]["api_key"].get("value", "")
-            result["llm"]["api_key"]["value"] = self._mask_api_key(api_key)
-            result["llm"]["api_key"]["masked"] = True
-        
         return result
     
     async def get_setting_values(
@@ -398,10 +396,6 @@ class SettingsService:
             except json.JSONDecodeError:
                 logger.warning(f"用户 {user_id} 的配置 JSON 解析失败")
         
-        # 如果用户没有设置 API Key，使用环境变量中的默认值
-        if not result.get("llm", {}).get("api_key"):
-            result.setdefault("llm", {})["api_key"] = app_settings.DEEPSEEK_API_KEY
-        
         return result
     
     async def update_settings(
@@ -435,12 +429,6 @@ class SettingsService:
         
         # 过滤脱敏值，不保存到数据库
         filtered_settings = copy.deepcopy(settings)
-        if "llm" in filtered_settings and "api_key" in filtered_settings["llm"]:
-            api_key = filtered_settings["llm"]["api_key"]
-            if api_key and self._is_masked_api_key(api_key):
-                # 脱敏值不保存到数据库
-                del filtered_settings["llm"]["api_key"]
-                logger.info(f"用户 {user_id} 的 API Key 为脱敏值，跳过保存")
         
         # 查询现有配置
         query = select(UserSettings).where(UserSettings.user_id == user_id)
@@ -693,9 +681,19 @@ class SettingsService:
         old_values = await self.get_setting_values(user_id, db)
         old_key = ""
         if service_name == "deepseek":
-            old_key = old_values.get("llm", {}).get("api_key", "")
+            # deepseek 的 api_key 已移至 model_configs 表管理
+            from app.models.model_config import ModelConfig
+            from sqlalchemy import select as sa_select
+            active_result = await db.execute(
+                sa_select(ModelConfig).where(
+                    ModelConfig.user_id == user_id,
+                    ModelConfig.is_active == True,
+                )
+            )
+            active_config = active_result.scalar_one_or_none()
+            old_key = active_config.api_key if active_config else ""
         else:
-            # 其他服务的 key 也存储在 llm 配置区域或单独区域
+            # 其他服务的 key 也存储在配置区域或单独区域
             old_key = old_values.get(service_name, {}).get("api_key", "")
 
         # 2. 验证新 key
@@ -709,18 +707,35 @@ class SettingsService:
 
         # 3. 更新数据库
         if service_name == "deepseek":
-            update_payload = {"llm": {"api_key": new_key}}
+            # deepseek 的 key 已移至 model_configs，更新激活模型的 api_key
+            from app.models.model_config import ModelConfig
+            from sqlalchemy import select as sa_select
+            active_result = await db.execute(
+                sa_select(ModelConfig).where(
+                    ModelConfig.user_id == user_id,
+                    ModelConfig.is_active == True,
+                )
+            )
+            active_config = active_result.scalar_one_or_none()
+            if active_config:
+                active_config.api_key = new_key
+                await db.commit()
+            else:
+                return {
+                    "success": False,
+                    "message": "没有激活的模型配置，请先添加模型",
+                    "service": service_name,
+                }
         else:
             update_payload = {service_name: {"api_key": new_key}}
-
-        try:
-            result = await self.update_settings(user_id, update_payload, db)
-        except Exception as e:
-            return {
-                "success": False,
-                "message": f"数据库更新失败: {str(e)[:100]}",
-                "service": service_name,
-            }
+            try:
+                result = await self.update_settings(user_id, update_payload, db)
+            except Exception as e:
+                return {
+                    "success": False,
+                    "message": f"数据库更新失败: {str(e)[:100]}",
+                    "service": service_name,
+                }
 
         # 4. 应用到运行时服务
         if service_name == "deepseek":
@@ -768,25 +783,16 @@ class SettingsService:
             是否应用成功
         """
         try:
-            # 应用 LLM 配置
+            # 应用 LLM 配置（model/api_key/api_base_url 已移至 model_configs 管理，只应用 temperature/max_tokens）
             if "llm" in settings_values:
                 from app.services.llm_service import llm_service
                 llm_config = settings_values["llm"]
                 
-                # 获取 api_key，如果是脱敏值则不传递（保留原值）
-                api_key = llm_config.get("api_key")
-                if api_key and self._is_masked_api_key(api_key):
-                    logger.info("API Key 为脱敏值，跳过更新，保留原值")
-                    api_key = None  # 传递 None 表示不更新
-                
                 await llm_service.update_config(
-                    model=llm_config.get("model"),
                     temperature=llm_config.get("temperature"),
                     max_tokens=llm_config.get("max_tokens"),
-                    api_key=api_key,
-                    api_base_url=llm_config.get("api_base_url")
                 )
-                logger.info(f"LLM 配置已更新: model={llm_config.get('model')}, temperature={llm_config.get('temperature')}")
+                logger.info(f"LLM 配置已更新: temperature={llm_config.get('temperature')}, max_tokens={llm_config.get('max_tokens')}")
             
             # 应用 RAG 配置
             if "rag" in settings_values:
@@ -799,16 +805,6 @@ class SettingsService:
                 )
                 logger.info(f"RAG 配置已更新: top_k={rag_config.get('top_k')}")
             
-            # 应用搜索配置
-            if "search" in settings_values:
-                from app.services.search_service import search_service
-                search_config = settings_values["search"]
-                await search_service.update_config(
-                    timeout=search_config.get("timeout"),
-                    max_results=search_config.get("max_results")
-                )
-                logger.info(f"搜索配置已更新: timeout={search_config.get('timeout')}, max_results={search_config.get('max_results')}")
-            
             # 应用推荐配置
             if "recommendation" in settings_values:
                 from app.services.recommendation_service import recommendation_service
@@ -817,7 +813,18 @@ class SettingsService:
                     top_k=rec_config.get("top_k")
                 )
                 logger.info(f"推荐配置已更新: top_k={rec_config.get('top_k')}")
-            
+
+            # 应用预缓存配置
+            if "precache" in settings_values:
+                from app.services.precache_service import precache_service
+                precache_config = settings_values["precache"]
+                topics = precache_config.get("topics", [])
+                if isinstance(topics, str):
+                    topics = [t.strip() for t in topics.split(",") if t.strip()]
+                if topics:
+                    precache_service.update_topics(topics)
+                    logger.info(f"预缓存主题已更新: {topics}")
+
             return True
             
         except Exception as e:

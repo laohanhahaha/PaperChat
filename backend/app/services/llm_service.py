@@ -1,6 +1,6 @@
 # backend/app/services/llm_service.py（兼容层）
 """兼容入口 - 保持现有导入路径不变"""
-from app.services.llm.llm_service import LLMService, llm_service
+from app.services.llm.llm_service import LLMService, llm_service, model_router
 from app.prompts import (
     # analyze
     ANALYZE_SYSTEM_PROMPT,
@@ -28,6 +28,7 @@ from app.prompts import (
 __all__ = [
     'LLMService',
     'llm_service',
+    'model_router',
     # analyze
     'ANALYZE_SYSTEM_PROMPT',
     'DEEP_ANALYZE_PROMPT',

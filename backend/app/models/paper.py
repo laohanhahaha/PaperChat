@@ -2,7 +2,7 @@
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import String, Text, ForeignKey, func, DateTime, Index
+from sqlalchemy import Boolean, String, Text, ForeignKey, func, DateTime, Index
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -25,10 +25,12 @@ class Paper(Base):
     doi: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     file_path: Mapped[str] = mapped_column(String(500))
     file_size: Mapped[int] = mapped_column(default=0)
+    file_hash: Mapped[Optional[str]] = mapped_column(String(64), index=True, nullable=True)
     page_count: Mapped[int] = mapped_column(default=0)
     tags: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON string
     category: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     reading_status: Mapped[str] = mapped_column(String(20), default="unread", index=True)  # unread/reading/finished
+    is_private: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, server_default="0")
     last_read_page: Mapped[int] = mapped_column(default=0)
     last_read_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)  # 最后阅读时间
     created_at: Mapped[datetime] = mapped_column(default=func.now())

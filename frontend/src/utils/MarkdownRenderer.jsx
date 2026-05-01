@@ -1,5 +1,7 @@
-import React, { memo } from 'react';
+import React, { memo, lazy, Suspense } from 'react';
 import ReactMarkdown from 'react-markdown';
+
+const MermaidChart = lazy(() => import('./MermaidChart'));
 
 const components = {
   // 降级标题层次（LLM 输出的 h1 在卡片中太大）
@@ -11,9 +13,22 @@ const components = {
   ol: (props) => <ol style={{ margin: '0.3em 0', paddingLeft: '1.5em' }} {...props} />,
   li: (props) => <li style={{ margin: '0.2em 0', lineHeight: 1.6 }} {...props} />,
   blockquote: (props) => <blockquote style={{ margin: '0.5em 0', padding: '0.5em 1em', borderLeft: '3px solid var(--color-accent, #007AFF)', background: 'var(--color-bg-elevated, rgba(0,0,0,0.03))', borderRadius: '0 6px 6px 0' }} {...props} />,
-  code: ({inline, ...props}) => inline 
-    ? <code style={{ background: 'var(--color-bg-elevated, rgba(0,0,0,0.06))', padding: '0.15em 0.4em', borderRadius: '4px', fontSize: '0.9em', fontFamily: 'Consolas, monospace' }} {...props} />
-    : <pre style={{ background: 'var(--color-bg-elevated, #1e1e1e)', padding: '0.75em 1em', borderRadius: '8px', overflow: 'auto', fontSize: '0.85em' }}><code {...props} /></pre>,
+  code: ({ inline, className, children, ...props }) => {
+    const match = /language-(\w+)/.exec(className || '');
+    const lang = match ? match[1] : '';
+
+    if (!inline && lang === 'mermaid') {
+      return (
+        <Suspense fallback={<div style={{ padding: '16px', textAlign: 'center', color: 'var(--text-secondary, #999)' }}>图表加载中...</div>}>
+          <MermaidChart chart={String(children).replace(/\n$/, '')} />
+        </Suspense>
+      );
+    }
+
+    return inline
+      ? <code style={{ background: 'var(--color-bg-elevated, rgba(0,0,0,0.06))', padding: '0.15em 0.4em', borderRadius: '4px', fontSize: '0.9em', fontFamily: 'Consolas, monospace' }} className={className} {...props}>{children}</code>
+      : <pre style={{ background: 'var(--color-bg-elevated, #1e1e1e)', padding: '0.75em 1em', borderRadius: '8px', overflow: 'auto', fontSize: '0.85em' }}><code className={className} {...props}>{children}</code></pre>;
+  },
   strong: (props) => <strong style={{ fontWeight: 600 }} {...props} />,
   table: (props) => <div style={{ overflowX: 'auto', margin: '0.5em 0' }}><table style={{ borderCollapse: 'collapse', width: '100%', fontSize: '0.9em' }} {...props} /></div>,
   th: (props) => <th style={{ border: '1px solid var(--color-border, #ddd)', padding: '0.4em 0.75em', background: 'var(--color-bg-elevated, #f5f5f5)', fontWeight: 600, textAlign: 'left' }} {...props} />,

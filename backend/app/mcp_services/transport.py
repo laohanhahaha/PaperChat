@@ -48,7 +48,12 @@ def _parse_response(raw: str) -> dict:
 # ---------------------------------------------------------------------------
 
 class StdioTransport:
-    """通过子进程 stdin/stdout 进行 JSON-RPC 2.0 通信"""
+    """通过子进程 stdin/stdout 进行 JSON-RPC 2.0 通信
+
+    兼容 Windows SelectorEventLoop（uvicorn reload 模式）：
+    当 asyncio.create_subprocess_exec 不可用时，自动降级为
+    subprocess.Popen + 线程池异步 I/O。
+    """
 
     def __init__(
         self,
@@ -61,9 +66,10 @@ class StdioTransport:
         self._args = args
         self._env = env
         self._timeout = timeout
-        self._process: Optional[asyncio.subprocess.Process] = None
+        self._process: Optional[Any] = None  # asyncio.subprocess.Process or subprocess.Popen
         self._req_id: int = 0
         self._lock = asyncio.Lock()   # 串行化请求，避免响应错位
+        self._use_popen: bool = False  # 是否使用 Popen 降级模式
 
     # ------------------------------------------------------------------ #
     async def connect(self) -> None:
@@ -71,20 +77,69 @@ class StdioTransport:
         if self._process is not None:
             return
 
+        import sys
+        import subprocess
+
         proc_env = {**os.environ}
         if self._env:
             proc_env.update(self._env)
 
         logger.debug("[StdioTransport] 启动子进程: %s %s", self._command, self._args)
-        self._process = await asyncio.create_subprocess_exec(
-            self._command,
-            *self._args,
-            stdin=asyncio.subprocess.PIPE,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            env=proc_env,
-        )
-        logger.info("[StdioTransport] 子进程已启动，pid=%s", self._process.pid)
+
+        creation_flags = 0
+        if sys.platform == "win32":
+            creation_flags = subprocess.CREATE_NO_WINDOW | subprocess.CREATE_NEW_PROCESS_GROUP
+
+        # 优先尝试 asyncio subprocess，失败则降级到 Popen
+        try:
+            self._process = await asyncio.create_subprocess_exec(
+                self._command,
+                *self._args,
+                stdin=asyncio.subprocess.PIPE,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                env=proc_env,
+                **(dict(creationflags=creation_flags) if creation_flags else {}),
+            )
+            self._use_popen = False
+        except NotImplementedError:
+            # Windows SelectorEventLoop 不支持 subprocess，降级到 Popen
+            logger.info("[StdioTransport] asyncio subprocess 不可用，降级为 Popen 模式")
+            self._process = subprocess.Popen(
+                [self._command, *self._args],
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                env=proc_env,
+                **(dict(creationflags=creation_flags) if creation_flags else {}),
+            )
+            self._use_popen = True
+        except Exception as exc:
+            raise ConnectionError(
+                f"StdioTransport: 启动子进程失败 (cmd={self._command}): {type(exc).__name__}: {exc}"
+            ) from exc
+
+        # 检查进程是否存活
+        await asyncio.sleep(0.2)
+        rc = self._process.returncode if not self._use_popen else self._process.poll()
+        if rc is not None:
+            stderr_data = ""
+            try:
+                if self._use_popen:
+                    stderr_data = self._process.stderr.read(2000).decode("utf-8", errors="replace")
+                else:
+                    raw = await asyncio.wait_for(self._process.stderr.read(2000), timeout=2)
+                    stderr_data = raw.decode("utf-8", errors="replace")
+            except Exception:
+                pass
+            raise ConnectionError(
+                f"StdioTransport: 子进程立即退出 (returncode={rc}), "
+                f"stderr={stderr_data[:300]}"
+            )
+
+        pid = self._process.pid
+        mode = "Popen" if self._use_popen else "asyncio"
+        logger.info("[StdioTransport] 子进程已启动，pid=%s, mode=%s", pid, mode)
 
     async def close(self) -> None:
         """关闭子进程（先 terminate，超时后 kill）"""
@@ -94,12 +149,24 @@ class StdioTransport:
         self._process = None
         try:
             proc.terminate()
-            try:
-                await asyncio.wait_for(proc.wait(), timeout=5.0)
-            except asyncio.TimeoutError:
-                logger.warning("[StdioTransport] terminate 超时，强制 kill")
-                proc.kill()
-                await proc.wait()
+            if self._use_popen:
+                import concurrent.futures
+                loop = asyncio.get_running_loop()
+                try:
+                    await asyncio.wait_for(
+                        loop.run_in_executor(None, proc.wait),
+                        timeout=5.0,
+                    )
+                except asyncio.TimeoutError:
+                    proc.kill()
+                    await loop.run_in_executor(None, proc.wait)
+            else:
+                try:
+                    await asyncio.wait_for(proc.wait(), timeout=5.0)
+                except asyncio.TimeoutError:
+                    logger.warning("[StdioTransport] terminate 超时，强制 kill")
+                    proc.kill()
+                    await proc.wait()
         except Exception as exc:
             logger.debug("[StdioTransport] 关闭子进程时出现异常（可忽略）: %s", exc)
         logger.info("[StdioTransport] 子进程已关闭")
@@ -107,7 +174,11 @@ class StdioTransport:
     @property
     def is_alive(self) -> bool:
         """子进程是否存活"""
-        return self._process is not None and self._process.returncode is None
+        if self._process is None:
+            return False
+        if self._use_popen:
+            return self._process.poll() is None
+        return self._process.returncode is None
 
     async def send_request(self, method: str, params: Any = None) -> dict:
         """发送 JSON-RPC 请求并等待响应（带超时）"""
@@ -119,22 +190,56 @@ class StdioTransport:
             req_id = self._req_id
             data = _make_request(req_id, method, params or {})
 
-            assert self._process.stdin is not None
-            assert self._process.stdout is not None
-
             logger.debug("[StdioTransport] → %s (id=%d)", method, req_id)
-            self._process.stdin.write(data)
-            await self._process.stdin.drain()
 
-            # 等待包含匹配 id 的响应行
-            raw = await asyncio.wait_for(
-                self._read_response_for(req_id),
-                timeout=self._timeout,
-            )
+            if self._use_popen:
+                loop = asyncio.get_running_loop()
+                await loop.run_in_executor(None, self._popen_write, data)
+                raw = await asyncio.wait_for(
+                    loop.run_in_executor(None, self._popen_read_response, req_id),
+                    timeout=self._timeout,
+                )
+            else:
+                assert self._process.stdin is not None
+                assert self._process.stdout is not None
+                self._process.stdin.write(data)
+                await self._process.stdin.drain()
+                raw = await asyncio.wait_for(
+                    self._read_response_for(req_id),
+                    timeout=self._timeout,
+                )
 
         response = _parse_response(raw)
         logger.debug("[StdioTransport] ← id=%d OK", req_id)
         return response
+
+    # --- Popen 模式同步 I/O（在线程池中执行） ---
+
+    def _popen_write(self, data: bytes) -> None:
+        """同步写入 stdin"""
+        self._process.stdin.write(data)
+        self._process.stdin.flush()
+
+    def _popen_read_response(self, expected_id: int) -> str:
+        """同步从 stdout 读取响应"""
+        while True:
+            line_bytes = self._process.stdout.readline()
+            if not line_bytes:
+                raise ConnectionError("StdioTransport: 子进程输出流已关闭")
+            line = line_bytes.decode("utf-8").strip()
+            if not line:
+                continue
+            try:
+                obj = json.loads(line)
+            except json.JSONDecodeError:
+                logger.debug("[StdioTransport] 忽略非 JSON 行: %s", line[:120])
+                continue
+            if "id" not in obj:
+                continue
+            if obj["id"] == expected_id:
+                return line
+
+    # --- asyncio 模式异步 I/O ---
 
     async def _read_response_for(self, expected_id: int) -> str:
         """持续读行直到找到 id 匹配的响应"""

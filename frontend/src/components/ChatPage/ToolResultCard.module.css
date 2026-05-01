@@ -274,3 +274,192 @@
   color: var(--color-accent, #B8860B);
   background: rgba(184, 134, 11, 0.06);
 }
+
+/* ===== 网络搜索结果卡片 ===== */
+.webCard {
+  border-color: var(--color-accent, rgba(66, 133, 244, 0.2));
+  border-left: 3px solid var(--color-accent, #4285F4);
+}
+
+.webPaperItem {
+  border-left: 2px solid transparent;
+}
+
+.webPaperItem:hover {
+  border-left-color: var(--color-accent, #B8860B);
+}
+
+/* ===== 来源 Badge ===== */
+.sourceBadge {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 9999px;
+  border: 1px solid;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.6;
+  white-space: nowrap;
+  flex-shrink: 0;
+  letter-spacing: 0.2px;
+}
+
+/* ===== 论文标题行 ===== */
+.paperTitleRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.paperTitleLink {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-accent, #B8860B);
+  text-decoration: none;
+  line-height: 1.5;
+  cursor: pointer;
+  transition: color 0.15s;
+}
+
+.paperTitleLink:hover {
+  color: var(--color-accent-hover, #9A7209);
+  text-decoration: underline;
+}
+
+/* ===== 年份 ===== */
+.paperYear {
+  margin-left: 6px;
+  color: var(--color-text-muted, #A89F94);
+  font-size: 11px;
+}
+
+.paperYear::before {
+  content: '·';
+  margin-right: 6px;
+}
+
+/* ===== 摘要 ===== */
+.paperAbstract {
+  font-size: 12px;
+  color: var(--color-text-secondary, #7A6E62);
+  line-height: 1.6;
+  margin-top: 4px;
+}
+
+.expandBtn {
+  display: inline;
+  padding: 0 4px;
+  border: none;
+  background: none;
+  color: var(--color-accent, #B8860B);
+  font-size: 11px;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.expandBtn:hover {
+  text-decoration: underline;
+}
+
+/* ===== 关键词标签 ===== */
+.keywordTag {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 0.25rem;
+  background: var(--color-accent-bg, rgba(184, 134, 11, 0.08));
+  color: var(--color-accent, #B8860B);
+  border: 1px solid rgba(184, 134, 11, 0.15);
+  font-size: 11px;
+  line-height: 1.6;
+  margin-left: 4px;
+}
+
+.headerKeywords {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.keywordsRow {
+  font-size: 12px;
+  color: var(--color-text-secondary, #7A6E62);
+  margin-top: 6px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+/* ===== 空结果 ===== */
+.emptyBody {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 14px;
+  gap: 6px;
+}
+
+.emptyIcon {
+  font-size: 28px;
+  opacity: 0.6;
+}
+
+.emptyText {
+  font-size: 13px;
+  color: var(--color-text-secondary, #7A6E62);
+}
+
+/* ===== Loading 状态 ===== */
+.searchingDots {
+  display: inline-flex;
+  gap: 3px;
+  align-items: center;
+}
+
+.searchingDots span {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--color-accent, #B8860B);
+  animation: searchDotPulse 1.2s ease-in-out infinite;
+}
+
+.searchingDots span:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.searchingDots span:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes searchDotPulse {
+  0%, 80%, 100% { opacity: 0.3; transform: scale(0.8); }
+  40% { opacity: 1; transform: scale(1); }
+}
+
+.loadingBody {
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.loadingSkeleton {
+  height: 14px;
+  border-radius: 4px;
+  background: linear-gradient(
+    90deg,
+    var(--color-border, rgba(92, 64, 51, 0.06)) 25%,
+    rgba(92, 64, 51, 0.12) 50%,
+    var(--color-border, rgba(92, 64, 51, 0.06)) 75%
+  );
+  background-size: 200% 100%;
+  animation: skeletonShimmer 1.5s ease-in-out infinite;
+}
+
+@keyframes skeletonShimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}

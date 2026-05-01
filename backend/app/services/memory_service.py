@@ -1,4 +1,4 @@
-"""用户记忆服务
+﻿"""用户记忆服务
 
 提供用户长期记忆的提取、存储、召回和管理功能
 """
@@ -105,7 +105,7 @@ class MemoryService:
         
         try:
             llm = ChatOpenAI(
-                model="deepseek-chat",
+                model="deepseek-v4-flash",
                 api_key=settings.DEEPSEEK_API_KEY,
                 base_url="https://api.deepseek.com",
                 temperature=0.3,

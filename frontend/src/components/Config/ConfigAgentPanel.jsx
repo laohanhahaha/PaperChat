@@ -4,14 +4,9 @@ import styles from './ConfigAgentPanel.module.css';
 
 // 服务图标映射
 const SERVICE_ICONS = {
-  arxiv: '📄',
-  semantic_scholar: '🎓',
-  crossref: '🔗',
-  dblp: '💻',
+  academic_mcp: '🎓',
+  open_websearch: '🔍',
   zotero: '📚',
-  bing: '🔍',
-  tavily: '🤖',
-  brave: '🦁',
 };
 
 // 服务状态映射
@@ -115,14 +110,9 @@ export default function ConfigAgentPanel() {
 
   // 所有服务定义（从状态推断 + 硬编码补充）
   const allServices = [
-    { name: 'arxiv', display_name: 'arXiv', requires_api_key: false, optional_api_key: false, description: '预印本论文搜索（免费）' },
-    { name: 'semantic_scholar', display_name: 'Semantic Scholar', requires_api_key: false, optional_api_key: true, description: '学术论文搜索与引用分析' },
-    { name: 'crossref', display_name: 'CrossRef', requires_api_key: false, optional_api_key: false, description: 'DOI 解析与学术元数据' },
-    { name: 'dblp', display_name: 'DBLP', requires_api_key: false, optional_api_key: false, description: '计算机科学文献数据库' },
+    { name: 'academic_mcp', display_name: 'Academic MCP', requires_api_key: false, optional_api_key: false, description: '学术论文搜索、下载与阅读，覆盖 18 个平台' },
+    { name: 'open_websearch', display_name: 'Open WebSearch', requires_api_key: false, optional_api_key: false, description: '通用网络搜索，支持 9 个搜索引擎' },
     { name: 'zotero', display_name: 'Zotero', requires_api_key: true, optional_api_key: false, description: '个人文献管理' },
-    { name: 'bing', display_name: 'Bing 搜索', requires_api_key: true, optional_api_key: false, description: '通用网络搜索' },
-    { name: 'tavily', display_name: 'Tavily 搜索', requires_api_key: true, optional_api_key: false, description: 'AI 优化搜索' },
-    { name: 'brave', display_name: 'Brave 搜索', requires_api_key: true, optional_api_key: false, description: '隐私优先网络搜索' },
   ];
 
   if (loading) {
@@ -276,7 +266,7 @@ export default function ConfigAgentPanel() {
         <p className={styles.aiHelperTitle}>🤖 AI 配置助手</p>
         <p className={styles.aiHelperDesc}>在对话框中输入配置需求，AI 助手将自动帮你完成配置</p>
         <p className={styles.aiHelperDesc}>
-          试试说："帮我配置 arXiv 和 CrossRef" 或 "查看所有服务状态"
+          试试说："帮我配置学术搜索服务" 或 "查看所有服务状态"
         </p>
       </div>
     </div>

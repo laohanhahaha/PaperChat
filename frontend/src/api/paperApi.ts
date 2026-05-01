@@ -34,7 +34,6 @@ export const paperApi = {
     if (metadata.tags) formData.append('tags', metadata.tags);
     
     return api.post('/papers/upload', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
       onUploadProgress: onProgress ? (progressEvent: any) => {
         const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
         onProgress(percentCompleted);
@@ -57,6 +56,10 @@ export const paperApi = {
   // 标记阅读状态
   markAsReading: (paperId: number | string): AxiosPromise => api.patch(`/papers/${paperId}/reading-status`, { status: 'reading' }),
 
+  // 更新论文隐私标记
+  updatePrivacy: (paperId: number | string, isPrivate: boolean): AxiosPromise =>
+    api.patch(`/papers/${paperId}/privacy`, { is_private: isPrivate }),
+
   // 获取相似论文推荐
   getRecommendations: (paperId: number | string, topK: number = 5): AxiosPromise => api.get(`/papers/${paperId}/recommendations?top_k=${topK}`),
 
@@ -76,7 +79,6 @@ export const paperApi = {
     const formData = new FormData();
     files.forEach(file => formData.append('files', file));
     return api.post('/papers/batch-upload', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
       onUploadProgress: onProgress ? (progressEvent: any) => {
         const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
         onProgress(percentCompleted);
@@ -89,13 +91,20 @@ export const paperApi = {
     const formData = new FormData();
     formData.append('file', zipFile);
     return api.post('/papers/batch-upload-zip', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
       onUploadProgress: onProgress ? (progressEvent: any) => {
         const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
         onProgress(percentCompleted);
       } : undefined,
     });
   },
+
+  // 扫描本地文件夹
+  scanFolder: (folderPath: string, recursive: boolean = true): AxiosPromise => 
+    api.post('/papers/scan-folder', { folder_path: folderPath, recursive }),
+
+  // 从本地文件夹导入
+  importFolder: (filePaths: string[]): AxiosPromise => 
+    api.post('/papers/import-folder', { file_paths: filePaths }),
 };
 
 export default paperApi;

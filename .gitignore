@@ -25,6 +25,7 @@ venv/
 ENV/
 env/
 .venv/
+chatpdf_venv/
 
 # ==================== Node.js ====================
 node_modules/

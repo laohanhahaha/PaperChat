@@ -77,7 +77,6 @@ class HealthService:
         checks = {
             "database": self._check_database,
             "llm_api": self._check_llm_api,
-            "search_service": self._check_search,
             "chromadb": self._check_chromadb,
             "mcp_servers": self._check_mcp_servers,
         }
@@ -200,46 +199,6 @@ class HealthService:
                 status=HealthStatus.UNKNOWN,
                 latency_ms=round(latency, 1),
                 message=f"LLM API 检查异常: {str(exc)[:80]}",
-                last_checked=time.time(),
-            )
-
-    async def _check_search(self) -> ServiceHealth:
-        """检查搜索服务（DuckDuckGo）"""
-        start = time.monotonic()
-        try:
-            from duckduckgo_search import DDGS
-            loop = asyncio.get_event_loop()
-            result = await asyncio.wait_for(
-                loop.run_in_executor(
-                    None,
-                    lambda: list(DDGS().text("health check", max_results=1)),
-                ),
-                timeout=5.0,
-            )
-            latency = (time.monotonic() - start) * 1000
-            return ServiceHealth(
-                name="search_service",
-                status=HealthStatus.HEALTHY if result else HealthStatus.DEGRADED,
-                latency_ms=round(latency, 1),
-                message="搜索服务正常" if result else "搜索服务返回空结果",
-                last_checked=time.time(),
-            )
-        except asyncio.TimeoutError:
-            latency = (time.monotonic() - start) * 1000
-            return ServiceHealth(
-                name="search_service",
-                status=HealthStatus.UNHEALTHY,
-                latency_ms=round(latency, 1),
-                message="搜索服务超时（5s）",
-                last_checked=time.time(),
-            )
-        except Exception as exc:
-            latency = (time.monotonic() - start) * 1000
-            return ServiceHealth(
-                name="search_service",
-                status=HealthStatus.DEGRADED,
-                latency_ms=round(latency, 1),
-                message=f"搜索服务异常: {str(exc)[:80]}",
                 last_checked=time.time(),
             )
 

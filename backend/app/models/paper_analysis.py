@@ -6,7 +6,7 @@
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import String, Text, ForeignKey, DateTime, Index
+from sqlalchemy import String, Text, ForeignKey, DateTime
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -17,14 +17,12 @@ class PaperAnalysisCache(Base):
     
     __tablename__ = "paper_analysis_cache"
     
-    __table_args__ = (
-        Index('ix_paper_analysis_cache_paper_id', 'paper_id'),
-    )
-    
+    __table_args__ = ()
+
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     paper_id: Mapped[int] = mapped_column(
         ForeignKey("papers.id", ondelete="CASCADE"),
-        unique=True, nullable=False, index=True
+        unique=True, nullable=False
     )
     section_analysis: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     deep_analysis: Mapped[Optional[str]] = mapped_column(Text, nullable=True)

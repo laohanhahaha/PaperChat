@@ -54,9 +54,17 @@ async def init_db():
     初始化数据库，创建所有表
     应在应用启动时调用
     """
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    
+    import logging
+    from sqlalchemy.exc import OperationalError
+    _logger = logging.getLogger(__name__)
+
+    try:
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+    except OperationalError as e:
+        # SQLite 在索引/表已存在时会报错，记录日志但不中断启动
+        _logger.warning(f"[init_db] create_all 遇到已存在对象（非阻断）: {e}")
+
     # 确保默认用户存在
     async with AsyncSessionLocal() as db:
         from app.models.user import User

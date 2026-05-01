@@ -262,11 +262,30 @@ function ChatPanel({
 
   const handleSend = () => {
     const trimmed = input.trim();
-    if (!trimmed || isChatting || wsStatus !== 'connected') return;
+    if (!trimmed || isChatting) return;
+
+    // 在线但 WS 断连时不允许发送（等自动重连）；离线时允许发送（入离线队列）
+    const isOffline = !navigator.onLine;
+    if (wsStatus !== 'connected' && !isOffline) return;
 
     const sessionId = currentSessionIdRef.current;
 
     addMessage({ role: 'user', content: trimmed });
+
+    if (isOffline) {
+      // 离线模式：消息入队列，不启动打字机（网络恢复后自动重放）
+      setInput('');
+      if (sendUnifiedChatMessage) {
+        sendUnifiedChatMessage(trimmed, paperId, selectedPaperIds, sessionId, enableSearch);
+      } else if (isCrossDocMode && selectedPaperIds.length > 0) {
+        sendCrossDocMessage(trimmed, selectedPaperIds, sessionId);
+      } else {
+        sendRagMessage(trimmed, paperId, sessionId, null, enableSearch);
+      }
+      return;
+    }
+
+    // 在线模式：正常流程
     addMessage({ role: 'assistant', content: '' });
 
     setInput('');

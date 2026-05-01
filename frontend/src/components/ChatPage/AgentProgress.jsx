@@ -8,13 +8,35 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import styles from './AgentProgress.module.css';
 
-// 角色配置：图标 + 中文标签
-const ROLE_CONFIG = {
-  orchestrator: { icon: '🧠', label: '协调器' },
-  retriever:    { icon: '🔍', label: '检索专家' },
-  analyzer:     { icon: '📊', label: '分析专家' },
-  recommender:  { icon: '💡', label: '推荐专家' },
-};
+// 根据名称智能匹配图标的函数（替代硬编码 ROLE_CONFIG）
+function getAgentConfig(agentKey) {
+  // 预置角色
+  if (agentKey === 'orchestrator') return { icon: '🧠', label: '协调器' };
+
+  // 根据名称关键词智能匹配图标
+  const name = agentKey.toLowerCase();
+  if (name.includes('检索') || name.includes('search') || name.includes('retriev'))
+    return { icon: '🔍', label: agentKey };
+  if (name.includes('分析') || name.includes('analyz') || name.includes('evaluat'))
+    return { icon: '📊', label: agentKey };
+  if (name.includes('推荐') || name.includes('recommend') || name.includes('suggest'))
+    return { icon: '💡', label: agentKey };
+  if (name.includes('综述') || name.includes('review') || name.includes('survey'))
+    return { icon: '📝', label: agentKey };
+  if (name.includes('对比') || name.includes('compar'))
+    return { icon: '⚖️', label: agentKey };
+  if (name.includes('写作') || name.includes('writ'))
+    return { icon: '✍️', label: agentKey };
+  if (name.includes('翻译') || name.includes('translat'))
+    return { icon: '🌐', label: agentKey };
+  if (name.includes('数据') || name.includes('data') || name.includes('统计'))
+    return { icon: '📈', label: agentKey };
+  if (name.includes('方法') || name.includes('method'))
+    return { icon: '🧪', label: agentKey };
+
+  // 默认
+  return { icon: '🤖', label: agentKey };
+}
 
 // 辅助函数：解析研究阶段
 function parseResearchPhase(content) {
@@ -125,7 +147,7 @@ const StepItem = ({ step }) => {
 
 // ─── 子 Agent 分组块 ─────────────────────────────────────────
 const SubAgentBlock = ({ agentKey, steps, isRunning, isLast }) => {
-  const config = ROLE_CONFIG[agentKey] || { icon: '🤖', label: agentKey };
+  const config = getAgentConfig(agentKey);
   // 运行中最后一个 agent 默认展开，其余完成后折叠
   const [expanded, setExpanded] = useState(true);
 
@@ -155,9 +177,6 @@ const SubAgentBlock = ({ agentKey, steps, isRunning, isLast }) => {
       >
         <span className={styles.subAgentIcon}>{config.icon}</span>
         <span className={styles.subAgentLabel}>{config.label}</span>
-        {agentKey !== 'orchestrator' && (
-          <span className={styles.subAgentRoleKey}>({agentKey})</span>
-        )}
         {isRunning && isLast && (
           <span className={styles.subAgentSpinner} />
         )}
@@ -217,6 +236,24 @@ const AgentProgress = ({ steps = [], isRunning = false }) => {
 
     const totalAgents = agentOrder.length;
 
+    // 生成专家标签列表（排除 orchestrator / unknown）
+    const expertLabels = agentOrder
+      .filter(k => k !== 'orchestrator' && k !== 'unknown')
+      .map(k => getAgentConfig(k).label);
+
+    // 运行中：找到当前活跃的子 Agent（最后一个）
+    const currentAgentKey = isRunning ? agentOrder[agentOrder.length - 1] : null;
+    const currentAgentLabel = currentAgentKey
+      ? getAgentConfig(currentAgentKey).label
+      : null;
+
+    // 标题文案
+    const headerTitle = isRunning
+      ? `多Agent 协作中${currentAgentLabel ? ` — ${currentAgentLabel} 运行中` : ''}...`
+      : expertLabels.length > 0
+        ? `多Agent 研究完成 (${expertLabels.join(' + ')})`
+        : `多Agent 协作完成 (${totalAgents} 个专家)`;
+
     return (
       <div className={styles.agentProgress}>
         <div
@@ -227,10 +264,7 @@ const AgentProgress = ({ steps = [], isRunning = false }) => {
             {isRunning ? '⚙️' : '✅'}
           </span>
           <span className={styles.title}>
-            {isRunning
-              ? `多 Agent 协作中... (${totalAgents} 个专家)`
-              : `多 Agent 协作完成 (${totalAgents} 个专家)`
-            }
+            {headerTitle}
           </span>
           <span className={`${styles.chevron} ${isExpanded ? styles.expanded : ''}`}>▾</span>
         </div>

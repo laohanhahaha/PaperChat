@@ -45,6 +45,54 @@ class ReadingStatusUpdate(BaseModel):
     status: str  # "reading" 或 "finished"
 
 
+class PrivacyUpdateRequest(BaseModel):
+    """论文隐私标记更新模型"""
+    is_private: bool
+
+
+@router.patch("/{paper_id}/privacy")
+async def update_paper_privacy(
+    paper_id: int,
+    request: PrivacyUpdateRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    更新论文隐私标记
+    
+    隐私论文的所有 LLM 处理将强制使用本地模型，不发送到云端。
+    
+    路径参数:
+        - paper_id: 论文 ID
+    
+    请求体:
+        - is_private: 是否标记为隐私
+    
+    返回:
+        - 更新结果
+    """
+    result = await db.execute(
+        select(Paper).where(and_(Paper.id == paper_id, Paper.user_id == current_user.id))
+    )
+    paper = result.scalar_one_or_none()
+    
+    if not paper:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="论文不存在"
+        )
+    
+    paper.is_private = request.is_private
+    await db.commit()
+    await db.refresh(paper)
+    
+    return {
+        "message": "隐私标记已更新",
+        "paper_id": paper_id,
+        "is_private": paper.is_private
+    }
+
+
 @router.patch("/{paper_id}/reading-status")
 async def mark_reading_status(
     paper_id: int,
@@ -1009,6 +1057,59 @@ async def reindex_paper(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="索引重建失败"
         )
+
+
+@router.post("/reindex-all")
+async def reindex_all_papers(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    批量重建所有已上传论文的向量索引
+
+    返回:
+        - 重建成功和失败的论文统计
+    """
+    result = await db.execute(
+        select(Paper).where(Paper.user_id == current_user.id)
+    )
+    papers = result.scalars().all()
+
+    if not papers:
+        return {"message": "没有找到论文", "total": 0, "success": 0, "failed": 0}
+
+    from app.models.paper import PaperTextBlock
+
+    success_count = 0
+    failed_papers = []
+
+    for paper in papers:
+        try:
+            blocks_result = await db.execute(
+                select(PaperTextBlock).where(PaperTextBlock.paper_id == paper.id)
+            )
+            text_blocks = blocks_result.scalars().all()
+            if not text_blocks:
+                continue
+            blocks_data = [
+                {"page_number": b.page_number, "text": b.text}
+                for b in text_blocks
+            ]
+            ok = await rag_service.reindex_paper(paper.id, blocks_data)
+            if ok:
+                success_count += 1
+            else:
+                failed_papers.append(paper.id)
+        except Exception:
+            failed_papers.append(paper.id)
+
+    return {
+        "message": f"索引重建完成: {success_count}/{len(papers)} 篇成功",
+        "total": len(papers),
+        "success": success_count,
+        "failed": len(failed_papers),
+        "failed_paper_ids": failed_papers,
+    }
 
 
 @router.get("/{paper_id}/index-status")

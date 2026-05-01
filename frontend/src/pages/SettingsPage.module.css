@@ -5,7 +5,7 @@
     margin: 0 auto;
     padding: 24px;
     min-height: 100vh;
-    background: linear-gradient(180deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);
+    background: linear-gradient(180deg, var(--color-bg-primary) 0%, var(--color-bg-secondary) 100%);
     padding-bottom: 100px;
 }
 
@@ -18,13 +18,13 @@
     font-family: var(--heading);
     font-size: 28px;
     font-weight: 600;
-    color: var(--text-primary);
+    color: var(--color-text-primary);
     margin: 0 0 8px 0;
 }
 
 .subtitle {
     font-size: 14px;
-    color: var(--text-secondary);
+    color: var(--color-text-secondary);
     margin: 0;
 }
 
@@ -37,17 +37,17 @@
 
 /* 分组卡片 - 纸张质感 */
 .sectionCard {
-    background: var(--bg-elevated);
-    border: 1px solid var(--border-color);
+    background: var(--color-settings-card-bg);
+    border: 1px solid var(--color-settings-card-border);
     border-radius: 0.375rem;
     overflow: hidden;
     transition: all 0.3s ease;
-    box-shadow: 0 2px 8px rgba(92, 64, 51, 0.06);
+    box-shadow: var(--shadow-sm);
 }
 
 .sectionCard:hover {
-    border-color: var(--accent-warm);
-    box-shadow: 0 4px 16px rgba(184, 134, 11, 0.12);
+    border-color: var(--color-accent-border);
+    box-shadow: var(--shadow-md);
 }
 
 .sectionHeader {
@@ -55,8 +55,8 @@
     align-items: center;
     gap: 12px;
     padding: 16px 20px;
-    background: var(--bg-secondary);
-    border-bottom: 1px solid var(--border-color);
+    background: var(--color-bg-secondary);
+    border-bottom: 1px solid var(--color-border-strong);
 }
 
 .sectionIcon {
@@ -67,7 +67,7 @@
     font-family: var(--heading);
     font-size: 16px;
     font-weight: 600;
-    color: var(--text-primary);
+    color: var(--color-text-primary);
     margin: 0;
 }
 
@@ -75,7 +75,7 @@
     padding: 16px 20px;
     display: flex;
     flex-direction: column;
-    gap: 20px;
+    gap: 0;
 }
 
 /* 单个设置项 */
@@ -83,6 +83,17 @@
     display: flex;
     flex-direction: column;
     gap: 8px;
+    padding: 14px 0;
+    border-bottom: 1px solid var(--color-border);
+}
+
+.settingItem:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+}
+
+.settingItem:first-child {
+    padding-top: 0;
 }
 
 .settingHeader {
@@ -94,21 +105,21 @@
 .settingLabel {
     font-size: 14px;
     font-weight: 500;
-    color: var(--text-primary);
+    color: var(--color-text-primary);
 }
 
 .settingValue {
     font-size: 14px;
     font-weight: 600;
-    color: var(--accent-warm);
-    background: var(--accent-warm-bg);
+    color: var(--color-accent);
+    background: var(--color-accent-bg);
     padding: 2px 10px;
     border-radius: 0.375rem;
 }
 
 .settingDesc {
     font-size: 12px;
-    color: var(--text-tertiary);
+    color: var(--color-text-muted);
     margin: 0;
     line-height: 1.5;
 }
@@ -119,7 +130,7 @@
     appearance: none;
     width: 100%;
     height: 6px;
-    background: var(--border-color);
+    background: var(--color-border-strong);
     border-radius: 3px;
     outline: none;
     cursor: pointer;
@@ -130,7 +141,7 @@
     appearance: none;
     width: 18px;
     height: 18px;
-    background: var(--accent-warm);
+    background: var(--color-accent);
     border-radius: 50%;
     cursor: pointer;
     box-shadow: 0 2px 8px rgba(184, 134, 11, 0.4);
@@ -144,7 +155,7 @@
 .slider::-moz-range-thumb {
     width: 18px;
     height: 18px;
-    background: var(--accent-warm);
+    background: var(--color-accent);
     border-radius: 50%;
     cursor: pointer;
     border: none;
@@ -155,7 +166,7 @@
     display: flex;
     justify-content: space-between;
     font-size: 11px;
-    color: var(--text-tertiary);
+    color: var(--color-text-muted);
 }
 
 /* 数字输入框 */
@@ -168,18 +179,22 @@
 .numberInput {
     width: 120px;
     padding: 10px 14px;
-    background: var(--bg-elevated);
-    border: 1px solid var(--border-color);
-    border-radius: 0.375rem;
-    color: var(--text-primary);
+    background: var(--color-input-bg);
+    border: 1px solid var(--color-border-strong);
+    border-radius: 6px;
+    color: var(--color-text-primary);
     font-size: 14px;
     outline: none;
     transition: all 0.2s;
 }
 
+.numberInput:hover {
+    border-color: var(--color-accent-border);
+}
+
 .numberInput:focus {
-    border-color: var(--accent-warm);
-    box-shadow: 0 0 0 3px var(--accent-warm-bg);
+    border-color: var(--color-accent);
+    box-shadow: 0 0 0 2px var(--color-accent-bg);
 }
 
 .numberInput::-webkit-inner-spin-button,
@@ -189,7 +204,7 @@
 
 .inputRange {
     font-size: 12px;
-    color: var(--text-tertiary);
+    color: var(--color-text-muted);
 }
 
 /* 下拉选择框 */
@@ -197,24 +212,28 @@
     width: 100%;
     max-width: 280px;
     padding: 10px 14px;
-    background: var(--bg-elevated);
-    border: 1px solid var(--border-color);
-    border-radius: 0.375rem;
-    color: var(--text-primary);
+    background: var(--color-input-bg);
+    border: 1px solid var(--color-border-strong);
+    border-radius: 6px;
+    color: var(--color-text-primary);
     font-size: 14px;
     outline: none;
     cursor: pointer;
     transition: all 0.2s;
 }
 
+.selectInput:hover {
+    border-color: var(--color-accent-border);
+}
+
 .selectInput:focus {
-    border-color: var(--accent-warm);
-    box-shadow: 0 0 0 3px var(--accent-warm-bg);
+    border-color: var(--color-accent);
+    box-shadow: 0 0 0 2px var(--color-accent-bg);
 }
 
 .selectInput option {
-    background: var(--bg-primary);
-    color: var(--text-primary);
+    background: var(--color-bg-primary);
+    color: var(--color-text-primary);
     padding: 10px;
 }
 
@@ -222,69 +241,78 @@
 .textInput {
     width: 100%;
     padding: 10px 14px;
-    background: var(--bg-elevated);
-    border: 1px solid var(--border-color);
-    border-radius: 0.375rem;
-    color: var(--text-primary);
+    background: var(--color-input-bg);
+    border: 1px solid var(--color-border-strong);
+    border-radius: 6px;
+    color: var(--color-text-primary);
     font-size: 14px;
     outline: none;
     transition: all 0.2s;
 }
 
+.textInput:hover {
+    border-color: var(--color-accent-border);
+}
+
 .textInput:focus {
-    border-color: var(--accent-warm);
-    box-shadow: 0 0 0 3px var(--accent-warm-bg);
+    border-color: var(--color-accent);
+    box-shadow: 0 0 0 2px var(--color-accent-bg);
 }
 
 .textInput::placeholder {
-    color: var(--text-tertiary);
+    color: var(--color-text-muted);
 }
 
 /* 密码输入框 */
 .passwordWrapper {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 0;
     max-width: 400px;
 }
 
 .passwordInput {
     flex: 1;
     padding: 10px 14px;
-    background: var(--bg-elevated);
-    border: 1px solid var(--border-color);
-    border-radius: 0.375rem 0 0 0.375rem;
-    color: var(--text-primary);
+    background: var(--color-input-bg);
+    border: 1px solid var(--color-border-strong);
+    border-radius: 6px 0 0 6px;
+    color: var(--color-text-primary);
     font-size: 14px;
     outline: none;
     transition: all 0.2s;
     font-family: var(--mono);
 }
 
+.passwordInput:hover {
+    border-color: var(--color-accent-border);
+}
+
 .passwordInput:focus {
-    border-color: var(--accent-warm);
-    box-shadow: 0 0 0 3px var(--accent-warm-bg);
+    border-color: var(--color-accent);
+    box-shadow: 0 0 0 2px var(--color-accent-bg);
 }
 
 .passwordInput::placeholder {
-    color: var(--text-tertiary);
+    color: var(--color-text-muted);
 }
 
 .passwordToggle {
     padding: 10px 14px;
-    background: var(--bg-elevated);
-    border: 1px solid var(--border-color);
+    background: var(--color-input-bg);
+    border: 1px solid var(--color-border-strong);
     border-left: none;
-    border-radius: 0 0.375rem 0.375rem 0;
-    color: var(--text-secondary);
+    border-radius: 0 6px 6px 0;
+    color: var(--color-text-secondary);
     font-size: 16px;
     cursor: pointer;
     transition: all 0.2s;
 }
 
 .passwordToggle:hover {
-    background: var(--bg-secondary);
-    color: var(--text-primary);
+    background: var(--color-bg-secondary);
+    color: var(--color-text-primary);
+    border-color: var(--color-accent-border);
 }
 
 /* Toggle 开关样式 - 琥珀金激活态 */
@@ -298,7 +326,7 @@
     position: relative;
     width: 44px;
     height: 24px;
-    background: var(--border-strong);
+    background: var(--color-border-strong);
     border-radius: 12px;
     cursor: pointer;
     transition: background 0.2s;
@@ -313,14 +341,14 @@
     left: 2px;
     width: 20px;
     height: 20px;
-    background: var(--bg-primary);
+    background: var(--color-bg-primary);
     border-radius: 50%;
     transition: transform 0.2s;
-    box-shadow: 0 1px 3px rgba(92, 64, 51, 0.2);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
 }
 
 .toggleSwitch.active {
-    background: var(--accent-warm);
+    background: var(--color-accent);
 }
 
 .toggleSwitch.active::after {
@@ -345,21 +373,21 @@
     flex-direction: column;
     align-items: center;
     padding: 12px;
-    background: var(--bg-elevated);
-    border: 1px solid var(--border-color);
-    border-radius: 0.375rem;
+    background: var(--color-input-bg);
+    border: 1px solid var(--color-border-strong);
+    border-radius: 6px;
     cursor: pointer;
     transition: all 0.2s;
 }
 
 .themeOption:hover {
-    border-color: var(--accent-warm);
-    background: var(--bg-secondary);
+    border-color: var(--color-accent);
+    background: var(--color-bg-secondary);
 }
 
 .themeOption.active {
-    border-color: var(--accent-warm);
-    background: var(--accent-warm-bg);
+    border-color: var(--color-accent);
+    background: var(--color-accent-bg);
 }
 
 .themeOptionIcon {
@@ -370,11 +398,11 @@
 .themeOptionLabel {
     font-size: 12px;
     font-weight: 500;
-    color: var(--text-primary);
+    color: var(--color-text-primary);
 }
 
 .themeOption.active .themeOptionLabel {
-    color: var(--accent-warm);
+    color: var(--color-accent);
 }
 
 /* 底部操作栏 - 玻璃拟态 */
@@ -388,27 +416,27 @@
     align-items: center;
     gap: 12px;
     padding: 16px 24px;
-    background: rgba(250, 250, 246, 0.85);
+    background: var(--color-bg-elevated);
     backdrop-filter: blur(10px);
-    border-top: 1px solid var(--border-color);
+    border-top: 1px solid var(--color-border-strong);
     z-index: 100;
 }
 
 .resetBtn {
     padding: 10px 20px;
     background: transparent;
-    border: 1px solid var(--border-strong);
-    border-radius: 0.375rem;
-    color: var(--text-secondary);
+    border: 1px solid var(--color-border-strong);
+    border-radius: 6px;
+    color: var(--color-text-secondary);
     font-size: 14px;
     cursor: pointer;
     transition: all 0.2s;
 }
 
 .resetBtn:hover:not(:disabled) {
-    background: rgba(220, 38, 38, 0.08);
-    border-color: #dc2626;
-    color: #dc2626;
+    background: var(--color-danger-bg);
+    border-color: var(--color-danger);
+    color: var(--color-danger);
 }
 
 .resetBtn:disabled {
@@ -418,10 +446,10 @@
 
 .saveBtn {
     padding: 10px 24px;
-    background: var(--accent-warm-bg);
-    border: 1px solid var(--accent-warm);
-    border-radius: 0.375rem;
-    color: var(--text-secondary);
+    background: var(--color-accent-bg);
+    border: 1px solid var(--color-accent);
+    border-radius: 6px;
+    color: var(--color-text-secondary);
     font-size: 14px;
     font-weight: 500;
     cursor: not-allowed;
@@ -429,9 +457,9 @@
 }
 
 .saveBtnActive {
-    background: var(--accent-warm);
+    background: var(--color-accent);
     border-color: transparent;
-    color: #FAFAF6;
+    color: var(--color-bg-primary);
     cursor: pointer;
     box-shadow: 0 4px 15px rgba(184, 134, 11, 0.35);
 }
@@ -452,11 +480,11 @@
     left: 50%;
     transform: translateX(-50%);
     padding: 12px 24px;
-    background: #059669;
-    color: #FAFAF6;
+    background: var(--color-success);
+    color: var(--color-bg-primary);
     font-size: 14px;
     font-weight: 500;
-    border-radius: 0.375rem;
+    border-radius: 6px;
     box-shadow: 0 4px 16px rgba(5, 150, 105, 0.3);
     animation: slideUp 0.3s ease;
     z-index: 101;
@@ -479,11 +507,11 @@
     left: 50%;
     transform: translateX(-50%);
     padding: 12px 24px;
-    background: #dc2626;
-    color: #FAFAF6;
+    background: var(--color-danger);
+    color: var(--color-bg-primary);
     font-size: 14px;
     font-weight: 500;
-    border-radius: 0.375rem;
+    border-radius: 6px;
     box-shadow: 0 4px 16px rgba(220, 38, 38, 0.3);
     animation: slideUp 0.3s ease;
     z-index: 101;
@@ -496,14 +524,14 @@
     align-items: center;
     justify-content: center;
     min-height: 60vh;
-    color: var(--text-secondary);
+    color: var(--color-text-secondary);
 }
 
 .spinner {
     width: 40px;
     height: 40px;
-    border: 3px solid var(--border-color);
-    border-top-color: var(--accent-warm);
+    border: 3px solid var(--color-border-strong);
+    border-top-color: var(--color-accent);
     border-radius: 50%;
     animation: spin 1s linear infinite;
     margin-bottom: 16px;
@@ -519,16 +547,16 @@
     align-items: center;
     justify-content: center;
     min-height: 60vh;
-    color: #dc2626;
+    color: var(--color-danger);
 }
 
 .error button {
     margin-top: 16px;
     padding: 10px 20px;
-    background: var(--accent-warm);
+    background: var(--color-accent);
     border: none;
-    border-radius: 0.375rem;
-    color: #FAFAF6;
+    border-radius: 6px;
+    color: var(--color-bg-primary);
     font-size: 14px;
     cursor: pointer;
     transition: all 0.2s;
@@ -579,5 +607,211 @@
 
     .themeOptionIcon {
         margin-bottom: 0;
+    }
+}
+
+/* 多选复选框组 */
+.checkboxGroup {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 4px;
+}
+
+.checkboxLabel {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 12px;
+    background: var(--color-input-bg);
+    border: 1px solid var(--color-border-strong);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 13px;
+    color: var(--color-text-primary);
+    user-select: none;
+}
+
+.checkboxLabel:hover {
+    border-color: var(--color-accent);
+    background: var(--color-accent-bg);
+}
+
+.checkboxInput {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--color-accent);
+    cursor: pointer;
+    margin: 0;
+}
+
+.checkboxText {
+    line-height: 1;
+}
+
+/* ===================== */
+/* 未保存更改确认弹窗    */
+/* ===================== */
+
+.dialogOverlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.55);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.dialogCard {
+    background: var(--color-bg-elevated);
+    border: 1px solid var(--color-border-strong);
+    border-radius: 12px;
+    padding: 28px 32px 24px;
+    max-width: 420px;
+    width: 90%;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4), 0 0 0 1px var(--color-border);
+    animation: scaleIn 0.2s ease;
+}
+
+@keyframes scaleIn {
+    from {
+        opacity: 0;
+        transform: scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+.dialogHeader {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 16px;
+}
+
+.dialogIcon {
+    font-size: 22px;
+}
+
+.dialogTitle {
+    font-family: var(--heading);
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--color-text-primary);
+    margin: 0;
+}
+
+.dialogMessage {
+    font-size: 14px;
+    color: var(--color-text-secondary);
+    line-height: 1.6;
+    margin: 0 0 24px 0;
+    padding-left: 32px;
+}
+
+.dialogActions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
+.dialogBtnContinue {
+    padding: 9px 18px;
+    background: transparent;
+    border: 1px solid var(--color-border-strong);
+    border-radius: 6px;
+    color: var(--color-text-secondary);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.dialogBtnContinue:hover:not(:disabled) {
+    background: var(--color-bg-secondary);
+    color: var(--color-text-primary);
+    border-color: var(--color-accent-border);
+}
+
+.dialogBtnContinue:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.dialogBtnDiscard {
+    padding: 9px 18px;
+    background: transparent;
+    border: 1px solid var(--color-border-strong);
+    border-radius: 6px;
+    color: var(--color-danger);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.dialogBtnDiscard:hover:not(:disabled) {
+    background: var(--color-danger-bg);
+    border-color: var(--color-danger);
+}
+
+.dialogBtnDiscard:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.dialogBtnSave {
+    padding: 9px 18px;
+    background: var(--color-accent);
+    border: none;
+    border-radius: 6px;
+    color: var(--color-bg-primary);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    box-shadow: 0 2px 8px rgba(184, 134, 11, 0.3);
+}
+
+.dialogBtnSave:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(184, 134, 11, 0.4);
+}
+
+.dialogBtnSave:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+}
+
+/* 弹窗响应式 */
+@media (max-width: 768px) {
+    .dialogCard {
+        padding: 24px 20px 20px;
+    }
+
+    .dialogActions {
+        flex-direction: column-reverse;
+        gap: 8px;
+    }
+
+    .dialogActions button {
+        width: 100%;
+        text-align: center;
+    }
+
+    .dialogMessage {
+        padding-left: 0;
     }
 }

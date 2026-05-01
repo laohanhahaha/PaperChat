@@ -148,7 +148,7 @@ class MCPClient:
             await transport.connect()
         except Exception as exc:
             raise MCPConnectionError(
-                f"[{self.config.name}] 连接失败: {exc}"
+                f"[{self.config.name}] 启动失败: {type(exc).__name__}: {exc}"
             ) from exc
 
         self._transport = transport
@@ -161,11 +161,20 @@ class MCPClient:
             await self._initialize()
         except Exception as exc:
             logger.error(
-                "[MCPClient] %s initialize 握手失败: %s，仍标记为已连接",
+                "[MCPClient] %s initialize 握手失败: %s，标记为连接失败",
                 self.config.name,
                 exc,
             )
-            # initialize 失败不阻断连接（部分服务器可能不支持）
+            # initialize 失败，断开传输层，不标记为已连接
+            try:
+                await transport.close()
+            except Exception:
+                pass
+            self._transport = None
+            self._process = None
+            raise MCPConnectionError(
+                f"[{self.config.name}] initialize 握手失败: {exc}"
+            ) from exc
 
         self._connected = True
         self._tools_cache = None   # 重置缓存

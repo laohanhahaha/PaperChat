@@ -7,6 +7,7 @@ const FUNCTION_CHIPS = [
   { id: 'review', label: '文献综述', icon: '📝', tool: 'literature_review', placeholder: '输入综述主题和要求...' },
   { id: 'polish', label: '润色改写', icon: '✨', tool: 'polish_text', placeholder: '粘贴需要润色的文本...' },
   { id: 'search', label: '搜索论文', icon: '🔍', tool: 'search_papers', placeholder: '输入搜索关键词...' },
+  { id: 'deep_research', label: '深度研究', icon: '🔬', tool: 'multi_agent_research', placeholder: '描述你的研究问题，AI将多角度深入分析...', description: '多Agent协作深度研究' },
 ];
 
 // "更多"中的隐藏功能
@@ -88,6 +89,15 @@ export default function FunctionChips({ activeFunction, onSelect, onClear, disab
   };
 
   const hasActiveFunction = activeFunction !== null;
+  const chipsRowRef = useRef(null);
+
+  // 鼠标滚轮横向滚动
+  const handleWheel = (e) => {
+    if (chipsRowRef.current) {
+      e.preventDefault();
+      chipsRowRef.current.scrollLeft += e.deltaY;
+    }
+  };
 
   return (
     <div className={`${styles.chipsContainer} ${disabled ? styles.disabled : ''}`}>
@@ -111,7 +121,7 @@ export default function FunctionChips({ activeFunction, onSelect, onClear, disab
       )}
 
       {/* 主要功能芯片 */}
-      <div className={styles.chipsRow}>
+      <div className={styles.chipsRow} ref={chipsRowRef} onWheel={handleWheel}>
         {/* 思考模式切换 */}
         <button
           className={`${styles.thinkingModeBtn} ${effectiveMode === 'deep' ? styles.thinkingModeDeep : styles.thinkingModeQuick} ${isModeLocked ? styles.thinkingModeLocked : ''}`}

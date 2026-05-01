@@ -31,7 +31,7 @@ class SearchTextTool(Tool):
     }
 
     async def execute(self, ctx: ToolContext, query: str, top_k: int = 5, paper_id: int = None) -> ToolResult:
-        from app.services.rag.rag_service import rag_service
+        from app.services.rag_service import rag_service
         # 优先使用传入的paper_id，否则从ctx获取
         pid = paper_id if paper_id is not None else ctx.paper_id
         if pid is None:
@@ -110,7 +110,7 @@ class GetPaperInfoTool(Tool):
         "required": []
     }
 
-    async def execute(self, ctx: ToolContext, paper_id: int = None) -> ToolResult:
+    async def execute(self, ctx: ToolContext, paper_id: int = None, **kwargs) -> ToolResult:
         """从数据库查询论文信息"""
         db = ctx.db
         if db is None:

@@ -62,6 +62,10 @@ class RAGService:
         self._top_k = 5  # 默认检索数量
         self._chunk_size = 800  # 默认分块大小
         self._chunk_overlap = 200  # 默认块重叠
+
+        # Reranker 懒加载状态
+        self._reranker = None
+        self._reranker_loading = False
     
     async def update_config(
         self,
@@ -106,6 +110,76 @@ class RAGService:
                     )
         return self._embedding_model
     
+    def _init_reranker(self):
+        """懒加载 bge-reranker-v2-m3（~500MB，首次 3-5s）"""
+        if self._reranker is None and not self._reranker_loading:
+            self._reranker_loading = True
+            try:
+                from FlagEmbedding import FlagReranker
+                from app.config import settings as app_cfg
+                model_name = getattr(app_cfg, 'RAG_RERANKER_MODEL', 'BAAI/bge-reranker-v2-m3')
+                self._reranker = FlagReranker(
+                    model_name,
+                    use_fp16=True  # 减少内存占用
+                )
+                logger.info("Reranker 模型加载完成 (bge-reranker-v2-m3)")
+            except Exception as e:
+                logger.warning(f"Reranker 加载失败，将跳过重排序: {e}")
+                self._reranker = None
+            finally:
+                self._reranker_loading = False
+
+    async def _rerank(self, query: str, docs: list, top_k: int = 5) -> list:
+        """使用 bge-reranker-v2-m3 对检索结果重排序
+
+        性能：~50-100ms/query（模型加载后）
+        """
+        if not self._reranker:
+            self._init_reranker()
+        if not self._reranker:
+            return docs[:top_k]  # 降级：不重排
+
+        pairs = [[query, doc.get("text", doc.get("content", ""))] for doc in docs]
+        # FlagReranker.compute_score 是同步的，放到线程池
+        loop = asyncio.get_event_loop()
+        scores = await loop.run_in_executor(
+            None, lambda: self._reranker.compute_score(pairs, normalize=True)
+        )
+
+        # 按分数排序
+        scored_docs = list(zip(docs, scores))
+        scored_docs.sort(key=lambda x: x[1], reverse=True)
+
+        result = []
+        for doc, score in scored_docs[:top_k]:
+            doc["rerank_score"] = float(score)
+            result.append(doc)
+        return result
+
+    async def _hyde_expand(self, query: str) -> str:
+        """HyDE: 生成假设文档用于增强向量检索
+
+        性能：+500-1000ms（需 LLM 调用），默认关闭
+        """
+        from app.services.llm.llm_service import llm_service
+        from langchain_core.messages import SystemMessage, HumanMessage
+        prompt = f"""请根据以下学术问题，写一段可能出现在相关论文中的段落（约100-200字）。
+这段文字应该包含问题的关键术语和可能的答案方向。
+
+问题：{query}
+
+论文段落："""
+        try:
+            messages = [
+                SystemMessage(content="你是一个学术写作助手，请根据问题生成假设性的论文段落。"),
+                HumanMessage(content=prompt)
+            ]
+            response = await llm_service.llm.ainvoke(messages)
+            return response.content
+        except Exception as e:
+            logger.warning(f"HyDE 生成失败，使用原始查询: {e}")
+            return query  # 降级：返回原始查询
+
     def get_or_create_collection(self, paper_id: int) -> chromadb.Collection:
         """为每篇论文创建/获取独立的 collection"""
         return self.chroma_client.get_or_create_collection(
@@ -317,10 +391,50 @@ class RAGService:
                     "pages": pages,
                     "chunk_index": metadata.get("chunk_index", 0)
                 })
-            
+
+            # --- RAG 增强 ---
+            from app.config import settings as app_cfg
+            reranker_enabled = getattr(app_cfg, 'RAG_RERANKER_ENABLED', True)
+            hyde_enabled = getattr(app_cfg, 'RAG_HYDE_ENABLED', False)
+
+            # HyDE: 如果启用，用假设文档增强向量检索
+            if hyde_enabled:
+                hyde_query = await self._hyde_expand(query)
+                # 用 hyde_query 重新做向量检索，与原始结果合并
+                hyde_model = await self.embedding_model
+                hyde_embedding = await loop.run_in_executor(
+                    self._executor,
+                    lambda: hyde_model.encode([hyde_query]).tolist()
+                )
+                hyde_raw = collection.query(
+                    query_embeddings=hyde_embedding,
+                    n_results=min(top_k * 2, collection.count())
+                )
+                # 去重合并：添加原始结果中不存在的文档
+                existing_texts = {r["text"] for r in results}
+                for i, doc_id in enumerate(hyde_raw["ids"][0]):
+                    idx = all_docs["ids"].index(doc_id)
+                    text = all_docs["documents"][idx]
+                    if text not in existing_texts:
+                        metadata = all_docs["metadatas"][idx]
+                        pages = json.loads(metadata.get("pages", "[]"))
+                        results.append({
+                            "text": text,
+                            "score": 0.0,  # HyDE 补充结果无 RRF 分数
+                            "pages": pages,
+                            "chunk_index": metadata.get("chunk_index", 0),
+                            "hyde_source": True
+                        })
+                        existing_texts.add(text)
+
+            # Reranker: 对融合结果重排序
+            if reranker_enabled and results:
+                reranker_top_k = getattr(app_cfg, 'RAG_RERANKER_TOP_K', top_k)
+                results = await self._rerank(query, results, reranker_top_k)
+
             duration_ms = round((time.time() - start_time) * 1000)
             logger.info(f"RAG search completed", extra={"paper_id": paper_id, "duration_ms": duration_ms, "results_count": len(results)})
-            
+
             return results
             
         except Exception as e:

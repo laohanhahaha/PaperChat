@@ -11,12 +11,27 @@
   gap: 6px;
   flex-wrap: nowrap;
   overflow-x: auto;
-  scrollbar-width: none; /* Firefox */
-  -ms-overflow-style: none; /* IE and Edge */
+  scrollbar-width: thin; /* Firefox: 显示细滚动条 */
+  scrollbar-color: rgba(128, 128, 128, 0.3) transparent; /* Firefox: 滚动条颜色 */
+  -webkit-overflow-scrolling: touch; /* iOS 惯性滚动 */
+  padding-bottom: 2px; /* 为滚动条留出空间 */
 }
 
 .chipsRow::-webkit-scrollbar {
-  display: none; /* Chrome, Safari, Opera */
+  height: 3px;
+}
+
+.chipsRow::-webkit-scrollbar-thumb {
+  background: rgba(128, 128, 128, 0.3);
+  border-radius: 2px;
+}
+
+.chipsRow::-webkit-scrollbar-thumb:hover {
+  background: rgba(128, 128, 128, 0.5);
+}
+
+.chipsRow::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 /* ========== 芯片基础样式 ========== */

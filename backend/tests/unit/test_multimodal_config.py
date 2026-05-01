@@ -1,99 +1,12 @@
-# -*- coding: utf-8 -*-
-"""多模态配置化 + LLM 服务增强 单元测试"""
+"""多模态功能 单元测试 — 压缩/图表/批量分析"""
 import base64
 import io
 import json
 import sys
 import os
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
-
-# 确保项目根目录在 sys.path 中
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
-
-from app.config import Settings
-
-
-# ---------------------------------------------------------------------------
-# test_config_defaults
-# ---------------------------------------------------------------------------
-class TestConfigDefaults:
-    """验证新配置项默认值正确"""
-
-    def test_qwen_model_cloud_default(self):
-        s = Settings()
-        assert s.QWEN_MODEL_CLOUD == "qwen2.5-vl-plus"
-
-    def test_qwen_model_local_default(self):
-        s = Settings()
-        assert s.QWEN_MODEL_LOCAL == "qwen2.5-vl:7b"
-
-    def test_qwen_multimodal_max_tokens_default(self):
-        s = Settings()
-        assert s.QWEN_MULTIMODAL_MAX_TOKENS == 2048
-
-    def test_qwen_multimodal_temperature_default(self):
-        s = Settings()
-        assert s.QWEN_MULTIMODAL_TEMPERATURE == 0.7
-
-    def test_max_image_size_mb_default(self):
-        s = Settings()
-        assert s.MAX_IMAGE_SIZE_MB == 10
-
-    def test_image_cache_enabled_default(self):
-        s = Settings()
-        assert s.IMAGE_CACHE_ENABLED is True
-
-
-# ---------------------------------------------------------------------------
-# test_chat_with_image_reads_config
-# ---------------------------------------------------------------------------
-class TestChatWithImageReadsConfig:
-    """验证 chat_with_image 使用配置中的模型名"""
-
-    @pytest.mark.asyncio
-    async def test_cloud_uses_config_model(self):
-        """云端调用应使用 settings.QWEN_MODEL_CLOUD"""
-        from app.services.llm.llm_service import LLMService
-
-        svc = LLMService()
-
-        with patch.object(
-            svc, "_chat_with_image_qwen_cloud", new_callable=AsyncMock
-        ) as mock_cloud:
-            mock_cloud.return_value = "test response"
-            await svc.chat_with_image("fake_data", "test", use_cloud=True)
-            mock_cloud.assert_awaited_once()
-
-    @pytest.mark.asyncio
-    async def test_local_uses_config_model(self):
-        """本地调用应使用 settings.QWEN_MODEL_LOCAL"""
-        from app.services.llm.llm_service import LLMService
-
-        svc = LLMService()
-
-        with patch.object(
-            svc, "_chat_with_image_ollama", new_callable=AsyncMock
-        ) as mock_local:
-            mock_local.return_value = "test response"
-            await svc.chat_with_image("fake_data", "test", use_cloud=False)
-            mock_local.assert_awaited_once()
-
-    def test_cloud_payload_uses_settings(self):
-        """验证 _chat_with_image_qwen_cloud 构造的 payload 使用配置"""
-        from app.config import settings
-
-        # 确保配置值非硬编码
-        assert settings.QWEN_MODEL_CLOUD == "qwen2.5-vl-plus"
-        assert settings.QWEN_MULTIMODAL_MAX_TOKENS == 2048
-        assert settings.QWEN_MULTIMODAL_TEMPERATURE == 0.7
-
-    def test_local_payload_uses_settings(self):
-        """验证 _chat_with_image_ollama 构造的 payload 使用配置"""
-        from app.config import settings
-
-        assert settings.QWEN_MODEL_LOCAL == "qwen2.5-vl:7b"
 
 
 # ---------------------------------------------------------------------------

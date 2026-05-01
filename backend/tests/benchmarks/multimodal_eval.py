@@ -10,7 +10,7 @@
 
 依赖接口:
 - llm_service.analyze_chart(image_data, chart_type_hint, question) -> dict
-- llm_service.chat_with_image(image_data, prompt, image_type, use_cloud) -> str
+- llm_service.chat_with_image(image_data, prompt, image_type) -> str
 """
 import json
 import time
@@ -115,6 +115,22 @@ class MultimodalBenchmark:
                 "metadata": {"source": "arxiv", "domain": "cs"},
             })
 
+        # 维度4: 表格结构化提取 — 30 样本
+        table_types = ["comparison", "results", "statistics", "configuration"]
+        for i in range(30):
+            samples.append({
+                "id": f"table_extract_{i:03d}",
+                "category": "table_extraction",
+                "image_path": f"table_extraction/sample_{i:03d}.png",
+                "ground_truth": {
+                    "headers": [],
+                    "rows": [],
+                    "table_type": table_types[i % len(table_types)],
+                    "caption": "",
+                },
+                "metadata": {"source": "arxiv", "table_type": table_types[i % len(table_types)]},
+            })
+
         manifest = {
             "version": "1.0",
             "total_samples": len(samples),
@@ -125,7 +141,7 @@ class MultimodalBenchmark:
             json.dump(manifest, f, indent=2, ensure_ascii=False)
 
         # 创建子目录
-        for subdir in ["chart_type", "data_extraction", "image_text"]:
+        for subdir in ["chart_type", "data_extraction", "image_text", "table_extraction"]:
             os.makedirs(self.data_dir / subdir, exist_ok=True)
 
         self.samples = [EvalSample(**s) for s in samples]
@@ -237,6 +253,58 @@ class MultimodalBenchmark:
                 False, (time.time() - start) * 1000, error=str(e),
             )
 
+    async def evaluate_table_extraction(self, sample: EvalSample, llm_service) -> EvalResult:
+        """评估表格提取准确性
+
+        调用 llm_service.extract_table()，比较返回的结构化数据与 ground_truth。
+        指标：列数匹配、行数匹配、数值精度、表格类型识别。
+        性能: 单样本 2-5s（云端），10-30s（本地）
+        """
+        start = time.time()
+        try:
+            img_path = self.data_dir / sample.image_path
+            if not img_path.exists():
+                return EvalResult(
+                    sample.id, sample.category, {}, sample.ground_truth,
+                    False, 0, error="图片文件不存在",
+                )
+
+            with open(img_path, "rb") as f:
+                image_data = base64.b64encode(f.read()).decode()
+
+            result = await llm_service.extract_table(
+                image_data,
+                context="",
+                output_format="json",
+            )
+
+            gt = sample.ground_truth
+            gt_headers = gt.get("headers", [])
+            gt_rows = gt.get("rows", [])
+            gt_type = gt.get("table_type", "")
+
+            predicted_headers = result.get("headers", [])
+            predicted_rows = result.get("rows", [])
+            predicted_type = result.get("table_type", "other")
+
+            # 简化匹配：列数匹配 + 行数匹配 + 类型匹配
+            header_match = len(predicted_headers) == len(gt_headers) if gt_headers else True
+            row_match = len(predicted_rows) == len(gt_rows) if gt_rows else True
+            type_match = predicted_type.lower() == gt_type.lower() if gt_type else True
+
+            correct = header_match and row_match and type_match
+            latency = (time.time() - start) * 1000
+
+            return EvalResult(
+                sample.id, sample.category, result, sample.ground_truth,
+                correct, latency,
+            )
+        except Exception as e:
+            return EvalResult(
+                sample.id, sample.category, {}, sample.ground_truth,
+                False, (time.time() - start) * 1000, error=str(e),
+            )
+
     async def evaluate_image_text_matching(self, sample: EvalSample, llm_service) -> EvalResult:
         """评估图文匹配
 
@@ -267,7 +335,7 @@ class MultimodalBenchmark:
                 prompt = "请详细描述这张图片的内容。"
 
             description = await llm_service.chat_with_image(
-                image_data, prompt, image_type="base64", use_cloud=True,
+                image_data, prompt, image_type="base64",
             )
 
             # 简化匹配: 检查描述是否包含关键词
@@ -324,6 +392,7 @@ class MultimodalBenchmark:
             "chart_type": self.evaluate_chart_type,
             "data_extraction": self.evaluate_data_extraction,
             "image_text_matching": self.evaluate_image_text_matching,
+            "table_extraction": self.evaluate_table_extraction,
         }
 
         for sample in self.samples:

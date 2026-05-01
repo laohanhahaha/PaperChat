@@ -1,5 +1,6 @@
 import React, { useRef, useCallback } from 'react';
 import ImagePreview from './ImagePreview';
+import FunctionChips from './FunctionChips';
 
 export default function InputBar({
   input,
@@ -21,6 +22,11 @@ export default function InputBar({
   images = [],
   onAddImage,
   onRemoveImage,
+  activeFunction,
+  onSelectFunction,
+  onClearFunction,
+  thinkingMode,
+  onThinkingModeChange,
 }) {
   const fileInputRef = useRef(null);
   const hasUploading = images.some((img) => img.status === 'uploading');
@@ -71,7 +77,7 @@ export default function InputBar({
   }, [onAddImage]);
 
   const isSendDisabled =
-    !input.trim() || (isWelcome && !hasPapers) || hasUploading;
+    !input.trim() || hasUploading;
 
   return (
     <div
@@ -97,7 +103,7 @@ export default function InputBar({
           className={styles.attachBtn}
           onClick={handleImageSelect}
           title="上传图片"
-          disabled={isChatting || (isWelcome && !hasPapers)}
+          disabled={isChatting}
         >
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
             <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
@@ -118,9 +124,9 @@ export default function InputBar({
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder={hasPapers ? '输入你的问题...' : '请先选择论文...'}
+          placeholder={activeFunction?.placeholder || '输入你的问题...'}
           rows={1}
-          disabled={isChatting || (isWelcome && !hasPapers)}
+          disabled={isChatting}
         />
         {isChatting ? (
           <button className={`${styles.sendBtn} ${styles.stopBtn}`} onClick={handleStop} title="停止生成">
@@ -140,6 +146,14 @@ export default function InputBar({
           </button>
         )}
       </div>
+      <FunctionChips
+        activeFunction={activeFunction}
+        onSelect={onSelectFunction}
+        onClear={onClearFunction}
+        disabled={isChatting}
+        thinkingMode={thinkingMode}
+        onThinkingModeChange={onThinkingModeChange}
+      />
       <div className={styles.inputActions}>
         <label className={styles.searchToggle}>
           <input type="checkbox" checked={enableSearch} onChange={toggleSearch} disabled={isChatting} />

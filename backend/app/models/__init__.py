@@ -14,6 +14,8 @@ from app.models.feedback import MessageFeedback
 from app.models.knowledge import KnowledgeCard, KnowledgeRelation
 from app.models.feature_flag import FeatureFlag
 from app.models.cost import UsageRecord, BudgetConfig
+from app.models.model_config import ModelConfig
+from app.models.custom_subagent import CustomSubAgent
 
 __all__ = [
     "Base",
@@ -32,4 +34,6 @@ __all__ = [
     "FeatureFlag",
     "UsageRecord",
     "BudgetConfig",
+    "ModelConfig",
+    "CustomSubAgent",
 ]

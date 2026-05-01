@@ -14,8 +14,7 @@ from typing import Any
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from app.services.llm_service import llm_service, RAG_CHAT_SYSTEM_PROMPT, RAG_CHAT_WITH_SEARCH_SYSTEM_PROMPT
-from app.services.search.search_service import search_service as legacy_search_service
-from app.services.rag.rag_service import rag_service
+from app.services.rag_service import rag_service
 from app.services.core.event_bus import event_bus, Event, EventTypes
 from app.services.context_compressor import context_compressor
 from app.services.chat.message_service import (
@@ -133,7 +132,7 @@ class RagChatHandler(ChatHandlerBase):
                 }))
                 return error_msg, []
 
-        # 5. 网络搜索（如果启用）
+        # 5. 网络搜索（如果启用）—— 通过 open-webSearch MCP 服务
         web_results = []
         if enable_search:
             await websocket.send_text(json.dumps({
@@ -141,27 +140,39 @@ class RagChatHandler(ChatHandlerBase):
                 "status": "searching"
             }))
 
-            # 优先使用 SearchDispatcher（多源），降级到旧 SearchService
-            search_dispatcher = getattr(getattr(websocket, "app", None), "state", None)
-            if search_dispatcher and hasattr(search_dispatcher, "search_dispatcher"):
-                dispatcher = search_dispatcher.search_dispatcher
-                raw_results = await dispatcher.search(query=message, max_results=5, search_type="general")
-                web_results = [
-                    {
-                        "title": r.title,
-                        "href": r.url,
-                        "body": r.snippet,
-                    }
-                    for r in raw_results
-                ]
-            else:
-                web_results = await legacy_search_service.search(message, max_results=5)
+            mcp_manager = websocket.app.state.mcp_manager
+            try:
+                raw_result = await mcp_manager.call_tool(
+                    server_name="open_websearch",
+                    tool_name="search",
+                    arguments={"query": message, "limit": 5}
+                )
+                if isinstance(raw_result, str):
+                    search_data = json.loads(raw_result)
+                else:
+                    search_data = raw_result
 
-            await websocket.send_text(json.dumps({
-                "type": "search_status",
-                "status": "completed",
-                "results_count": len(web_results)
-            }))
+                results_list = search_data.get("results", []) if isinstance(search_data, dict) else []
+                web_results = [
+                    {"title": r.get("title", ""), "href": r.get("url", ""), "body": r.get("description", "")}
+                    for r in results_list
+                ]
+            except Exception as e:
+                logger.warning(f"open-webSearch 搜索失败: {e}")
+                web_results = []
+
+            if web_results:
+                await websocket.send_text(json.dumps({
+                    "type": "search_status",
+                    "status": "completed",
+                    "results_count": len(web_results)
+                }))
+            else:
+                await websocket.send_text(json.dumps({
+                    "type": "search_status",
+                    "status": "failed",
+                    "message": "搜索暂时不可用"
+                }))
 
         if not relevant_chunks and not web_results:
             no_content_msg = "抱歉，未能从论文中检索到相关内容，网络搜索也未返回结果。请尝试重新表述问题。"

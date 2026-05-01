@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 
 export default function SelectedPapersBar({
   selectedPaperIds,
@@ -6,26 +6,56 @@ export default function SelectedPapersBar({
   removePaperFromCrossDoc,
   onOpenSelector,
   styles,
+  privatePaperIds = [],
+  onTogglePrivacy,
 }) {
+  const [hoveredPid, setHoveredPid] = useState(null);
+
   return (
     <div className={styles.selectedPapersBar}>
       <div className={styles.selectedPapersContent}>
         {selectedPaperIds.length > 0 ? (
           <>
-            {selectedPaperIds.map(pid => (
-              <div key={pid} className={styles.selectedPaperTag}>
-                <span className={styles.selectedPaperTitle} title={getPaperTitle(pid)}>
-                  {getPaperTitle(pid)}
-                </span>
-                <button
-                  className={styles.selectedPaperRemove}
-                  onClick={() => removePaperFromCrossDoc(pid)}
-                  title="移除论文"
+            {selectedPaperIds.map(pid => {
+              const isPrivate = privatePaperIds.includes(pid);
+              const isHovered = hoveredPid === pid;
+              return (
+                <div
+                  key={pid}
+                  className={styles.selectedPaperTag}
+                  onMouseEnter={() => setHoveredPid(pid)}
+                  onMouseLeave={() => setHoveredPid(null)}
                 >
-                  ×
-                </button>
-              </div>
-            ))}
+                  <span
+                    style={{
+                      cursor: 'pointer',
+                      fontSize: '13px',
+                      lineHeight: 1,
+                      opacity: isPrivate ? 1 : (isHovered ? 0.7 : 0),
+                      transition: 'opacity 0.15s',
+                      userSelect: 'none',
+                    }}
+                    title={isPrivate ? '隐私保护中 — 点击取消' : '点击标记为隐私（强制本地处理）'}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onTogglePrivacy?.(pid, !isPrivate);
+                    }}
+                  >
+                    {isPrivate ? '🔒' : '🔓'}
+                  </span>
+                  <span className={styles.selectedPaperTitle} title={getPaperTitle(pid)}>
+                    {getPaperTitle(pid)}
+                  </span>
+                  <button
+                    className={styles.selectedPaperRemove}
+                    onClick={() => removePaperFromCrossDoc(pid)}
+                    title="移除论文"
+                  >
+                    ×
+                  </button>
+                </div>
+              );
+            })}
             <button
               className={styles.addPaperChip}
               onClick={onOpenSelector}
