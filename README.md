@@ -393,3 +393,4 @@ npm run dev
 - **当前版本**：v4.0.0
 - 完整变更记录见 [CHANGELOG.md](./CHANGELOG.md)
 - 各版本发布公告见 [GitHub Releases](https://github.com/laohanhahaha/PaperChat/releases)
+pico 演示
